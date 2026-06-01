@@ -61,7 +61,7 @@ export function DashboardView() {
       {/* Header */}
       <header className="shrink-0">
         <div className="h-[52px] flex items-center px-6 drag-region">
-          <span className="text-[13px] font-medium text-text-secondary no-drag">任务总览</span>
+          <span className="text-[13px] font-medium text-text-secondary no-drag">Overview</span>
         </div>
         <div className="h-px bg-edge" />
       </header>
@@ -70,42 +70,42 @@ export function DashboardView() {
       <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
         <div className="px-8 py-7 space-y-8">
 
-          {/* ═══ Section: 新任务 ═══ */}
+          {/* ═══ Section: New tasks ═══ */}
           <section>
-            <SectionBar title="新任务" count={newTasks.length} variant="accent" />
+            <SectionBar title="New tasks" count={newTasks.length} variant="accent" />
             {newTasks.length > 0 ? (
-              <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
+              <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(min(280px,100%),1fr))] gap-3">
                 {newTasks.map(task => (
                   <NewTaskCard key={task.id} task={task} onSelect={() => selectTask(task.id)} />
                 ))}
               </div>
             ) : (
-              <EmptySection message="没有新到达的任务" />
+              <EmptySection message="No new tasks" />
             )}
           </section>
 
-          {/* ═══ Section: 处理中 ═══ */}
+          {/* ═══ Section: In progress ═══ */}
           <section>
-            <SectionBar title="处理中" count={inProgressTasks.length} variant="default" />
+            <SectionBar title="In progress" count={inProgressTasks.length} variant="default" />
             {inProgressTasks.length > 0 ? (
-              <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
+              <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(min(280px,100%),1fr))] gap-3">
                 {inProgressTasks.map(task => (
                   <InProgressCard key={task.id} task={task} onSelect={() => selectTask(task.id)} />
                 ))}
               </div>
             ) : (
-              <EmptySection message="没有处理中的任务" />
+              <EmptySection message="No tasks in progress" />
             )}
           </section>
 
-          {/* ═══ Section: 已完成 ═══ */}
+          {/* ═══ Section: Completed ═══ */}
           <section>
             <div className="flex items-center justify-between">
-              <SectionBar title="已完成" count={completedTasks.length} variant="muted" />
+              <SectionBar title="Completed" count={completedTasks.length} variant="muted" />
               <div className="flex items-center gap-1">
-                <RangeTab label="本周" active={timeRange === 'week'} onClick={() => setTimeRange('week')} />
-                <RangeTab label="本月" active={timeRange === 'month'} onClick={() => setTimeRange('month')} />
-                <RangeTab label="自定义" active={timeRange === 'custom'} onClick={() => setTimeRange('custom')} />
+                <RangeTab label="This week" active={timeRange === 'week'} onClick={() => setTimeRange('week')} />
+                <RangeTab label="This month" active={timeRange === 'month'} onClick={() => setTimeRange('month')} />
+                <RangeTab label="Custom" active={timeRange === 'custom'} onClick={() => setTimeRange('custom')} />
               </div>
             </div>
 
@@ -118,7 +118,7 @@ export function DashboardView() {
                   onChange={e => setCustomFrom(e.target.value)}
                   className="text-[12px] text-text-secondary bg-surface-1 border border-edge rounded-lg px-2.5 py-1.5 outline-none focus:border-accent/40"
                 />
-                <span className="text-[11px] text-text-tertiary">至</span>
+                <span className="text-[11px] text-text-tertiary">to</span>
                 <input
                   type="date"
                   value={customTo}
@@ -138,7 +138,7 @@ export function DashboardView() {
                 />
               </div>
             ) : (
-              <EmptySection message="该时间段内没有已完成或已忽略的任务" />
+              <EmptySection message="No completed or dismissed tasks in this period" />
             )}
           </section>
 
@@ -249,8 +249,8 @@ function NewTaskCard({ task, onSelect }: { task: Task; onSelect: () => void }) {
 
       {/* Hover actions */}
       <div className="absolute right-3 top-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <ActionDot icon={<Check size={15} />} onClick={e => { e.stopPropagation(); completeTask(task.id) }} color="success" title="完成" />
-        <ActionDot icon={<X size={15} />} onClick={e => { e.stopPropagation(); useTaskStore.getState().cancelTask(task.id) }} color="danger" title="忽略" />
+        <ActionDot icon={<Check size={15} />} onClick={e => { e.stopPropagation(); completeTask(task.id) }} color="success" title="Complete" />
+        <ActionDot icon={<X size={15} />} onClick={e => { e.stopPropagation(); useTaskStore.getState().cancelTask(task.id) }} color="danger" title="Dismiss" />
       </div>
     </div>
   )
@@ -295,7 +295,7 @@ function InProgressCard({ task, onSelect }: { task: Task; onSelect: () => void }
             {getSourceIcon(task.source, 11)}
             {getSourceLabel(task.source)}
           </span>
-          <span>开始于 {formatRelativeTime(task.updatedAt)}</span>
+          <span>Started {formatRelativeTime(task.updatedAt)}</span>
           {task.dueDate && (
             <span className={isOverdue(task.dueDate) ? 'text-danger font-medium' : ''}>
               {getTimeText(task)}
@@ -306,8 +306,8 @@ function InProgressCard({ task, onSelect }: { task: Task; onSelect: () => void }
 
       {/* Hover actions */}
       <div className="absolute right-3 top-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <ActionDot icon={<Check size={15} />} onClick={e => { e.stopPropagation(); completeTask(task.id) }} color="success" title="完成" />
-        <ActionDot icon={<X size={15} />} onClick={e => { e.stopPropagation(); useTaskStore.getState().cancelTask(task.id) }} color="danger" title="忽略" />
+        <ActionDot icon={<Check size={15} />} onClick={e => { e.stopPropagation(); completeTask(task.id) }} color="success" title="Complete" />
+        <ActionDot icon={<X size={15} />} onClick={e => { e.stopPropagation(); useTaskStore.getState().cancelTask(task.id) }} color="danger" title="Dismiss" />
       </div>
     </div>
   )
@@ -357,7 +357,7 @@ function CompletedTimeline({ dateKeys, completedByDate, ignoredByDate, onSelect 
                     onClick={() => setViewByDate(prev => ({ ...prev, [date]: 'completed' }))}
                     className={`text-[11px] transition-colors ${currentView === 'completed' ? 'text-text-secondary font-medium' : 'text-text-tertiary hover:text-text-secondary'}`}
                   >
-                    {completedTasks.length} 项完成
+                    {completedTasks.length} completed
                   </button>
                 )}
                 {ignoredTasks.length > 0 && (
@@ -365,7 +365,7 @@ function CompletedTimeline({ dateKeys, completedByDate, ignoredByDate, onSelect 
                     onClick={() => setViewByDate(prev => ({ ...prev, [date]: 'ignored' }))}
                     className={`text-[11px] transition-colors ${currentView === 'ignored' ? 'text-text-secondary font-medium' : 'text-text-tertiary hover:text-text-secondary'}`}
                   >
-                    {ignoredTasks.length} 项忽略
+                    {ignoredTasks.length} dismissed
                   </button>
                 )}
                 {canShowDailyReport && (
@@ -373,14 +373,14 @@ function CompletedTimeline({ dateKeys, completedByDate, ignoredByDate, onSelect 
                     onClick={() => toggleReport({ type: 'daily', key: date })}
                     className={`inline-flex items-center gap-1 text-[11px] transition-colors ${reportTarget?.key === date ? 'text-accent font-medium' : 'text-text-tertiary hover:text-accent'}`}
                   >
-                    <FileText size={11} /> 日报
+                    <FileText size={11} /> Daily report
                   </button>
                 )}
               </div>
 
               {reportTarget?.key === date && (
                 <ReportCard
-                  title={`${date}日报`}
+                  title={`${date} daily report`}
                   completedTasks={completedTasks}
                   ignoredTasks={ignoredTasks}
                   onClose={() => setReportTarget(null)}
@@ -409,7 +409,7 @@ function CompletedTimeline({ dateKeys, completedByDate, ignoredByDate, onSelect 
                       </span>
                       <span className="text-[11px] text-text-tertiary/50 tabular-nums">
                         {task.completedAt
-                          ? new Date(task.completedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+                          ? new Date(task.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
                           : ''
                         }
                       </span>
@@ -446,22 +446,22 @@ function ReportCard({ title, completedTasks, ignoredTasks, onClose }: {
         <div className="flex items-center gap-2 min-w-0">
           <FileText size={14} className="text-accent shrink-0" />
           <span className="text-[13px] font-medium text-text-primary truncate">{title}</span>
-          <span className="text-[11px] text-text-tertiary shrink-0">{completedTasks.length} 完成 · {ignoredTasks.length} 忽略</span>
+          <span className="text-[11px] text-text-tertiary shrink-0">{completedTasks.length} completed · {ignoredTasks.length} dismissed</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button onClick={copyReport} className="h-6 px-2 rounded-md text-[11px] text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors inline-flex items-center gap-1">
             {copied ? <Check size={11} className="text-success" /> : <Copy size={11} />}
-            {copied ? '已复制' : '复制'}
+            {copied ? 'Copied' : 'Copy'}
           </button>
-          <button onClick={onClose} className="w-6 h-6 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors" title="关闭">
+          <button onClick={onClose} className="w-6 h-6 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors" title="Close">
             <X size={12} />
           </button>
         </div>
       </div>
 
       <div className="space-y-3 max-h-[280px] overflow-y-auto scrollbar-thin pr-1">
-        <ReportSection title="完成" tasks={completedTasks} icon="check" empty="没有完成项" />
-        {ignoredTasks.length > 0 && <ReportSection title="忽略" tasks={ignoredTasks} icon="x" empty="没有忽略项" />}
+        <ReportSection title="Completed" tasks={completedTasks} icon="check" empty="No completed items" />
+        {ignoredTasks.length > 0 && <ReportSection title="Dismissed" tasks={ignoredTasks} icon="x" empty="No dismissed items" />}
       </div>
     </div>
   )
@@ -535,16 +535,15 @@ function getSourceIcon(source: TaskSource, size = 12): React.ReactNode {
     case 'github': return <Github size={size} className={cls} />
     case 'teams': return <MessageSquare size={size} className={cls} />
     case 'calendar': return <Calendar size={size} className={cls} />
-    case 'user': return <User size={size} className={cls} />
-    case 'agent': return <Zap size={size} className={cls} />
+    case 'chat': return <Zap size={size} className={cls} />
     default: return <User size={size} className={cls} />
   }
 }
 
 function getSourceLabel(source: TaskSource): string {
   const map: Record<string, string> = {
-    email: '邮件', github: 'GitHub', teams: 'Teams',
-    calendar: '日历', user: '自建', agent: 'Agent'
+    email: 'Email', github: 'GitHub', teams: 'Teams',
+    calendar: 'Calendar', user: 'Manual', agent: 'Agent'
   }
   return map[source.type] || source.type
 }
@@ -552,11 +551,11 @@ function getSourceLabel(source: TaskSource): string {
 function getTimeText(task: Task): string | null {
   if (!task.dueDate) return null
   const diff = Math.ceil((new Date(task.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-  if (diff < 0) return `逾期 ${Math.abs(diff)} 天`
-  if (diff === 0) return '今天到期'
-  if (diff === 1) return '明天到期'
-  if (diff <= 7) return `${diff} 天后`
-  return new Date(task.dueDate).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }) + ' 到期'
+  if (diff < 0) return `${Math.abs(diff)}d overdue`
+  if (diff === 0) return 'Due today'
+  if (diff === 1) return 'Due tomorrow'
+  if (diff <= 7) return `Due in ${diff}d`
+  return 'Due ' + new Date(task.dueDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
 }
 
 function isOverdue(dateStr: string): boolean {
@@ -566,20 +565,20 @@ function isOverdue(dateStr: string): boolean {
 function formatRelativeTime(isoStr: string): string {
   const diffMs = Date.now() - new Date(isoStr).getTime()
   const diffMin = Math.floor(diffMs / 60000)
-  if (diffMin < 1) return '刚刚'
-  if (diffMin < 60) return `${diffMin} 分钟前`
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
   const diffH = Math.floor(diffMin / 60)
-  if (diffH < 24) return `${diffH} 小时前`
+  if (diffH < 24) return `${diffH}h ago`
   const diffD = Math.floor(diffH / 24)
-  if (diffD === 1) return '昨天'
-  if (diffD < 7) return `${diffD} 天前`
-  return new Date(isoStr).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
+  if (diffD === 1) return 'yesterday'
+  if (diffD < 7) return `${diffD}d ago`
+  return new Date(isoStr).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
 }
 
 function groupByDate(tasks: Task[]): Record<string, Task[]> {
   const groups: Record<string, Task[]> = {}
-  const today = new Date().toLocaleDateString('zh-CN')
-  const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('zh-CN')
+  const today = new Date().toLocaleDateString('en-US')
+  const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('en-US')
 
   // Sort completed tasks by time descending
   const sorted = [...tasks].sort((a, b) => {
@@ -590,9 +589,9 @@ function groupByDate(tasks: Task[]): Record<string, Task[]> {
 
   for (const task of sorted) {
     const d = task.completedAt
-      ? new Date(task.completedAt).toLocaleDateString('zh-CN')
-      : new Date(task.updatedAt).toLocaleDateString('zh-CN')
-    const label = d === today ? '今天' : d === yesterday ? '昨天' : d
+      ? new Date(task.completedAt).toLocaleDateString('en-US')
+      : new Date(task.updatedAt).toLocaleDateString('en-US')
+    const label = d === today ? 'Today' : d === yesterday ? 'Yesterday' : d
     if (!groups[label]) groups[label] = []
     groups[label].push(task)
   }
@@ -605,18 +604,26 @@ function mergeDateKeys(primary: Record<string, Task[]>, secondary: Record<string
   for (const key of Object.keys(secondary)) {
     if (!keys.includes(key)) keys.push(key)
   }
-  return keys
+  // Sort all date groups newest-first, regardless of which list they came from
+  return keys.sort((a, b) => labelToTime(b) - labelToTime(a))
+}
+
+function labelToTime(label: string): number {
+  if (label === 'Today') return new Date().setHours(0, 0, 0, 0)
+  if (label === 'Yesterday') return new Date(Date.now() - 86400000).setHours(0, 0, 0, 0)
+  const t = new Date(label).getTime()
+  return Number.isNaN(t) ? 0 : t
 }
 
 function isTodayLabel(label: string): boolean {
-  return label === '今天'
+  return label === 'Today'
 }
 
 function buildReportText(title: string, completedTasks: Task[], ignoredTasks: Task[]): string {
-  const lines = [title, '', `完成：${completedTasks.length} 项`]
+  const lines = [title, '', `Completed: ${completedTasks.length}`]
   for (const task of completedTasks) lines.push(`- ${task.title}`)
   if (ignoredTasks.length > 0) {
-    lines.push('', `忽略：${ignoredTasks.length} 项`)
+    lines.push('', `Dismissed: ${ignoredTasks.length}`)
     for (const task of ignoredTasks) lines.push(`- ${task.title}`)
   }
   return lines.join('\n')

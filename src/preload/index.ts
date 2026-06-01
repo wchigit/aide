@@ -8,7 +8,8 @@ const api: AideAPI = {
     create: (input) => ipcRenderer.invoke('tasks:create', input),
     update: (id, changes) => ipcRenderer.invoke('tasks:update', id, changes),
     markSeen: (id) => ipcRenderer.invoke('tasks:markSeen', id),
-    snooze: (id, until) => ipcRenderer.invoke('tasks:snooze', id, until)
+    snooze: (id, until) => ipcRenderer.invoke('tasks:snooze', id, until),
+    listActivities: (taskId) => ipcRenderer.invoke('tasks:listActivities', taskId)
   },
   chat: {
     send: (message, taskId, attachments) => ipcRenderer.invoke('chat:send', message, taskId, attachments),

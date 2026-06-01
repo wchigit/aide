@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid'
 import { getDb } from '../db'
-import type { Task, TaskFilter, CreateTaskInput, TaskStatus, Priority } from '@shared/types'
+import type { Task, TaskFilter, CreateTaskInput, TaskStatus, Priority, TaskActivity, TaskActivityType } from '@shared/types'
 
 function rowToTask(row: Record<string, unknown>): Task {
   return {
@@ -24,7 +24,22 @@ function rowToTask(row: Record<string, unknown>): Task {
     seenAt: row.seen_at as string | null,
     snoozedUntil: row.snoozed_until as string | null,
     sessionId: row.session_id as string | null,
-    result: row.result as string | null
+    result: row.result as string | null,
+    lastActivityAt: (row.last_activity_at as string | null) ?? null
+  }
+}
+
+function rowToActivity(row: Record<string, unknown>): TaskActivity {
+  return {
+    id: row.id as string,
+    taskId: row.task_id as string,
+    timestamp: row.timestamp as string,
+    type: row.type as TaskActivityType,
+    summary: row.summary as string,
+    statusFrom: (row.status_from as TaskStatus | null) ?? null,
+    statusTo: (row.status_to as TaskStatus | null) ?? null,
+    sourceRef: (row.source_ref as string | null) ?? null,
+    createdAt: row.created_at as string
   }
 }
 
@@ -117,6 +132,9 @@ export function updateTask(id: string, changes: Partial<Task>): Task {
   const db = getDb()
   const now = new Date().toISOString()
 
+  // Capture prior status for auto status_change activity
+  const prior = changes.status !== undefined ? getTask(id) : null
+
   // Enforce terminal state: completed/cancelled cannot be reverted
   if (changes.status && changes.status !== 'completed' && changes.status !== 'cancelled') {
     const current = getTask(id)
@@ -148,7 +166,60 @@ export function updateTask(id: string, changes: Partial<Task>): Task {
   params.push(id)
   db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).run(...params)
 
+  // Auto-log a status_change activity when status actually changed
+  if (changes.status !== undefined && prior && prior.status !== changes.status) {
+    addTaskActivity(id, {
+      type: 'status_change',
+      summary: `Status changed: ${prior.status} → ${changes.status}`,
+      statusFrom: prior.status,
+      statusTo: changes.status
+    })
+  }
+
   return getTask(id)!
+}
+
+// === Task Activity Timeline ===
+
+export interface AddActivityInput {
+  type?: TaskActivityType
+  summary: string
+  statusFrom?: TaskStatus | null
+  statusTo?: TaskStatus | null
+  sourceRef?: string | null
+}
+
+export function addTaskActivity(taskId: string, input: AddActivityInput): TaskActivity {
+  const db = getDb()
+  const now = new Date().toISOString()
+  const id = uuid()
+  db.prepare(`
+    INSERT INTO task_activities (id, task_id, timestamp, type, summary, status_from, status_to, source_ref, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    taskId,
+    now,
+    input.type || 'progress',
+    input.summary,
+    input.statusFrom ?? null,
+    input.statusTo ?? null,
+    input.sourceRef ?? null,
+    now
+  )
+  // Bump task's last_activity_at so UI can surface "new activity"
+  db.prepare('UPDATE tasks SET last_activity_at = ? WHERE id = ?').run(now, taskId)
+
+  const row = db.prepare('SELECT * FROM task_activities WHERE id = ?').get(id) as Record<string, unknown>
+  return rowToActivity(row)
+}
+
+export function listTaskActivities(taskId: string): TaskActivity[] {
+  const db = getDb()
+  const rows = db.prepare(
+    'SELECT * FROM task_activities WHERE task_id = ? ORDER BY timestamp DESC'
+  ).all(taskId) as Record<string, unknown>[]
+  return rows.map(rowToActivity)
 }
 
 export function markTaskSeen(id: string): void {
@@ -224,6 +295,74 @@ export function findSimilarTask(title: string, threshold: number = 0.6, descript
       }
     }
   }
+  return null
+}
+
+// === Related-task finder (shared by "create" and "associate activity" paths) ===
+// Returns the best candidate with a score and human-readable reason, so the
+// agent can decide whether to associate an activity vs. open a new task.
+
+export interface RelatedTaskMatch {
+  task: Task
+  score: number // 0..1
+  reason: 'entity' | 'source_ref' | 'title' | 'title+desc'
+}
+
+export function findRelatedTask(
+  title: string,
+  description?: string,
+  sourceRef?: string
+): RelatedTaskMatch | null {
+  const db = getDb()
+  const candidates = db.prepare(
+    `SELECT * FROM tasks WHERE status IN ('pending', 'in_progress')
+     UNION ALL
+     SELECT * FROM tasks WHERE status IN ('completed', 'cancelled')
+       AND completed_at >= datetime('now', '-7 days')`
+  ).all() as Record<string, unknown>[]
+
+  // 0. Precise binding: a prior activity already linked this source_ref to a task
+  if (sourceRef) {
+    const act = db.prepare(
+      'SELECT task_id FROM task_activities WHERE source_ref = ? ORDER BY timestamp DESC LIMIT 1'
+    ).get(sourceRef) as { task_id: string } | undefined
+    if (act) {
+      const t = getTask(act.task_id)
+      if (t) return { task: t, score: 1, reason: 'source_ref' }
+    }
+  }
+
+  const inputTokens = tokenize(title)
+  const inputDescTokens = description ? tokenize(description) : null
+  const inputEntities = extractEntities(title + (description ? ' ' + description : '') + (sourceRef ? ' ' + sourceRef : ''))
+
+  let best: RelatedTaskMatch | null = null
+  for (const row of candidates) {
+    const existingTitle = row.title as string
+    const existingDesc = (row.description as string) || ''
+
+    if (inputEntities.size > 0) {
+      const existingEntities = extractEntities(existingTitle + ' ' + existingDesc)
+      const shared = [...inputEntities].filter(e => existingEntities.has(e))
+      if (shared.length > 0) {
+        return { task: rowToTask(row), score: 1, reason: 'entity' }
+      }
+    }
+
+    const titleSim = jaccardSimilarity(inputTokens, tokenize(existingTitle))
+    if (!best || titleSim > best.score) {
+      let reason: RelatedTaskMatch['reason'] = 'title'
+      let score = titleSim
+      if (titleSim >= 0.4 && inputDescTokens && existingDesc) {
+        const descSim = jaccardSimilarity(inputDescTokens, tokenize(existingDesc))
+        if (descSim >= 0.5) { reason = 'title+desc'; score = Math.max(titleSim, (titleSim + descSim) / 2) }
+      }
+      best = { task: rowToTask(row), score, reason }
+    }
+  }
+
+  // Only surface a meaningful candidate
+  if (best && best.score >= 0.3) return best
   return null
 }
 

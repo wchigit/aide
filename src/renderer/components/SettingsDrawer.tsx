@@ -25,12 +25,12 @@ export function SettingsDrawer() {
   if (!isOpen) return null
 
   const tabs: Array<{ id: typeof activeTab; label: string; icon: React.ReactNode }> = [
-    { id: 'connections', label: '连接', icon: <Link2 size={14} /> },
-    { id: 'jobs', label: '定时任务', icon: <Timer size={14} /> },
-    { id: 'projects', label: '项目', icon: <FolderOpen size={14} /> },
-    { id: 'relations', label: '联系人', icon: <Users size={14} /> },
-    { id: 'memory', label: '记忆', icon: <Brain size={14} /> },
-    { id: 'preferences', label: '偏好', icon: <Sliders size={14} /> },
+    { id: 'connections', label: 'Connections', icon: <Link2 size={14} /> },
+    { id: 'jobs', label: 'Jobs', icon: <Timer size={14} /> },
+    { id: 'projects', label: 'Projects', icon: <FolderOpen size={14} /> },
+    { id: 'relations', label: 'Contacts', icon: <Users size={14} /> },
+    { id: 'memory', label: 'Memory', icon: <Brain size={14} /> },
+    { id: 'preferences', label: 'Preferences', icon: <Sliders size={14} /> },
   ]
 
   return (
@@ -39,11 +39,11 @@ export function SettingsDrawer() {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={close} />
 
       {/* Panel */}
-      <div className="absolute right-0 top-0 bottom-0 w-[540px] max-w-[92vw] bg-surface-1 border-l border-edge shadow-2xl flex flex-col anim-slide-in">
+      <div className="absolute right-0 top-0 bottom-0 w-[620px] max-w-[94vw] bg-surface-1 border-l border-edge shadow-2xl flex flex-col anim-slide-in">
         {/* Header */}
         <div className="shrink-0 bg-surface-0">
           <div className="flex items-center justify-between pl-5 pr-5 h-[52px]">
-            <h2 className="text-[13px] font-semibold text-text-primary">管理</h2>
+            <h2 className="text-[13px] font-semibold text-text-primary">Manage</h2>
             <button onClick={close} className="w-7 h-7 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors">
               <X size={15} strokeWidth={2} />
             </button>
@@ -52,12 +52,12 @@ export function SettingsDrawer() {
         </div>
 
         {/* Tabs */}
-        <nav className="flex border-b border-edge px-5 gap-1 shrink-0">
+        <nav className="flex border-b border-edge px-4 gap-0.5 shrink-0">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-[12px] font-medium transition-colors border-b-2 -mb-px ${
+              className={`flex items-center gap-1.5 px-2.5 py-2.5 text-[12px] font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
                 activeTab === tab.id
                   ? 'text-text-primary border-accent'
                   : 'text-text-tertiary border-transparent hover:text-text-secondary'
@@ -118,23 +118,23 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
 
   return (
     <div className="space-y-4">
-      <Desc>管理与外部服务的连接，Aide 通过这些连接获取邮件、日历等信息。</Desc>
+      <Desc>Connect services so Aide can pull in your email, calendar, and more.</Desc>
 
       {connections.map(conn => (
         <Card key={conn.id}>
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                 conn.type === 'workiq' ? 'bg-blue-500/10 text-blue-400' : 'bg-zinc-500/10 text-text-secondary'
               }`}>
                 {conn.type === 'workiq' ? <MicrosoftIcon /> : <Github size={18} />}
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-medium text-text-primary">
                   {conn.type === 'workiq' ? 'Microsoft 365' : 'GitHub'}
                 </p>
                 <p className="text-[12px] text-text-tertiary mt-0.5">
-                  {conn.type === 'workiq' ? '邮件 · 日历 · Teams · OneDrive' : 'Issues · Pull Requests · Repos'}
+                  {conn.type === 'workiq' ? 'Email · Calendar · Teams · OneDrive' : 'Issues · Pull Requests · Repos'}
                 </p>
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <div className={`w-[6px] h-[6px] rounded-full ${
@@ -144,14 +144,14 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
                     conn.verified ? 'text-success' : conn.authenticated ? 'text-warning' : 'text-text-tertiary'
                   }`}>
                     {conn.verified
-                      ? `已连接${conn.activeAccount ? ` · ${conn.activeAccount}` : ''}`
-                      : conn.authenticated ? '已登录 · 权限待验证' : '未连接'}
+                      ? `Connected${conn.activeAccount ? ` · ${conn.activeAccount}` : ''}`
+                      : conn.authenticated ? 'Signed in · verifying permissions' : 'Not connected'}
                   </span>
                 </div>
                 {conn.lastError && <p className="text-[11px] text-danger mt-1">{conn.lastError}</p>}
                 {conn.type === 'github' && conn.authenticated && ghAccounts.length > 1 && (
                   <div className="mt-2">
-                    <p className="text-[10px] text-text-tertiary mb-1">切换账号：</p>
+                    <p className="text-[10px] text-text-tertiary mb-1">Switch account:</p>
                     <div className="flex flex-wrap gap-1">
                       {ghAccounts.map(acc => (
                         <button
@@ -172,11 +172,11 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
                 )}
                 {isCliMissing(conn.type) && !conn.authenticated && (
                   <div className="mt-2 p-2.5 rounded-lg bg-surface-2/60 border border-edge-subtle">
-                    <p className="text-[11px] text-text-secondary mb-1">需要先安装 <code className="bg-surface-2 px-1 rounded text-[10px]">gh</code> CLI：</p>
+                    <p className="text-[11px] text-text-secondary mb-1">Install the <code className="bg-surface-2 px-1 rounded text-[10px]">gh</code> CLI first:</p>
                     <p className="text-[11px] text-text-tertiary">
                       <code className="bg-surface-2 px-1 rounded text-[10px]">winget install GitHub.cli</code>
                       {' · '}
-                      <a href="https://cli.github.com" className="text-accent hover:underline" onClick={e => { e.preventDefault(); window.open('https://cli.github.com') }}>下载页</a>
+                      <a href="https://cli.github.com" className="text-accent hover:underline" onClick={e => { e.preventDefault(); window.open('https://cli.github.com') }}>Download</a>
                     </p>
                   </div>
                 )}
@@ -184,7 +184,7 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {conn.authenticated && (
-                <Btn variant="danger" onClick={() => disconnect(conn.type)}>断开</Btn>
+                <Btn variant="danger" onClick={() => disconnect(conn.type)}>Disconnect</Btn>
               )}
               {!isCliMissing(conn.type) && (
                 <Btn
@@ -198,7 +198,7 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
                     finally { setConnecting(null) }
                   }}
                 >
-                  {connecting === conn.type ? '连接中…' : conn.authenticated ? '重新授权' : '连接'}
+                  {connecting === conn.type ? 'Connecting…' : conn.authenticated ? 'Reauthorize' : 'Connect'}
                 </Btn>
               )}
             </div>
@@ -222,8 +222,8 @@ function ProjectsTab({ projects, onRefresh }: { projects: Project[]; onRefresh: 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Desc>管理关注的项目，Agent 会据此提供更精准的帮助。</Desc>
-        <Btn onClick={() => setAdding(true)}><Plus size={12} /> 添加</Btn>
+        <Desc>The projects you follow, so Aide can help more precisely.</Desc>
+        <Btn onClick={() => setAdding(true)}><Plus size={12} /> Add</Btn>
       </div>
 
       {adding && (
@@ -233,7 +233,7 @@ function ProjectsTab({ projects, onRefresh }: { projects: Project[]; onRefresh: 
         />
       )}
 
-      {projects.length === 0 && !adding && <Empty>暂无项目，点击上方「添加」开始。</Empty>}
+      {projects.length === 0 && !adding && <Empty>No projects yet. Click “Add” above to start.</Empty>}
 
       {projects.map(p => editId === p.id ? (
         <ProjectForm
@@ -256,7 +256,7 @@ function ProjectsTab({ projects, onRefresh }: { projects: Project[]; onRefresh: 
               </div>
             </div>
             <button onClick={() => setEditId(p.id)} className="text-[12px] text-text-tertiary hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-all">
-              编辑
+              Edit
             </button>
           </div>
         </Card>
@@ -271,26 +271,15 @@ function ProjectForm({ initial, onSave, onCancel, onDelete }: {
   const [name, setName] = useState(initial?.name || '')
   const [description, setDescription] = useState(initial?.description || '')
   const [repoPath, setRepoPath] = useState(initial?.repoPath || '')
-  const [docsPath, setDocsPath] = useState(initial?.docsPath || '')
-  const [techStack, setTechStack] = useState(initial?.techStack || '')
-  const [team, setTeam] = useState((initial?.team || []).join(', '))
-  const [notes, setNotes] = useState(initial?.notes || '')
 
   return (
     <FormCard>
-      <Field label="名称" value={name} onChange={setName} placeholder="项目名称" required />
-      <Field label="描述" value={description} onChange={setDescription} placeholder="简介（可选）" multiline />
-      <div className="grid grid-cols-2 gap-2.5">
-        <Field label="仓库" value={repoPath} onChange={setRepoPath} placeholder="路径或 owner/repo" />
-        <Field label="文档" value={docsPath} onChange={setDocsPath} placeholder="路径或 URL" />
-      </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        <Field label="技术栈" value={techStack} onChange={setTechStack} placeholder="React, TS, Node" />
-        <Field label="团队" value={team} onChange={setTeam} placeholder="逗号分隔" />
-      </div>
-      <Field label="备注" value={notes} onChange={setNotes} placeholder="其他 Agent 需了解的信息" multiline />
+      <Field label="Name" value={name} onChange={setName} placeholder="Project name" required />
+      <Field label="Repository" value={repoPath} onChange={setRepoPath} placeholder="owner/repo or local path (optional)" />
+      <Field label="One-line description" value={description} onChange={setDescription} placeholder="What's this project about? (optional)" multiline />
+      <FormHint>Aide keeps details like tech stack, team, and docs up to date on its own as you work.</FormHint>
       <FormActions
-        onSave={() => onSave({ name, description, repoPath: repoPath || undefined, docsPath: docsPath || undefined, techStack: techStack || undefined, team: team ? team.split(',').map(s => s.trim()).filter(Boolean) : [], notes: notes || undefined })}
+        onSave={() => onSave({ name, description, repoPath: repoPath || undefined })}
         onCancel={onCancel}
         onDelete={onDelete}
         disabled={!name.trim()}
@@ -310,15 +299,15 @@ function RelationsTab({ relations, onRefresh }: { relations: Relation[]; onRefre
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Desc>工作联系人，Agent 据此判断消息优先级与协作关系。</Desc>
-        <Btn onClick={() => setAdding(true)}><Plus size={12} /> 添加</Btn>
+        <Desc>Key people you work with, so Aide can prioritize their messages.</Desc>
+        <Btn onClick={() => setAdding(true)}><Plus size={12} /> Add</Btn>
       </div>
 
       {adding && (
         <RelationForm onSave={async (data) => { await window.aide.relations.create(data); setAdding(false); onRefresh() }} onCancel={() => setAdding(false)} />
       )}
 
-      {relations.length === 0 && !adding && <Empty>暂无关系人。</Empty>}
+      {relations.length === 0 && !adding && <Empty>No contacts yet.</Empty>}
 
       {relations.map(r => editId === r.id ? (
         <RelationForm key={r.id} initial={r} onSave={async (data) => { await window.aide.relations.update(r.id, data); setEditId(null); onRefresh() }} onCancel={() => setEditId(null)} onDelete={async () => { await window.aide.relations.delete(r.id); setEditId(null); onRefresh() }} />
@@ -331,7 +320,7 @@ function RelationsTab({ relations, onRefresh }: { relations: Relation[]; onRefre
                 <RoleBadge role={r.role} />
               </div>
               <p className="text-[12px] text-text-tertiary mt-0.5">
-                {[r.title, r.org].filter(Boolean).join(' · ') || '未设置'}
+                {[r.title, r.org].filter(Boolean).join(' · ') || 'Not set'}
               </p>
               {r.expertise.length > 0 && (
                 <div className="flex gap-1 mt-1.5 flex-wrap">
@@ -339,7 +328,7 @@ function RelationsTab({ relations, onRefresh }: { relations: Relation[]; onRefre
                 </div>
               )}
             </div>
-            <button onClick={() => setEditId(r.id)} className="text-[12px] text-text-tertiary hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-all">编辑</button>
+            <button onClick={() => setEditId(r.id)} className="text-[12px] text-text-tertiary hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-all">Edit</button>
           </div>
         </Card>
       ))}
@@ -352,46 +341,27 @@ function RelationForm({ initial, onSave, onCancel, onDelete }: {
 }) {
   const [name, setName] = useState(initial?.name || '')
   const [role, setRole] = useState<string>(initial?.role || 'peer')
-  const [org, setOrg] = useState(initial?.org || '')
-  const [title, setTitle] = useState(initial?.title || '')
-  const [email, setEmail] = useState(initial?.email || '')
-  const [teamsId, setTeamsId] = useState(initial?.teamsId || '')
-  const [timezone, setTimezone] = useState(initial?.timezone || '')
-  const [expertise, setExpertise] = useState((initial?.expertise || []).join(', '))
-  const [communicationStyle, setCommunicationStyle] = useState(initial?.communicationStyle || '')
   const [notes, setNotes] = useState(initial?.notes || '')
 
   return (
     <FormCard>
       <div className="grid grid-cols-2 gap-2.5">
-        <Field label="姓名" value={name} onChange={setName} placeholder="姓名" required />
+        <Field label="Name" value={name} onChange={setName} placeholder="Name" required />
         <div>
-          <label className="text-[11px] text-text-tertiary font-medium block mb-1">角色</label>
+          <label className="text-[11px] text-text-tertiary font-medium block mb-1">Role</label>
           <select value={role} onChange={e => setRole(e.target.value)} className="w-full bg-surface-0 border border-edge rounded-lg px-2.5 py-[7px] text-[13px] text-text-primary outline-none focus:border-accent/50 transition-colors appearance-none">
-            <option value="manager">上级</option>
-            <option value="peer">同事</option>
-            <option value="report">下属</option>
-            <option value="external">外部</option>
-            <option value="stakeholder">利益相关方</option>
+            <option value="manager">Manager</option>
+            <option value="peer">Peer</option>
+            <option value="report">Report</option>
+            <option value="external">External</option>
+            <option value="stakeholder">Stakeholder</option>
           </select>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        <Field label="组织" value={org} onChange={setOrg} placeholder="部门或公司" />
-        <Field label="职位" value={title} onChange={setTitle} placeholder="职位" />
-      </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        <Field label="Email" value={email} onChange={setEmail} placeholder="name@company.com" />
-        <Field label="Teams ID" value={teamsId} onChange={setTeamsId} placeholder="user@tenant" />
-      </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        <Field label="时区" value={timezone} onChange={setTimezone} placeholder="Asia/Shanghai" />
-        <Field label="专长" value={expertise} onChange={setExpertise} placeholder="逗号分隔" />
-      </div>
-      <Field label="沟通风格" value={communicationStyle} onChange={setCommunicationStyle} placeholder="偏好的沟通方式" />
-      <Field label="备注" value={notes} onChange={setNotes} placeholder="其他信息" multiline />
+      <Field label="Notes" value={notes} onChange={setNotes} placeholder="Why they matter or how you work together (optional)" multiline />
+      <FormHint>Aide picks up details like email, Teams handle, title, and working style on its own as you interact.</FormHint>
       <FormActions
-        onSave={() => onSave({ name, role, org: org || undefined, title: title || undefined, email: email || undefined, teamsId: teamsId || undefined, timezone: timezone || undefined, expertise: expertise ? expertise.split(',').map(s => s.trim()).filter(Boolean) : [], communicationStyle: communicationStyle || undefined, notes: notes || undefined })}
+        onSave={() => onSave({ name, role, notes: notes || undefined })}
         onCancel={onCancel}
         onDelete={onDelete}
         disabled={!name.trim()}
@@ -412,8 +382,8 @@ function JobsTab({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Desc>定时任务由 Agent 按计划自动执行，用于周期性信息收集与处理。</Desc>
-        <Btn onClick={() => { setAdding(true); setEditId(null) }}><Plus size={12} /> 新建</Btn>
+        <Desc>Tasks Aide runs automatically on a schedule to keep you up to date.</Desc>
+        <Btn onClick={() => { setAdding(true); setEditId(null) }}><Plus size={12} /> New</Btn>
       </div>
 
       {adding && (
@@ -423,7 +393,7 @@ function JobsTab({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) {
         />
       )}
 
-      {jobs.length === 0 && !adding && <Empty>暂无定时任务，点击上方「新建」创建。</Empty>}
+      {jobs.length === 0 && !adding && <Empty>No scheduled jobs yet. Click “New” above to create one.</Empty>}
 
       {jobs.map(job => editId === job.id ? (
         <JobForm
@@ -447,7 +417,7 @@ function JobsTab({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button onClick={() => setEditId(job.id)} className="text-[12px] text-text-tertiary hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-all">
-                编辑
+                Edit
               </button>
               <Toggle checked={job.enabled} onChange={async v => { await window.aide.jobs.toggle(job.id, v); onRefresh() }} />
             </div>
@@ -461,12 +431,12 @@ function JobsTab({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) {
             <div className="mt-2.5 pt-2.5 border-t border-edge-subtle">
               <div className="flex items-center gap-2">
                 <span className={`text-[11px] ${job.lastResult === 'success' ? 'text-success' : 'text-danger'}`}>
-                  {job.lastResult === 'success' ? '上次成功' : '上次失败'}
+                  {job.lastResult === 'success' ? 'Last run succeeded' : 'Last run failed'}
                 </span>
                 <span className="text-[11px] text-text-tertiary">{formatRelativeTime(job.lastRunAt)}</span>
                 {job.lastSummary && (
                   <button onClick={() => setExpandedId(expandedId === job.id ? null : job.id)} className="text-[11px] text-text-tertiary hover:text-text-secondary transition-colors ml-auto">
-                    {expandedId === job.id ? '收起' : '详情'}
+                    {expandedId === job.id ? 'Collapse' : 'Details'}
                   </button>
                 )}
               </div>
@@ -501,21 +471,21 @@ function JobForm({ initial, onSave, onCancel, onDelete }: {
   const selectCls = "bg-surface-0 border border-edge rounded-lg px-3 py-[7px] text-[13px] text-text-primary outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all appearance-none pr-7"
   const selectStyle = { backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }
 
-  const dayNames = ['一', '二', '三', '四', '五', '六', '日']
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const toggleDay = (d: number) => setWeekdays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort())
 
   return (
     <FormCard>
-      <Field label="任务名称" value={name} onChange={setName} placeholder="例：检查未读邮件" required />
+      <Field label="Job name" value={name} onChange={setName} placeholder="e.g. Check unread email" required />
 
       <div>
-        <label className="text-[11px] text-text-tertiary font-medium block mb-1.5">执行频率</label>
+        <label className="text-[11px] text-text-tertiary font-medium block mb-1.5">Frequency</label>
         <div className="flex items-center gap-2 flex-wrap">
           <select value={schedType} onChange={e => setSchedType(e.target.value as any)} className={selectCls} style={selectStyle}>
-            <option value="interval">每隔</option>
-            <option value="daily">每天</option>
-            <option value="weekly">每周</option>
-            <option value="monthly">每月</option>
+            <option value="interval">Every</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
           </select>
 
           {schedType === 'interval' && (
@@ -523,7 +493,7 @@ function JobForm({ initial, onSave, onCancel, onDelete }: {
               <select value={interval} onChange={e => setInterval(+e.target.value)} className={`${selectCls} w-[80px]`} style={selectStyle}>
                 {[5, 10, 15, 20, 30, 60].map(n => <option key={n} value={n}>{n}</option>)}
               </select>
-              <span className="text-[13px] text-text-secondary">分钟</span>
+              <span className="text-[13px] text-text-secondary">minutes</span>
             </>
           )}
 
@@ -534,7 +504,7 @@ function JobForm({ initial, onSave, onCancel, onDelete }: {
                   <select value={monthDay} onChange={e => setMonthDay(+e.target.value)} className={`${selectCls} w-[72px]`} style={selectStyle}>
                     {Array.from({ length: 28 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
                   </select>
-                  <span className="text-[13px] text-text-secondary">日</span>
+                  <span className="text-[13px] text-text-secondary">of the month</span>
                 </>
               )}
               <select value={hour} onChange={e => setHour(+e.target.value)} className={`${selectCls} w-[72px]`} style={selectStyle}>
@@ -569,7 +539,7 @@ function JobForm({ initial, onSave, onCancel, onDelete }: {
         )}
       </div>
 
-      <Field label="指令" value={instruction} onChange={setInstruction} placeholder="告诉 Agent 要做什么，例：检查我的未读邮件，如果有紧急的就提醒我" required multiline />
+      <Field label="Instruction" value={instruction} onChange={setInstruction} placeholder="Tell Aide what to do, e.g. Check my unread email and flag anything urgent" required multiline />
       <FormActions onSave={() => onSave({ name, cron, instruction })} onCancel={onCancel} onDelete={onDelete} disabled={!name.trim() || !cron.trim() || !instruction.trim()} />
     </FormCard>
   )
@@ -636,12 +606,12 @@ function buildCron(type: string, interval: number, hour: number, minute: number,
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return '刚刚'
-  if (mins < 60) return `${mins} 分钟前`
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs} 小时前`
+  if (hrs < 24) return `${hrs}h ago`
   const days = Math.floor(hrs / 24)
-  return `${days} 天前`
+  return `${days}d ago`
 }
 
 /* ═══════════════════════════════════════════
@@ -678,21 +648,21 @@ function MemoryTab() {
       <div>
         <div className="flex items-center justify-between mb-2">
           <div>
-            <p className="text-[13px] font-medium text-text-primary">身份记忆</p>
-            <p className="text-[11px] text-text-tertiary mt-0.5">始终注入对话上下文的核心信息</p>
+            <p className="text-[13px] font-medium text-text-primary">Identity memory</p>
+            <p className="text-[11px] text-text-tertiary mt-0.5">A few core facts about who you are. Aide always keeps these in mind.</p>
           </div>
-          <span className="text-[11px] text-text-tertiary tabular-nums">{l0.length}/8000</span>
+          <span className="text-[11px] text-text-tertiary tabular-nums">{l0.length}/1000</span>
         </div>
         <textarea
           value={l0}
           onChange={e => setL0(e.target.value)}
-          className="w-full h-40 bg-surface-0 border border-edge rounded-xl p-3 text-[13px] text-text-primary placeholder:text-text-tertiary resize-none outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all leading-relaxed"
-          placeholder={"我是张三，在 ABC 公司担任高级前端工程师。\n我的上级是李四 (Engineering Manager)。\n我主要负责 Web App 项目，使用 React + TypeScript。"}
-          maxLength={8000}
+          className="w-full h-24 bg-surface-0 border border-edge rounded-xl p-3 text-[13px] text-text-primary placeholder:text-text-tertiary resize-none outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all leading-relaxed"
+          placeholder={"I'm Jane Doe, a senior frontend engineer at ABC Inc.\nI mainly work on the Web App."}
+          maxLength={1000}
         />
         <div className="flex justify-end mt-2">
           <Btn onClick={saveL0}>
-            {l0Saved ? <><Check size={12} /> 已保存</> : <><Save size={12} /> 保存</>}
+            {l0Saved ? <><Check size={12} /> Saved</> : <><Save size={12} /> Save</>}
           </Btn>
         </div>
       </div>
@@ -701,16 +671,16 @@ function MemoryTab() {
       <div>
         <div className="flex items-center justify-between mb-2">
           <div>
-            <p className="text-[13px] font-medium text-text-primary">学习记忆</p>
-            <p className="text-[11px] text-text-tertiary mt-0.5">Agent 从交互中自动积累的知识</p>
+            <p className="text-[13px] font-medium text-text-primary">Learned memory</p>
+            <p className="text-[11px] text-text-tertiary mt-0.5">What Aide has learned about you as you work together</p>
           </div>
-          <span className="text-[11px] text-text-tertiary">{memories.length} 条</span>
+          <span className="text-[11px] text-text-tertiary">{memories.length} items</span>
         </div>
 
         {loading ? (
-          <div className="text-[12px] text-text-tertiary text-center py-8">加载中…</div>
+          <div className="text-[12px] text-text-tertiary text-center py-8">Loading…</div>
         ) : memories.length === 0 ? (
-          <Empty>尚未积累记忆，随使用逐渐增长。</Empty>
+          <Empty>No memories yet. They grow as you use Aide.</Empty>
         ) : (
           <div className="space-y-1.5 max-h-[360px] overflow-y-auto scrollbar-thin">
             {memories.map(m => (
@@ -720,12 +690,12 @@ function MemoryTab() {
                     <p className="text-[12px] text-text-secondary leading-relaxed">{m.content}</p>
                     <div className="flex items-center gap-2 mt-1.5 text-[11px] text-text-tertiary">
                       <Tag>{m.layer}</Tag>
-                      <span>{new Date(m.createdAt).toLocaleDateString('zh-CN')}</span>
+                      <span>{new Date(m.createdAt).toLocaleDateString('en-US')}</span>
                       {m.tags.length > 0 && <span>{m.tags.join(', ')}</span>}
-                      {m.recallCount > 0 && <span>被引用 {m.recallCount} 次</span>}
+                      {m.recallCount > 0 && <span>Recalled {m.recallCount} times</span>}
                     </div>
                   </div>
-                  <button onClick={() => { if (confirm('确定删除这条记忆？此操作不可撤销。')) { window.aide.memory.delete(m.id); setMemories(prev => prev.filter(x => x.id !== m.id)) } }} className="w-6 h-6 rounded-md flex items-center justify-center text-text-tertiary hover:text-danger hover:bg-danger/8 opacity-0 group-hover:opacity-100 transition-all shrink-0" title="删除">
+                  <button onClick={() => { if (confirm('Delete this memory? This cannot be undone.')) { window.aide.memory.delete(m.id); setMemories(prev => prev.filter(x => x.id !== m.id)) } }} className="w-6 h-6 rounded-md flex items-center justify-center text-text-tertiary hover:text-danger hover:bg-danger/8 opacity-0 group-hover:opacity-100 transition-all shrink-0" title="Delete">
                     <Trash2 size={12} />
                   </button>
                 </div>
@@ -747,38 +717,21 @@ function PreferencesTab() {
 
   useEffect(() => { fetchPreferences() }, [])
 
-  if (!preferences) return <div className="text-[12px] text-text-tertiary text-center py-8">加载中…</div>
+  if (!preferences) return <div className="text-[12px] text-text-tertiary text-center py-8">Loading…</div>
 
   return (
     <div className="space-y-4">
-      <Desc>应用行为偏好。</Desc>
+      <Desc>Fine-tune how Aide behaves.</Desc>
 
-      <SettingRow label="语言" description="Agent 回复语言">
-        <Select value={preferences.language} onChange={v => setPreferences({ language: v as any })} options={[
-          { value: 'zh-CN', label: '中文' },
-          { value: 'en', label: 'English' },
-        ]} />
-      </SettingRow>
-
-      <SettingRow label="自主级别" description="操作前是否需要确认">
+      <SettingRow label="Autonomy level" description="Decide when Aide should check with you before acting">
         <Select value={preferences.autonomyLevel} onChange={v => setPreferences({ autonomyLevel: v as any })} options={[
-          { value: 'default', label: '默认 — 写操作确认' },
-          { value: 'auto', label: '全自动 — 仅危险确认' },
-          { value: 'confirm', label: '全确认' },
+          { value: 'default', label: 'Default — Aide acts on its own' },
+          { value: 'confirm', label: 'Confirm first — ask me before every action' },
         ]} />
       </SettingRow>
 
-      <SettingRow label="系统通知" description="高优先级任务弹出通知">
+      <SettingRow label="System notifications" description="Get notified about high-priority tasks">
         <Toggle checked={preferences.systemNotifications} onChange={v => setPreferences({ systemNotifications: v })} />
-      </SettingRow>
-
-      <SettingRow label="任务列表上限" description="侧边栏显示条数">
-        <Select value={String(preferences.activeTaskCap)} onChange={v => setPreferences({ activeTaskCap: Number(v) })} options={[
-          { value: '10', label: '10' },
-          { value: '15', label: '15' },
-          { value: '20', label: '20' },
-          { value: '30', label: '30' },
-        ]} />
       </SettingRow>
     </div>
   )
@@ -794,6 +747,10 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 
 function FormCard({ children }: { children: React.ReactNode }) {
   return <div className="p-4 rounded-xl bg-surface-2 border border-edge space-y-2.5 anim-fade-up">{children}</div>
+}
+
+function FormHint({ children }: { children: string }) {
+  return <p className="text-[11px] text-text-tertiary/80 leading-relaxed">{children}</p>
 }
 
 function Desc({ children }: { children: string }) {
@@ -846,12 +803,12 @@ function FormActions({ onSave, onCancel, onDelete, disabled }: { onSave: () => v
   return (
     <div className="flex items-center gap-2 pt-1">
       <button onClick={onSave} disabled={disabled} className="h-7 px-3 rounded-lg text-[12px] font-medium bg-accent text-white hover:brightness-110 disabled:opacity-30 disabled:hover:brightness-100 transition-all inline-flex items-center gap-1.5">
-        <Check size={12} /> 保存
+        <Check size={12} /> Save
       </button>
-      <button onClick={onCancel} className="h-7 px-3 rounded-lg text-[12px] text-text-tertiary hover:text-text-secondary transition-colors">取消</button>
+      <button onClick={onCancel} className="h-7 px-3 rounded-lg text-[12px] text-text-tertiary hover:text-text-secondary transition-colors">Cancel</button>
       {onDelete && (
         <button onClick={onDelete} className="h-7 px-3 rounded-lg text-[12px] text-danger/70 hover:text-danger hover:bg-danger/8 transition-colors ml-auto inline-flex items-center gap-1.5">
-          <Trash2 size={12} /> 删除
+          <Trash2 size={12} /> Delete
         </button>
       )}
     </div>
@@ -905,7 +862,7 @@ function RoleBadge({ role }: { role: string }) {
     external: 'bg-warning/10 text-warning border-warning/15',
     stakeholder: 'bg-success/10 text-success border-success/15'
   }
-  const labels: Record<string, string> = { manager: '上级', peer: '同事', report: '下属', external: '外部', stakeholder: '相关方' }
+  const labels: Record<string, string> = { manager: 'Manager', peer: 'Peer', report: 'Report', external: 'External', stakeholder: 'Stakeholder' }
   return <span className={`text-[11px] px-1.5 py-[1px] rounded-md font-medium border ${styles[role] || styles.peer}`}>{labels[role] || role}</span>
 }
 
@@ -917,38 +874,38 @@ function describeCron(cron: string): string {
 
   // Normalize weekday detection: '1-5' or '1,2,3,4,5' both count as workdays
   const isWorkdays = dow === '1-5' || dow === '1,2,3,4,5'
-  const dayNames = ['', '一', '二', '三', '四', '五', '六', '日']
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   let dayLabel = ''
   if (isWorkdays) {
-    dayLabel = '工作日'
+    dayLabel = 'Weekdays'
   } else if (dow !== '*') {
-    const days = dow.split(',').map(d => `周${dayNames[parseInt(d)] || d}`).join('/')
+    const days = dow.split(',').map(d => dayNames[parseInt(d)] || d).join('/')
     dayLabel = days
   }
 
   // Every N minutes
   if (min.startsWith('*/')) {
     const n = min.slice(2)
-    return `每 ${n} 分钟`
+    return `Every ${n} min`
   }
 
   // Monthly (day-of-month specified)
   if (dom !== '*') {
     const time = `${hour}:${min.padStart(2, '0')}`
-    return `每月 ${dom} 日 ${time}`
+    return `Day ${dom} monthly at ${time}`
   }
 
   // Every hour
-  if (min === '0' && hour === '*') return '每小时整点'
+  if (min === '0' && hour === '*') return 'Hourly on the hour'
   // Specific hours
   if (min === '0' && hour !== '*') {
     const hours = hour.split(',').map(h => `${h}:00`)
-    const prefix = dayLabel ? `${dayLabel} ` : '每天 '
-    return `${prefix}${hours.join(' 和 ')}`
+    const prefix = dayLabel ? `${dayLabel} ` : 'Daily '
+    return `${prefix}${hours.join(' and ')}`
   }
   // Specific minute and hour
   if (hour !== '*' && min !== '*') {
-    const prefix = dayLabel ? `${dayLabel} ` : '每天 '
+    const prefix = dayLabel ? `${dayLabel} ` : 'Daily '
     return `${prefix}${hour}:${min.padStart(2, '0')}`
   }
   return cron

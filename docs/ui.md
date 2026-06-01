@@ -1,249 +1,250 @@
 # UI
 
-Electron 桌面 App。React 前端。
+Electron desktop app. React frontend.
 
-## 设计原则
+## Design principles
 
-1. **不切页面** — 用户的核心操作（看任务 + 跟 Agent 对话）在同一视图内完成，不需要导航
-2. **Chat 永远可用** — 无论在看什么，底部输入框始终在，随时可以跟 Agent 说话
-3. **任务即上下文** — 点击一个任务 = 切换 Agent 的工作上下文，不是打开新页面
-4. **Agent 主动出现** — 早上打开 App，Agent 主动给你 briefing，不需要你问
+1. **No page switching** — the user's core actions (viewing tasks + talking with the Agent) happen in a single view, no navigation needed
+2. **Chat is always available** — no matter what you're looking at, the input box at the bottom is always there; you can talk to the Agent anytime
+3. **A task is context** — clicking a task = switching the Agent's working context, not opening a new page
+4. **The Agent shows up proactively** — open the app in the morning and the Agent gives you a briefing; you don't have to ask
 
-## 布局
+## Layout
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  Aide                                    [Settings ⚙️]   │
 ├──────────────┬───────────────────────────────────────────┤
 │              │                                           │
-│  ACTIVE      │  [General Chat / Task: 修分页bug]         │
-│  🔴 API文档  │                                           │
+│  ACTIVE      │  [General Chat / Task: Fix pagination bug]│
+│  🔴 API docs │                                           │
 │  🟡 PR #351 •│  ┌─────────────────────────────────┐     │
-│  🟡 修分页bug│  │                                 │     │
-│  🟡 写设计文档│  │  Agent: 早上好，今天有3件新事... │     │
-│  🔵 确认会议 •│  │                                 │     │
-│              │  │  You: 先处理那个分页bug         │     │
+│  🟡 Fix bug  │  │                                 │     │
+│  🟡 Design   │  │  Agent: Good morning, 3 new...  │     │
+│  🔵 Confirm •│  │                                 │     │
+│              │  │  You: Handle the pagination bug │     │
 │  DONE        │  │                                 │     │
-│  Today       │  │  Agent: 好的，我看了相关issue... │     │
-│   ✓ 回复张三 │  │                                 │     │
-│   ✓ 日报     │  └─────────────────────────────────┘     │
+│  Today       │  │  Agent: OK, I read the issue... │     │
+│   ✓ Reply    │  │                                 │     │
+│   ✓ Report   │  └─────────────────────────────────┘     │
 │  Yesterday   │                                           │
-│   ✓ 部署fix  ├───────────────────────────────────────────┤
+│   ✓ Deploy   ├───────────────────────────────────────────┤
 │              │  [Message input...               ] [Send]│
 │  [+ New]     │                                           │
 └──────────────┴───────────────────────────────────────────┘
 ```
 
-### 左侧面板：Task List（固定可见）
+### Left panel: Task List (always visible)
 
-只有两个区域，不搞复杂分类：
+Only two areas, no complex categorization:
 
 ```
-ACTIVE                          ← 所有未完成任务，按优先级排
-  🔴 API文档 review (今天到期)
+ACTIVE                          ← all unfinished tasks, sorted by priority
+  🔴 API docs review (due today)
   🟡 PR #351 review        •new
-  🟡 修分页 bug
-  🟡 写设计文档
-  🔵 确认下周会议          •new
+  🟡 Fix pagination bug
+  🟡 Write design doc
+  🔵 Confirm next week's meeting  •new
 
-DONE                            ← 已完成，按日期分组
+DONE                            ← completed, grouped by date
   Today
-    ✓ 回复张三
-    ✓ 日报
+    ✓ Reply to Zhang San
+    ✓ Daily report
   Yesterday  
-    ✓ 部署 hotfix
+    ✓ Deploy hotfix
     ✓ ...
   [More history...]
 ```
 
-**Active（未完成任务）**
+**Active (unfinished tasks)**
 
-- 所有未完成任务在这一个列表里，按优先级排序
-- **不按日期分**——你不关心任务是什么时候创建的，只关心它多重要
-- 新发现的任务有 `•new` 标记（用户点击过后消失）
-- 过期/紧急的任务自动浮到顶部（Agent 会重新评估优先级）
-- 昨天没做完的任务不需要"挪到今天"——它一直在 Active 里，只是优先级可能变了
+- All unfinished tasks are in this one list, sorted by priority
+- **Not grouped by date** — you don't care when a task was created, only how important it is
+- Newly discovered tasks have a `•new` marker (disappears once the user clicks)
+- Overdue/urgent tasks float to the top automatically (the Agent re-evaluates priority)
+- Tasks not finished yesterday don't need to be "moved to today" — they stay in Active, just possibly with a changed priority
 
-**Done（已完成任务）**
+**Done (completed tasks)**
 
-- 按日期分组，最新在上
-- 默认只展示今天 + 昨天
-- 点击 `[More history...]` 展开更早的历史（按日/周分组）
-- 这就是用户回看"我过去做了什么"的入口
-- 也是日报/周报生成的数据来源
+- Grouped by date, newest on top
+- By default shows only today + yesterday
+- Click `[More history...]` to expand earlier history (grouped by day/week)
+- This is the user's entry point for reviewing "what did I do in the past"
+- It's also the data source for daily/weekly report generation
 
-**未完成任务的生命周期：**
+**Lifecycle of an unfinished task:**
 
 ```
-Agent 发现 → 进入 Active (带 •new 标记，Agent 定优先级)
-用户点击/查看 → •new 消失
-用户处理完 → 移入 Done (记录完成日期)
-用户说"不用了" → 标记取消，从 Active 消失
-一直没处理 → 留在 Active，Agent 可能在日终对账时提醒或降低优先级
+Agent discovers it → enters Active (with •new marker, Agent sets priority)
+User clicks/views → •new disappears
+User finishes it → moves to Done (completion date recorded)
+User says "never mind" → marked cancelled, disappears from Active
+Never handled → stays in Active; the Agent may remind or lower priority during end-of-day reconciliation
 ```
 
-**任务快捷操作（右键菜单 / hover 按钮）：**
+**Task quick actions (right-click menu / hover buttons):**
 
-| 操作 | 效果 | 场景 |
+| Action | Effect | Scenario |
 |------|------|------|
-| ✓ 完成 | 移入 Done | 自己已经处理了（不通过 Agent） |
-| ✗ 取消 | 从 Active 移除 | 不需要做 / 跟我无关 |
-| ↓ 降低优先级 | 沉到列表底部 | 看了，现在不想管，以后再说 |
-| ⏰ 延后到... | 暂时隐藏，到时间重新出现 | "周五再看这个" |
+| ✓ Complete | Move to Done | Handled it yourself (not through the Agent) |
+| ✗ Cancel | Remove from Active | Don't need to do it / not relevant to me |
+| ↓ Lower priority | Sink to the bottom of the list | Saw it, don't want to deal with it now, later |
+| ⏰ Snooze until... | Temporarily hide, reappear at the set time | "Look at this on Friday" |
 
-**Active 列表的膨胀控制：**
+**Controlling Active-list bloat:**
 
-列表只进不出会废掉。控制机制：
+A list that only grows will break down. Control mechanisms:
 
-1. **可视上限**：默认只显示优先级最高的 ~15 条。底部显示 `+12 more...` 可展开。大部分时候用户只需关注顶部几条。
+1. **Visible cap**: by default show only the ~15 highest-priority items. The bottom shows `+12 more...` to expand. Most of the time the user only needs to focus on the top few.
 
-2. **Agent 主动清理（日终对账的一部分）**：
-   - 超过 7 天未互动 + 无 deadline + 低优先级 → Agent 提议批量清理
-   - "这 5 个任务超过一周没动了，还需要保留吗？" → 用户一键确认/逐个决定
-   - 外部系统中已关闭的事项（邮件已回复、PR 已 merge）→ Agent 自动标记完成
+2. **Agent proactive cleanup (part of end-of-day reconciliation)**:
+   - No interaction for over 7 days + no deadline + low priority → the Agent proposes a batch cleanup
+   - "These 5 tasks haven't moved in over a week, keep them?" → the user confirms in one click / decides one by one
+   - Items already closed in external systems (email replied, PR merged) → the Agent marks them complete automatically
 
-3. **自然淘汰**：被延后多次 + 持续低优先级的任务逐渐沉底。如果一个任务在 Active 里待了 2 周以上且用户从未点开过，Agent 在下次 briefing 中提出处置建议。
+3. **Natural attrition**: tasks snoozed many times + persistently low priority gradually sink. If a task has sat in Active for over 2 weeks and the user has never opened it, the Agent proposes a disposition in the next briefing.
 
-4. **用户批量操作**：长按/多选 → 批量完成/取消/延后。用于周末清理场景。
+4. **User batch operations**: long-press/multi-select → batch complete/cancel/snooze. For weekend-cleanup scenarios.
 
-**核心原则：Agent 的职责不仅是创建任务，也包括维护列表健康。** 如果 Active 超过 20 条，这本身就是 Agent 需要处理的问题——提醒用户、建议合并、自动关闭已过时的。
+**Core principle: the Agent's job isn't just to create tasks, but also to keep the list healthy.** If Active exceeds 20 items, that itself is a problem the Agent needs to handle — remind the user, suggest merging, auto-close stale ones.
 
-### 右侧面板：Chat（上下文感知）
+### Right panel: Chat (context-aware)
 
-两种模式，平滑切换：
+Two modes, switching smoothly:
 
-**Task 模式**（点击了某个任务）
+**Task mode** (a task is clicked)
 
 ```
 ┌─────────────────────────────────────────────┐
-│ ← General          修分页 bug        [✓] [✗]│  ← 标题 + 快捷操作
-│ 🔴 High · From: GitHub #234 · Project: Web  │  ← 元数据栏（一行）
-│ Due: Today · Related: 张三                   │
+│ ← General          Fix pagination bug [✓] [✗]│  ← title + quick actions
+│ 🔴 High · From: GitHub #234 · Project: Web  │  ← metadata bar (one line)
+│ Due: Today · Related: Zhang San             │
 ├─────────────────────────────────────────────┤
 │                                             │
-│ Agent: 这个 issue 是用户反馈列表第二页       │  ← Chat 区域
-│ 加载为空。我看了代码，问题在 pagination      │
-│ 组件的 offset 计算...                       │
+│ Agent: This issue is about the feedback     │  ← Chat area
+│ list's second page loading empty. I read    │
+│ the code; the problem is in the pagination  │
+│ component's offset calculation...           │
 │                                             │
-│ You: 修一下，写个测试                        │
+│ You: Fix it and write a test                │
 │                                             │
-│ Agent: 好的，我来...                         │
+│ Agent: OK, on it...                          │
 └─────────────────────────────────────────────┘
 ```
 
-- 顶部：Task 标题 + 返回 General 的箭头 + 完成/取消快捷按钮
-- 元数据栏：优先级、来源（可点击跳转原始系统）、关联 Project、deadline、相关人
-- 元数据栏是**一到两行的紧凑展示**，不是表单。点击可展开看完整信息
-- 下方就是正常 Chat——Agent 自动拥有该 Task 的完整上下文
+- Top: the Task title + an arrow to return to General + complete/cancel quick buttons
+- Metadata bar: priority, source (clickable to jump to the original system), associated Project, deadline, related people
+- The metadata bar is a **compact one-to-two-line display**, not a form. Click to expand for full information
+- Below it is normal Chat — the Agent automatically has the Task's full context
 
-**关键：Agent 第一条消息就是"详情"。** 用户第一次点进一个 Task 时，Agent 主动说明这是什么、来自哪里、当前状态、建议怎么处理。不需要一个静态的详情面板——对话本身就是动态的、有判断力的详情展示。
+**Key: the Agent's first message is the "details".** The first time the user clicks into a Task, the Agent proactively explains what it is, where it came from, its current status, and how it suggests handling it. No need for a static details panel — the conversation itself is a dynamic, judgment-driven presentation of the details.
 
-**General 模式**（没有选中任务，或点击顶部标题回到 General）
-- 自由对话，问任何事
-- Agent 基于 L0 + L1 Memory 回答
-- 如果对话中涉及某个已有 Task，Agent 可以建议"要切换到那个任务吗？"
+**General mode** (no task selected, or click the top title to return to General)
+- Free conversation, ask anything
+- The Agent answers based on L0 + L1 Memory
+- If the conversation touches an existing Task, the Agent can suggest "want to switch to that task?"
 
-### 模式切换
+### Mode switching
 
 ```
-点击左侧某 Task → 进入 Task 模式（Chat 加载该 Task session）
-点击顶部 "Aide" / "General" → 回到 General 模式
-在 General 模式对话中 Agent 创建了新 Task → 左侧列表更新，可点击进入
+Click a Task on the left → enter Task mode (Chat loads that Task's session)
+Click "Aide" / "General" at the top → return to General mode
+The Agent creates a new Task during a General-mode conversation → the left list updates, clickable to enter
 ```
 
-## Agent 主动行为（在 Chat 中体现）
+## Agent proactive behavior (reflected in Chat)
 
-| 时机 | Agent 做什么 |
+| Trigger | What the Agent does |
 |------|-------------|
-| 早上打开 App | 主动发送 morning briefing（今日概览 + 优先建议） |
-| 有紧急新任务进入 | Chat 中提示"刚收到 XX，需要你看一下" |
-| Task 自动处理完成 | "我帮你处理了 XX，结果是..." |
-| 日终 | "今天的日报准备好了，要看看吗？" |
+| Open the app in the morning | Proactively sends a morning briefing (today's overview + priority suggestions) |
+| An urgent new task arrives | Prompts in Chat: "Just received XX, you should take a look" |
+| A Task is auto-completed | "I handled XX for you, the result is..." |
+| End of day | "Today's daily report is ready, want to see it?" |
 
-## 确认交互
+## Confirmation interaction
 
-Agent 执行写操作前需要用户确认时，在 Chat 中渲染为带按钮的特殊消息：
+When the Agent needs user confirmation before a write operation, it's rendered in Chat as a special message with buttons:
 
 ```
 ┌─────────────────────────────────────────┐
-│ Agent: 我来帮你回复张三。草稿如下：      │
+│ Agent: I'll reply to Zhang San. Draft below:│
 │                                         │
-│ "Hi 张三，API 文档已更新，请查收。      │
-│  如有问题随时沟通。"                    │
+│ "Hi Zhang San, the API docs are updated,  │
+│  please review. Reach out anytime."       │
 │                                         │
-│ 发送到：zhangsan@company.com            │
+│ Send to: zhangsan@company.com           │
 │                                         │
-│   [✓ 确认发送]  [✎ 修改]  [✗ 取消]     │
+│   [✓ Confirm send]  [✎ Edit]  [✗ Cancel] │
 └─────────────────────────────────────────┘
 ```
 
-- **确认**：Agent 执行操作，Chat 中显示"已发送 ✓"
-- **修改**：输入框自动填入草稿内容，用户编辑后重新确认
-- **取消**：不执行，Agent 回应"好的，已取消"
+- **Confirm**: the Agent executes the operation, Chat shows "Sent ✓"
+- **Edit**: the input box is auto-filled with the draft; the user edits and re-confirms
+- **Cancel**: nothing is done; the Agent responds "OK, cancelled"
 
-不需要用户打字"确认"——按钮点击即可。保持流畅。
+No need for the user to type "confirm" — a button click is enough. Keep it smooth.
 
-## Settings（齿轮图标 → Modal 抽屉）
+## Settings (gear icon → modal drawer)
 
-不是单独页面，是从右侧滑出的抽屉/modal。
+Not a separate page; a drawer/modal that slides out from the right.
 
-分 tab：
-- **Connections** — Work IQ 授权状态、GitHub token
-- **Projects** — 项目列表，关联 repo/docs
-- **Relations** — 人际关系配置
-- **Jobs** — 定时任务开关和频率
-- **Memory** — 浏览/编辑/删除 Agent 的记忆
-- **Preferences** — 语言、主题、通知偏好
+Tabs:
+- **Connections** — Work IQ authorization status, GitHub token
+- **Projects** — project list, linked repo/docs
+- **Relations** — relationship configuration
+- **Jobs** — scheduled-task toggles and frequencies
+- **Memory** — browse/edit/delete the Agent's memories
+- **Preferences** — language, theme, notification preferences
 
-## 关键交互流程
+## Key interaction flows
 
-### 流程一：处理一个任务
-
-```
-1. 用户看到左侧 "PR review: fix auth flow" 
-2. 点击 → 右侧进入该 Task 的 Chat
-3. Agent: "这个 PR 改了 auth middleware，我看了 diff，主要变更是..."
-4. 用户: "approve it, 加个 comment 说 LGTM"
-5. Agent: [需要确认] 要在 PR #342 上 approve 并评论 "LGTM" 吗？
-6. 用户: 确认
-7. Agent: 已完成。任务标记为已完成。
-8. 左侧该 Task 移到 Completed
-```
-
-### 流程二：早上开工
+### Flow 1: handling a task
 
 ```
-1. 用户打开 App
-2. 左侧显示已更新的任务列表（Job 在后台已运行）
-3. 右侧 General Chat 中 Agent 主动发送：
-   "早上好。昨晚到现在有 3 件新事项：
-    1. [High] 张三邮件请求 API 文档 review（deadline 今天）
-    2. [Med] PR #351 需要你 review  
-    3. [Low] 下周会议日程确认
-   建议先处理第 1 件。"
-4. 用户点击左侧对应 Task 开始处理
+1. The user sees "PR review: fix auth flow" on the left
+2. Clicks → the right side enters that Task's Chat
+3. Agent: "This PR changes the auth middleware; I read the diff, the main change is..."
+4. User: "approve it, add a comment saying LGTM"
+5. Agent: [needs confirmation] Approve PR #342 and comment "LGTM"?
+6. User: confirm
+7. Agent: Done. The task is marked complete.
+8. The Task moves to Completed on the left
 ```
 
-### 流程三：快速提问
+### Flow 2: starting the morning
 
 ```
-1. 用户在 General 模式直接输入："上周 A 说那个 deadline 是几号？"
-2. Agent 检索 Memory + Work IQ："根据上周三的邮件，A 说 deadline 是 6 月 15 号。"
-3. 不涉及任何 Task 切换
+1. The user opens the app
+2. The left shows the updated task list (the Job already ran in the background)
+3. In the General Chat on the right, the Agent proactively sends:
+   "Good morning. Since last night there are 3 new items:
+    1. [High] Zhang San's email requesting an API docs review (deadline today)
+    2. [Med] PR #351 needs your review  
+    3. [Low] Confirm next week's meeting schedule
+   I suggest handling #1 first."
+4. The user clicks the corresponding Task on the left to start
 ```
 
-## 技术选型
+### Flow 3: a quick question
 
-| 决策 | 选择 | 理由 |
+```
+1. In General mode the user types directly: "What date did A say that deadline was last week?"
+2. The Agent searches Memory + Work IQ: "Per last Wednesday's email, A said the deadline is June 15."
+3. No Task switching involved
+```
+
+## Tech selection
+
+| Decision | Choice | Rationale |
 |------|------|------|
-| UI 框架 | React | 生态成熟 |
-| 状态管理 | Zustand | 轻量，适合中等规模 |
-| 样式 | Tailwind CSS | 快速迭代 |
-| 组件库 | shadcn/ui | 可定制、不臃肿 |
-| Chat 渲染 | Markdown + streaming | Agent 回复流式展示 |
-| IPC | Electron contextBridge + typed API | 类型安全 |
+| UI framework | React | Mature ecosystem |
+| State management | Zustand | Lightweight, fits medium scale |
+| Styling | Tailwind CSS | Fast iteration |
+| Component library | shadcn/ui | Customizable, not bloated |
+| Chat rendering | Markdown + streaming | Streaming display of Agent replies |
+| IPC | Electron contextBridge + typed API | Type-safe |
 
-## 通知
+## Notifications
 
-- App 内：Chat 中 Agent 主动消息 + 左侧 Active 列表 •new 标记
-- 系统级：仅高优先级紧急任务才弹系统通知（默认关闭，可配）
+- In-app: the Agent's proactive messages in Chat + a •new marker on the left Active list
+- System-level: only high-priority urgent tasks trigger a system notification (off by default, configurable)

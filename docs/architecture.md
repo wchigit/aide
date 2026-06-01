@@ -1,16 +1,16 @@
 # Architecture
 
-系统全局架构。
+System-wide architecture.
 
-## 技术栈
+## Tech stack
 
 - **Runtime**: Electron (main + renderer)
-- **语言**: TypeScript 全栈
-- **AI 引擎**: GitHub Copilot SDK
-- **外部连接**: MCP 协议
-- **存储**: 本地 SQLite + 文件系统
+- **Language**: TypeScript everywhere
+- **AI engine**: GitHub Copilot SDK
+- **External connections**: MCP protocol
+- **Storage**: Local SQLite + filesystem
 
-## 进程模型
+## Process model
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -28,12 +28,12 @@
 │                                              │
 │  ┌──────────────────────────────────────┐   │
 │  │ MCP Servers                          │   │
-│  │ • @microsoft/workiq (M365 全覆盖)   │   │
-│  │ • GitHub MCP Server                  │   │  │ • 用户安装的 MCP（来自 Registry）   │   │
+│  │ • @microsoft/workiq (full M365)   │   │
+│  │ • GitHub MCP Server                  │   │  │ • User-installed MCP (from Registry) │   │
   └──────────────────────────────────────┘   │
   ┌──────────────────────────────────────┐   │
   │ Skills (SDK skillDirectories)        │   │
-  │ • 内置 / 社区 / 本地 SKILL.md        │   ││  └──────────────────────────────────────┘   │
+  │ • built-in / community / local SKILL.md │   ││  └──────────────────────────────────────┘   │
 └──────────────────────┬──────────────────────┘
                        │ IPC
 ┌──────────────────────▼──────────────────────┐
@@ -44,73 +44,73 @@
 └──────────────────────────────────────────────┘
 ```
 
-## 数据流
+## Data flow
 
-### 信息采集（Job 驱动）
+### Information collection (Job-driven)
 
 ```
 Job Scheduler (cron)
-  → 触发 Connection 轮询
-  → MCP Server 调 Graph API / GitHub API / ...
-  → 返回原始数据
-  → Agent 分析：是否包含新 Task？
-  → 是 → 创建 Task，写入 SQLite
-  → 沉淀观察到的信息 → Memory
+  → trigger Connection poll
+  → MCP Server calls Graph API / GitHub API / ...
+  → returns raw data
+  → Agent analyzes: does it contain a new Task?
+  → yes → create Task, write to SQLite
+  → distill observed information → Memory
 ```
 
-### 用户对话处理
+### User conversation handling
 
 ```
-用户输入 (Renderer)
+User input (Renderer)
   → IPC → Main Process
   → Agent (Copilot SDK session)
-    → 加载上下文 (Memory L0 + L1 检索 + Task + Project + Relation)
-    → SDK 推理循环
-    → 调用 Custom Tools (store_memory, create_task, send_email, ...)
-    → 返回结果
-  → IPC → Renderer 展示
+    → load context (Memory L0 + L1 retrieval + Task + Project + Relation)
+    → SDK reasoning loop
+    → call Custom Tools (store_memory, create_task, send_email, ...)
+    → return result
+  → IPC → Renderer renders
 ```
 
-## 存储设计
+## Storage design
 
-### SQLite Schema 概览
+### SQLite schema overview
 
-| 表 | 核心字段 | 说明 |
+| Table | Key fields | Description |
 |---|---|---|
-| `tasks` | id, title, status, priority, source, project_id, created_at | 任务 |
-| `memory_entries` | id, layer, content, source, status, tags, project_id, created_at | 记忆（L0/L1/L2 统一表） |
-| `memory_fts` | (FTS5 虚拟表) | 记忆全文检索 |
-| `projects` | id, name, repo_path, docs_path, description | 项目 |
-| `relations` | id, name, role, org, preferences | 人际关系 |
-| `jobs` | id, name, cron, instruction, enabled, last_run, last_result | 调度任务 |
+| `tasks` | id, title, status, priority, source, project_id, created_at | Tasks |
+| `memory_entries` | id, layer, content, source, status, tags, project_id, created_at | Memory (unified L0/L1/L2 table) |
+| `memory_fts` | (FTS5 virtual table) | Full-text search over memory |
+| `projects` | id, name, repo_path, docs_path, description | Projects |
+| `relations` | id, name, role, org, preferences | Working relationships |
+| `jobs` | id, name, cron, instruction, enabled, last_run, last_result | Scheduled jobs |
 
-### 文件系统
+### Filesystem
 
 ```
 ~/.aide/
-├── aide.db              # SQLite 主数据库
-├── sessions/            # Copilot SDK session 数据（SDK 自管理）
-├── skills/              # 已安装的 Skill（SKILL.md 包，SDK 从此目录加载）
-└── logs/                # 运行日志
+├── aide.db              # Main SQLite database
+├── sessions/            # Copilot SDK session data (SDK-managed)
+├── skills/              # Installed Skills (SKILL.md packages, loaded by the SDK from here)
+└── logs/                # Runtime logs
 ```
 
-### 可扩展性（Skill + MCP）
+### Extensibility (Skill + MCP)
 
-Aide 的能力可被持续扩展，而非写死在代码里。两类平级扩展点：
+Aide's capabilities can be continuously extended rather than hard-coded. Two peer extension points:
 
-- **Skill**：`SKILL.md` 包，放入 `~/.aide/skills/`，通过 SDK 的 `SessionConfig.skillDirectories` 自动加载，按 description 匹配后注入 context。
-- **MCP Server**：外部工具提供者，可从 `registry.modelcontextprotocol.io` 搜索并一键安装，配置注入 session。
+- **Skill**: a `SKILL.md` package placed in `~/.aide/skills/`, auto-loaded via the SDK's `SessionConfig.skillDirectories`, and injected into context once matched by description.
+- **MCP Server**: an external tool provider that can be searched and one-click installed from `registry.modelcontextprotocol.io`, with its config injected into the session.
 
-详见 docs/skill.md。
+See docs/skill.md for details.
 
-## 模块通信
+## Module communication
 
-Main process 内各模块通过直接函数调用（同一进程），不需要事件总线或消息队列。保持简单。
+Modules inside the main process call each other directly (same process) — no event bus or message queue needed. Keep it simple.
 
-Renderer ↔ Main 通过 Electron IPC，暴露类型安全的 API：
+Renderer ↔ Main communicate via Electron IPC, exposing a type-safe API:
 
 ```typescript
-// preload 暴露给 renderer 的 API
+// API exposed to the renderer via preload
 interface AideAPI {
   tasks: { list, get, update, markSeen, snooze, ... }
   chat: { send, getHistory, confirmAction, ... }

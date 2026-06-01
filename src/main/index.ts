@@ -1,14 +1,18 @@
-import { app, BrowserWindow, Menu, Notification, nativeImage } from 'electron'
+import { app, BrowserWindow, Menu, Notification, nativeImage, shell } from 'electron'
 import { join } from 'path'
 import { registerIpcHandlers } from './ipc'
 import { getDb, closeDb } from './db'
-import { startAllJobs, stopAllJobs } from './jobs'
+import { startAllJobs, stopAllJobs, catchUpMissedJobs } from './jobs'
 import { initAgent, generateMorningBriefing } from './agent'
 import { createClient } from './agent/client'
 import { initMcpServers, stopAllMcpServers } from './agent/mcp'
 import { initConnectionState } from './connections'
 import { setSdkHealth } from './health'
 import { getPreferences } from './preferences'
+
+// Force English (US) locale so native controls (e.g. <input type="date">)
+// render as mm/dd/yyyy instead of following the OS locale (年/月/日).
+app.commandLine.appendSwitch('lang', 'en-US')
 
 let mainWindow: BrowserWindow | null = null
 
@@ -67,6 +71,23 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  // Open external links in the system browser; never let the app window navigate away.
+  const isInternalUrl = (url: string): boolean => {
+    if (process.env.ELECTRON_RENDERER_URL && url.startsWith(process.env.ELECTRON_RENDERER_URL)) return true
+    return url.startsWith('file://')
+  }
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isInternalUrl(url)) return
+    event.preventDefault()
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+  })
+
   // Open DevTools in development
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.webContents.openDevTools({ mode: 'right' })
@@ -108,6 +129,8 @@ app.whenReady().then(async () => {
   // Start job scheduler (only if onboarding is complete — no connections = wasted tokens)
   if (getPreferences().onboardingComplete) {
     startAllJobs()
+    // Replay any low-frequency jobs missed while the app was closed (non-blocking)
+    catchUpMissedJobs().catch((err) => console.warn('[Aide] Job catch-up:', err))
   }
 
   // Create window
@@ -137,7 +160,7 @@ app.whenReady().then(async () => {
       // Notify renderer to refresh
       mainWindow.webContents.send('aide:event', { type: 'task:updated', task: null })
       if (reactivated.length > 0 && Notification.isSupported() && getPreferences().systemNotifications) {
-        showSystemNotification('任务提醒', `${reactivated.length} 个暂停的任务已恢复`)
+        showSystemNotification('Task reminder', `${reactivated.length} snoozed task(s) resumed`)
       }
     }
   }, 60_000)

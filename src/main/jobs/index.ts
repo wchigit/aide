@@ -36,6 +36,47 @@ export function stopAllJobs(): void {
   activeJobs.clear()
 }
 
+/**
+ * Catch up jobs that missed their scheduled run while the app was closed.
+ * croner does not replay missed fires, so low-frequency jobs (e.g. weekly
+ * world-sync) can be skipped indefinitely. On startup we detect any enabled
+ * job whose last run predates its most recent scheduled time and run it once.
+ *
+ * Excluded:
+ * - periodic-poll: high-frequency, the next tick covers any gap.
+ * - morning-briefing: has its own dedicated startup catch-up.
+ *
+ * Missed jobs run serially with spacing so a long-closed app doesn't fire a
+ * burst of sessions at once. runJob's own pre-filters guard against duplicates.
+ */
+export async function catchUpMissedJobs(): Promise<void> {
+  const db = getDb()
+  const rows = db.prepare('SELECT * FROM jobs WHERE enabled = 1').all() as Record<string, unknown>[]
+  const SKIP = new Set(['periodic-poll', 'morning-briefing'])
+
+  const missed: Job[] = []
+  for (const row of rows) {
+    const job = rowToJob(row)
+    if (SKIP.has(job.id)) continue
+
+    let prevScheduled: Date | null = null
+    try {
+      prevScheduled = new Cron(job.cron).previousRun()
+    } catch {
+      continue
+    }
+    if (!prevScheduled) continue
+
+    const lastRun = job.lastRunAt ? new Date(job.lastRunAt).getTime() : 0
+    if (lastRun < prevScheduled.getTime()) missed.push(job)
+  }
+
+  for (let i = 0; i < missed.length; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 30_000))
+    await runJob(missed[i].id)
+  }
+}
+
 function scheduleJob(job: Job): void {
   // Stop existing if any
   const existing = activeJobs.get(job.id)

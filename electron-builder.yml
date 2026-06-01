@@ -1,0 +1,75 @@
+appId: com.aide.app
+productName: Aide
+copyright: Copyright © 2026 Aide
+
+directories:
+  output: release
+  buildResources: resources
+
+# Only ship the compiled output and production node_modules.
+files:
+  - out/**/*
+  - package.json
+
+# Rebuild native modules (better-sqlite3) for the target platform.
+npmRebuild: true
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+mac:
+  category: public.app-category.productivity
+  icon: resources/icon-512.png
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Signing & notarization are enabled automatically when the matching
+  # secrets/env vars are present (CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID,
+  # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID). Without them the build is
+  # produced unsigned.
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+# ---------------------------------------------------------------------------
+# Windows
+# ---------------------------------------------------------------------------
+win:
+  icon: resources/icon-512.png
+  target:
+    - target: nsis
+      arch: [x64]
+  # Azure Trusted Signing is picked up automatically when these env vars are
+  # set in CI: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET plus the
+  # azureSignOptions below. Without them the build is produced unsigned.
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-${version}-Setup.${ext}
+
+# ---------------------------------------------------------------------------
+# Linux
+# ---------------------------------------------------------------------------
+linux:
+  icon: resources/icon-512.png
+  category: Utility
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+
+appImage:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+publish:
+  provider: github
+  releaseType: release

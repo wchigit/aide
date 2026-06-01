@@ -37,6 +37,9 @@ export default function App() {
         case 'task:updated':
           fetchTasks()
           break
+        case 'task:activity':
+          fetchTasks()
+          break
         case 'chat:message':
           if (event.message.taskId === selectedTaskIdRef.current) {
             addMessage(event.message)
@@ -61,7 +64,10 @@ export default function App() {
           addPendingAction(event.action)
           break
         case 'chat:tool-use':
-          updateToolCall(event.record)
+          // Only show tool calls for the currently active context
+          if (event.taskId === selectedTaskIdRef.current) {
+            updateToolCall(event.record)
+          }
           break
         case 'job:completed':
           fetchTasks()
@@ -70,7 +76,7 @@ export default function App() {
             addMessage({
               id: `job-${Date.now()}`,
               role: 'agent',
-              content: `[自动任务完成] ${event.summary}`,
+              content: `[Auto task completed] ${event.summary}`,
               timestamp: new Date().toISOString(),
               taskId: null
             })
@@ -82,7 +88,7 @@ export default function App() {
             addMessage({
               id: `job-err-${Date.now()}`,
               role: 'agent',
-              content: `⚠️ 后台任务执行失败（${(event as any).jobId}）：${(event as any).error}\n\n请检查连接设置是否正常。`,
+              content: `⚠️ Background job failed (${(event as any).jobId}): ${(event as any).error}\n\nPlease check your connection settings.`,
               timestamp: new Date().toISOString(),
               taskId: null
             })

@@ -2,7 +2,7 @@ import { getL0Content, searchMemory, writeMemory } from '../memory'
 import { createTask, updateTask, listTasks, getTask } from '../tasks'
 import { getProject } from '../projects'
 import { listRelations, getRelation } from '../relations'
-import { getAutonomyLevel, getPreferences } from '../preferences'
+import { getAutonomyLevel } from '../preferences'
 import { getConnectionStatus } from '../connections'
 import { showSystemNotification } from '../index'
 import type { ChatMessage, Task, PendingAction } from '@shared/types'
@@ -16,18 +16,18 @@ import { buildTools } from './tools'
 // ============================================================
 // Agent Engine — Adapter between Aide and Copilot SDK
 // ============================================================
-// SDK 负责:
-//   - 推理循环 (receive → understand → plan → execute → respond)
-//   - Tool 编排 (自动选择、调用、处理结果、再次推理)
-//   - Session 持久化 & resume
-//   - 多轮对话 & context window 自动压缩 (infinite sessions)
-//   - 流式输出
+// The SDK is responsible for:
+//   - Reasoning loop (receive → understand → plan → execute → respond)
+//   - Tool orchestration (auto-select, invoke, process results, reason again)
+//   - Session persistence & resume
+//   - Multi-turn conversation & automatic context-window compaction (infinite sessions)
+//   - Streaming output
 //
-// 我们负责:
-//   - Custom Tools (memory, tasks, reports) 的实现
-//   - Lifecycle Hooks (注入 Memory, 提取 facts)
-//   - Permission handler (自主级别控制)
-//   - 动态 System Prompt 拼装
+// We are responsible for:
+//   - Implementing Custom Tools (memory, tasks, reports)
+//   - Lifecycle Hooks (inject Memory, extract facts)
+//   - Permission handler (autonomy-level control)
+//   - Dynamic System Prompt assembly
 // ============================================================
 
 let client: CopilotClient | null = null
@@ -44,7 +44,7 @@ export function stopStream(): void {
   }
 }
 
-// === Reset Session (清除有问题的对话历史) ===
+// === Reset Session (clear a corrupted conversation history) ===
 
 export async function resetSession(taskId: string | null): Promise<void> {
   if (!client) return
@@ -74,13 +74,13 @@ function extractTaskIdFromSession(sessionId: string): string | null {
 // === Lifecycle Hooks ===
 
 const hooks: SessionConfig['hooks'] = {
-  // 注入 L0 Identity + 动态上下文
+  // Inject L0 Identity + dynamic context
   onSessionStart: async (_input: any, invocation: { sessionId: string }) => {
     const l0 = getL0Content()
     const taskId = extractTaskIdFromSession(invocation.sessionId)
     const parts: string[] = []
 
-    if (l0) parts.push(`## 身份记忆\n${l0}`)
+    if (l0) parts.push(`## Identity\n${l0}`)
 
     if (taskId) {
       const task = getTask(taskId)
@@ -99,9 +99,9 @@ const hooks: SessionConfig['hooks'] = {
       // General chat: inject workspace awareness (task summary + connection status)
       const conns = getConnectionStatus()
       const connSummary = conns.map(c =>
-        `- ${c.type}: ${c.authenticated ? `✓ 已连接${c.activeAccount ? ` (${c.activeAccount})` : ''}` : '✗ 未连接'}${c.lastError ? ` [错误: ${c.lastError}]` : ''}`
+        `- ${c.type}: ${c.authenticated ? `✓ connected${c.activeAccount ? ` (${c.activeAccount})` : ''}` : '✗ not connected'}${c.lastError ? ` [error: ${c.lastError}]` : ''}`
       ).join('\n')
-      parts.push(`## 当前连接状态\n${connSummary}`)
+      parts.push(`## Connection status\n${connSummary}`)
 
       // Brief task overview
       const allTasks = listTasks({})
@@ -109,16 +109,16 @@ const hooks: SessionConfig['hooks'] = {
       const p0Count = allTasks.filter(t => (t.status === 'pending' || t.status === 'in_progress') && t.priority === 'p0').length
       const unseenCount = allTasks.filter(t => (t.status === 'pending' || t.status === 'in_progress') && !t.seenAt).length
       if (pendingCount > 0) {
-        parts.push(`## 任务概况\n活跃任务: ${pendingCount} 个${p0Count > 0 ? `（其中 ${p0Count} 个紧急）` : ''}${unseenCount > 0 ? `，${unseenCount} 个未读` : ''}`)
+        parts.push(`## Tasks overview\nActive tasks: ${pendingCount}${p0Count > 0 ? ` (${p0Count} urgent)` : ''}${unseenCount > 0 ? `, ${unseenCount} unread` : ''}`)
       }
     }
 
-    // Token budget: ~4K total. 固定 prompt ~1K, L0 ~2K, 动态 ~1K
-    // 截断优先级: Task > Relation > Project > L1
+    // Token budget: ~3K total. Fixed prompt ~1K, L0 ~0.5K, dynamic ~1K
+    // Truncation priority: Task > Relation > Project > L1
     return { additionalContext: parts.join('\n\n') }
   },
 
-  // 注入 L1 Knowledge — 基于用户消息做 FTS5 检索
+  // Inject L1 Knowledge — FTS5 retrieval based on the user message
   // Also tracks interaction count for periodic memory flush (since infinite sessions never trigger onSessionEnd)
   onUserPromptSubmitted: async (input: any, invocation: { sessionId: string }) => {
     // Track interaction count and periodically flush a session context marker to L2
@@ -140,7 +140,7 @@ const hooks: SessionConfig['hooks'] = {
     return { modifiedPrompt: `<memory-context>\n${block}\n</memory-context>\n\n${input.prompt}` }
   },
 
-  // Session 结束时：提取 summary → L2, 补漏提取
+  // On session end: extract summary → L2, plus catch-up extraction
   onSessionEnd: async (input: any, invocation: { sessionId: string }) => {
     if (input.reason === 'complete' || input.reason === 'user_exit') {
       const taskId = extractTaskIdFromSession(invocation.sessionId)
@@ -158,7 +158,7 @@ const hooks: SessionConfig['hooks'] = {
     return {}
   },
 
-  // 工具调用前 — 授权拦截 + 向 UI 推送记录
+  // Before tool call — permission interception + push record to UI
   onPreToolUse: async (input: any, invocation: { sessionId: string }) => {
     const toolName: string = input.toolName || ''
     const toolCallId: string = input.toolCallId || `tc-${Date.now()}`
@@ -176,7 +176,7 @@ const hooks: SessionConfig['hooks'] = {
       }
     }
 
-    // 向 UI 推送"正在调用"记录
+    // Push a "running" record to the UI
     toolCallTimestamps.set(toolCallId, Date.now())
     emitEvent({
       type: 'chat:tool-use',
@@ -184,24 +184,24 @@ const hooks: SessionConfig['hooks'] = {
       record: { id: toolCallId, toolName, status: 'running', timestamp: new Date().toISOString(), inputPreview }
     })
 
-    // 受保护工具 → 弹确认卡片等用户批准
+    // Protected tools → show a confirmation card and wait for user approval
     if (CONFIRM_REQUIRED_TOOLS.has(toolName)) {
       const approved = await requestToolConfirmation(toolName, input.toolArgs)
       if (!approved) {
         emitEvent({
           type: 'chat:tool-use',
           taskId,
-          record: { id: toolCallId, toolName, status: 'error', timestamp: new Date().toISOString(), inputPreview, resultPreview: '用户取消' }
+          record: { id: toolCallId, toolName, status: 'error', timestamp: new Date().toISOString(), inputPreview, resultPreview: 'Cancelled by user' }
         })
         toolCallTimestamps.delete(toolCallId)
-        return { permissionDecision: 'deny' as const, permissionDecisionReason: '用户取消了操作' }
+        return { permissionDecision: 'deny' as const, permissionDecisionReason: 'User cancelled the operation' }
       }
     }
-    // 其余工具 → 放行
+    // All other tools → allow
     return undefined
   },
 
-  // 工具调用后 — 向 UI 推送完成记录
+  // After tool call — push completion record to UI
   onPostToolUse: async (input: any, invocation: { sessionId: string }) => {
     const toolName: string = input.toolName || ''
     const toolCallId: string = input.toolCallId || ''
@@ -231,23 +231,23 @@ const activatedTaskSessions = new Set<string>()
 const sessionInteractionCount = new Map<string, number>()
 const MEMORY_FLUSH_INTERVAL = 10 // Flush every N user messages
 
-// === Permission Handler (分类级别授权) ===
+// === Permission Handler (category-level authorization) ===
 
-// onPermissionRequest 处理 SDK 分类级别的权限（shell, mcp, write, read 等）
-// 工具级别的精确控制在 onPreToolUse 中（见上方 hooks）
+// onPermissionRequest handles SDK category-level permissions (shell, mcp, write, read, etc.)
+// Fine-grained per-tool control lives in onPreToolUse (see hooks above)
 
 const pendingActions = new Map<string, { resolve: (v: boolean) => void; action: PendingAction; timer: ReturnType<typeof setTimeout> }>()
 
 async function handlePermissionRequest(request: PermissionRequest, _invocation: { sessionId: string }): Promise<PermissionRequestResult> {
   const level = getAutonomyLevel()
 
-  // confirm 模式 — 所有分类都弹确认
+  // confirm mode — prompt for confirmation on every category
   if (level === 'confirm') {
     const approved = await requestCategoryConfirmation(request)
     return approved ? { kind: 'approve-once' } : { kind: 'reject' }
   }
 
-  // default / auto — 分类级别全部自动批准（具体工具由 onPreToolUse 拦截）
+  // default / auto — auto-approve all categories (specific tools are intercepted by onPreToolUse)
   return { kind: 'approve-once' }
 }
 
@@ -257,7 +257,7 @@ function requestCategoryConfirmation(request: PermissionRequest): Promise<boolea
     const action: PendingAction = {
       id: actionId,
       type: request.kind,
-      description: `允许 ${request.kind} 类操作`,
+      description: `Allow ${request.kind} operation`,
       details: request as unknown as Record<string, unknown>,
       status: 'pending'
     }
@@ -276,19 +276,19 @@ function requestCategoryConfirmation(request: PermissionRequest): Promise<boolea
   })
 }
 
-// === 工具级别授权 (由 onPreToolUse 调用) ===
+// === Tool-level authorization (invoked by onPreToolUse) ===
 
-// 需要强制确认的工具（外部写操作）
-// 注：WorkIQ 发送类工具已在 MCP 层过滤，不再注册给 LLM
+// Tools that require mandatory confirmation (external write operations)
+// Note: WorkIQ send-type tools are already filtered at the MCP layer and not registered with the LLM
 const CONFIRM_REQUIRED_TOOLS = new Set([
-  // GitHub — 评论/review
+  // GitHub — comment/review
   'create_issue_comment',
   'create_pull_request_review',
 ])
 
 const TOOL_LABELS: Record<string, string> = {
-  create_issue_comment: '评论 GitHub Issue',
-  create_pull_request_review: '提交 PR Review',
+  create_issue_comment: 'Comment on a GitHub issue',
+  create_pull_request_review: 'Submit a PR review',
 }
 
 function requestToolConfirmation(toolName: string, toolArgs: unknown): Promise<boolean> {
@@ -298,7 +298,7 @@ function requestToolConfirmation(toolName: string, toolArgs: unknown): Promise<b
       id: actionId,
       type: 'tool_call',
       toolName,
-      description: TOOL_LABELS[toolName] || `执行 ${toolName}`,
+      description: TOOL_LABELS[toolName] || `Run ${toolName}`,
       details: toolArgs as Record<string, unknown> || {},
       status: 'pending'
     }
@@ -325,11 +325,7 @@ export function resolveAction(actionId: string, decision: 'confirm' | 'modify' |
 
 function buildSystemMessage(): string {
   const now = new Date()
-  const prefs = getPreferences()
-  const langInstruction = prefs.language === 'en'
-    ? '- Respond in English unless the user writes in another language'
-    : '- 使用中文回复（除非用户用其他语言）'
-  const locale = prefs.language === 'en' ? 'en-US' : 'zh-CN'
+  const locale = 'en-US'
 
   // Gather connected identities
   const conns = getConnectionStatus()
@@ -337,45 +333,43 @@ function buildSystemMessage(): string {
   const identityLines: string[] = []
   if (ghConn?.activeAccount) identityLines.push(`- GitHub: ${ghConn.activeAccount}`)
 
-  return `你是 Aide，用户的个人工作 Agent。你帮助用户管理工作事务、跟踪任务、处理信息流。
+  return `You are Aide, the user's personal work agent. You help the user manage work, track tasks, and process their information streams.
 
-当前时间: ${now.toLocaleDateString(locale)} ${now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}${identityLines.length ? `\n当前操作身份:\n${identityLines.join('\n')}` : ''}
+Current time: ${now.toLocaleDateString(locale)} ${now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}${identityLines.length ? `\nActing as:\n${identityLines.join('\n')}` : ''}
 
-## 行为准则
-- 回答简洁直接
-- 读操作直接做；写操作（发邮件/评论PR）直接调工具，系统会自动弹确认卡片
-- 发现值得记住的新事实时调 memory_write
+## Behavior
+- Answer concisely and directly
+- Read operations: just do them. Write operations (send email, comment on PR): call the tool directly — the system shows a confirmation card automatically
+- Call memory_write when you learn a new fact worth remembering
 
-## 任务管理原则
+## Task management
 
-**门槛（高）**：只有明确需要我本人出手的事才建 Task。
-- 该建：点名要我做某事、单独发给我要求行动、我是明确责任人
-- 不该建：纯通知、我只是 CC/群发对象、已完成的事、自动订阅
+**Bar (high)**: only create a Task for things that clearly need the user to act personally.
+- Create: the user is named/asked to do something, sent to them individually for action, they are the clear owner
+- Don't create: pure notifications, the user is only CC'd or in a broadcast, already-done items, automated subscriptions
 
-**优先级**：
-- P0：重要的人点名我 + 单独发给我 + 事情紧急。三者结合。
-- P1：需要我处理，有重要性或时限，但不紧急。
-- P2：被牵涉但不是唯一责任人，或低优先级。
-- 不确定就选 P2。
+**Priority**:
+- P0: an important person names the user + sent individually + urgent. All three together.
+- P1: needs the user, has importance or a deadline, but not urgent.
+- P2: involved but not the sole owner, or low priority.
+- When unsure, choose P2.
 
-**去重**：创建前确认没有已存在的相同任务（系统会注入已有任务列表）。传 sourceId 做精确去重。
+**De-dup**: before creating, confirm no identical task already exists (the system injects the existing task list). Pass sourceId for exact de-dup.
 
-## 联系人与项目
+## Contacts & projects
 
-克制。质量优先于数量。
-- 联系人：只记与我有直接实质性往来的人。群里没跟我交流过的不记。判断标准：这个人下周还会出现吗？
-- 项目：必须对应真实 repo（有 GitHub URL 或本地路径）。抽象概念不建。
-- 不要首次看到就记录，确认重要/重复出现后再建。
+Be restrained. Quality over quantity.
+- Contacts: only record people the user has direct, substantive dealings with. Don't record people in a group who never interacted with the user. Test: will this person still matter next week?
+- Projects: must map to a real repo (has a GitHub URL or local path). Don't create abstract concepts.
+- Don't record on first sight; create only after it proves important or recurring.
 
-## 记忆管理
-- 该记：用户纠正、偏好、稳定事实、人际关系
-- 不该记：临时状态、会快速过期的信息
-- 用户纠正时，检查并修正已有的错误记忆，不能只加新的不管旧的
+## Memory
+- Record: user corrections, preferences, stable facts, relationships
+- Don't record: transient state, info that expires quickly
 
-## 上下文感知
-- General 对话中提到与已有 Task 相关的事 → 提示是否切换
-- 进入 Task 对话时 → 简要说明任务背景、状态、建议处理方式
-${langInstruction}`
+## Context awareness
+- In general chat, if something relates to an existing Task → suggest switching to it
+- When entering a Task chat → briefly state the task's background, status, and suggested handling`
 }
 
 // === Model Selection (persisted to DB) ===
@@ -411,7 +405,7 @@ export function setSelectedModel(modelId: string): void {
   `).run(modelId, now, now)
 }
 
-// === 核心 API: 发送消息 ===
+// === Core API: send message ===
 
 async function getOrCreateSession(taskId: string | null): Promise<CopilotSession> {
   if (!client) throw new Error('Copilot SDK not initialized. Ensure SDK is configured.')
@@ -441,7 +435,7 @@ export async function sendMessage(
   onStream: (delta: string) => void,
   attachments?: { name: string; type: string; dataUrl: string }[]
 ): Promise<ChatMessage> {
-  // 存用户消息到本地 DB (UI 展示用)
+  // Save the user message to the local DB (for UI display)
   const userMsg: ChatMessage = {
     id: uuid(),
     role: 'user',
@@ -454,19 +448,19 @@ export async function sendMessage(
   const session = await getOrCreateSession(taskId)
   activeSession = session
 
-  // 构建 prompt（附件以内联方式附加）
+  // Build the prompt (attachments are appended inline)
   let prompt = userMessage
   if (attachments && attachments.length > 0) {
     const attachmentDescriptions = attachments.map(a => {
       if (a.type.startsWith('image/')) {
-        return `[附件: 图片 "${a.name}" (${a.type}), data: ${a.dataUrl}]`
+        return `[Attachment: image "${a.name}" (${a.type}), data: ${a.dataUrl}]`
       }
-      return `[附件: 文件 "${a.name}" (${a.type})]`
+      return `[Attachment: file "${a.name}" (${a.type})]`
     }).join('\n')
     prompt = `${userMessage}\n\n${attachmentDescriptions}`
   }
 
-  // 订阅流式事件
+  // Subscribe to streaming events
   let fullResponse = ''
   const unsubscribe = session.on('assistant.message_delta', (event) => {
     const delta = event.data.deltaContent || ''
@@ -484,7 +478,7 @@ export async function sendMessage(
     activeSession = null
   }
 
-  // 存 agent 回复
+  // Save the agent reply
   const agentMsg: ChatMessage = {
     id: uuid(),
     role: 'agent',
@@ -496,7 +490,7 @@ export async function sendMessage(
   return agentMsg
 }
 
-// === Job 执行 (无头 agent session) ===
+// === Job execution (headless agent session) ===
 
 // Job: category-level auto-approve. Tool-level blocking via onPreToolUse in job hooks.
 function jobPermissionHandler(_request: PermissionRequest): PermissionRequestResult {
@@ -510,7 +504,7 @@ const jobHooks = {
     const toolName: string = input.toolName || ''
     console.log(`[Agent/Job] tool_pre: ${toolName} | session: ${invocation.sessionId}`)
     if (CONFIRM_REQUIRED_TOOLS.has(toolName)) {
-      return { permissionDecision: 'deny' as const, permissionDecisionReason: 'Job 模式不允许发送类操作' }
+      return { permissionDecision: 'deny' as const, permissionDecisionReason: 'Job mode does not allow send/write operations' }
     }
     return undefined
   },
@@ -519,7 +513,7 @@ const jobHooks = {
 
     // Identity
     const l0 = getL0Content()
-    if (l0) parts.push(`## 身份记忆\n${l0}`)
+    if (l0) parts.push(`## Identity\n${l0}`)
 
     // Existing tasks (prevents duplicates — Agent sees what already exists)
     const existingTasks = listTasks({ status: ['pending', 'in_progress'] })
@@ -527,10 +521,10 @@ const jobHooks = {
       const taskLines = existingTasks.slice(0, 30).map(t =>
         `- [${t.priority}] ${t.title}${t.source.externalId ? ` (src:${t.source.externalId})` : ''}`
       ).join('\n')
-      parts.push(`## 已有任务\n${taskLines}`)
+      parts.push(`## Existing tasks\n${taskLines}`)
     }
 
-    parts.push(`[JOB MODE] 自动执行。可创建任务和记忆。不允许发邮件/评论等外部写操作。`)
+    parts.push(`[JOB MODE] Run automatically. You may create tasks and memories. External write operations (send email, comment, etc.) are not allowed.`)
 
     return { additionalContext: parts.join('\n\n') }
   }
@@ -567,9 +561,9 @@ export async function executeJobSession(instruction: string, jobId: string, last
     // Inject time context as metadata, not instructions
     let prompt = instruction
     if (lastRunAt) {
-      prompt = `[上次执行时间: ${lastRunAt}]\n\n${instruction}`
+      prompt = `[Last run: ${lastRunAt}]\n\n${instruction}`
     } else {
-      prompt = `[首次执行，当前时间: ${new Date().toISOString()}]\n\n${instruction}`
+      prompt = `[First run, current time: ${new Date().toISOString()}]\n\n${instruction}`
     }
     const result = await session.sendAndWait({ prompt }, timeoutMs)
     await session.disconnect()
@@ -579,17 +573,17 @@ export async function executeJobSession(instruction: string, jobId: string, last
   }
 }
 
-// === Morning Briefing (主动消息) ===
+// === Morning Briefing (proactive message) ===
 
 export async function generateMorningBriefing(): Promise<string> {
   // Fetch instruction from DB so there's a single source of truth
   const db = getDb()
   const row = db.prepare("SELECT instruction FROM jobs WHERE id = 'morning-briefing'").get() as { instruction: string } | undefined
-  const instruction = row?.instruction || '检查今天的日历事件、新邮件、Teams 消息和 GitHub 通知。为需要我处理的事项创建 Task，按优先级排序给出今日建议。'
+  const instruction = row?.instruction || 'Check today\'s calendar events, new email, Teams messages, and GitHub notifications. Create tasks for anything I need to handle, and give prioritized suggestions for today.'
   return executeJobSession(instruction, 'morning-briefing')
 }
 
-// === Chat History (本地 DB, UI 展示用) ===
+// === Chat History (local DB, for UI display) ===
 
 function saveMessage(msg: ChatMessage): void {
   const db = getDb()
@@ -644,23 +638,23 @@ export async function triggerFirstMessage(taskId: string): Promise<ChatMessage |
   if (history.length > 0) return null
 
   // Build a local briefing from structured data — instant, no LLM needed
-  const sourceLabel = { email: '邮件', github: 'GitHub', teams: 'Teams', calendar: '日历', user: '手动创建', agent: 'Agent' }[task.source.type] || task.source.type
-  const priorityLabel = { p0: 'P0（紧急）', p1: 'P1（正常）', p2: 'P2（可延后）' }[task.priority] || task.priority
-  const statusLabel = { pending: '待处理', in_progress: '处理中', completed: '已完成', cancelled: '已取消' }[task.status] || task.status
+  const sourceLabel = { email: 'Email', github: 'GitHub', teams: 'Teams', calendar: 'Calendar', chat: 'Chat' }[task.source.type] || task.source.type
+  const priorityLabel = { p0: 'P0 (urgent)', p1: 'P1 (normal)', p2: 'P2 (can wait)' }[task.priority] || task.priority
+  const statusLabel = { pending: 'Pending', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled' }[task.status] || task.status
 
   const lines: string[] = []
   lines.push(`**${task.title}**`)
   lines.push('')
-  lines.push(`来源：${sourceLabel}${task.source.externalUrl ? ` · [链接](${task.source.externalUrl})` : ''}`)
-  lines.push(`优先级：${priorityLabel} · 状态：${statusLabel}`)
+  lines.push(`Source: ${sourceLabel}${task.source.externalUrl ? ` · [link](${task.source.externalUrl})` : ''}`)
+  lines.push(`Priority: ${priorityLabel} · Status: ${statusLabel}`)
   if (task.dueDate) {
     const due = new Date(task.dueDate)
     const now = new Date()
     const diffDays = Math.ceil((due.getTime() - now.getTime()) / 86400000)
-    const dueStr = due.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
-    if (diffDays < 0) lines.push(`截止：${dueStr}（已逾期 ${-diffDays} 天）`)
-    else if (diffDays === 0) lines.push(`截止：今天`)
-    else lines.push(`截止：${dueStr}（${diffDays} 天后）`)
+    const dueStr = due.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
+    if (diffDays < 0) lines.push(`Due: ${dueStr} (${-diffDays} day(s) overdue)`)
+    else if (diffDays === 0) lines.push(`Due: today`)
+    else lines.push(`Due: ${dueStr} (in ${diffDays} day(s))`)
   }
   if (task.description) {
     lines.push('')
@@ -668,7 +662,7 @@ export async function triggerFirstMessage(taskId: string): Promise<ChatMessage |
   }
   lines.push('')
   lines.push('---')
-  lines.push('需要我帮你处理这个任务吗？可以直接告诉我要做什么。')
+  lines.push('Want me to help with this task? Just tell me what to do.')
 
   const agentMsg: ChatMessage = {
     id: uuid(),
@@ -685,20 +679,20 @@ export async function triggerFirstMessage(taskId: string): Promise<ChatMessage |
 // === Helpers ===
 
 function formatTaskContext(task: Task): string {
-  const lines = [`## 当前任务`, `- ID: ${task.id}`, `- 标题: ${task.title}`, `- 状态: ${task.status}`, `- 优先级: ${task.priority}`]
-  if (task.description) lines.push(`- 描述: ${task.description}`)
-  if (task.dueDate) lines.push(`- 截止: ${task.dueDate}`)
-  if (task.source.externalUrl) lines.push(`- 来源: ${task.source.externalUrl}`)
-  lines.push(`\n> 用户在此任务的对话中。可直接用 update_task(id: "${task.id}", ...) 操作此任务。`)
+  const lines = [`## Current task`, `- ID: ${task.id}`, `- Title: ${task.title}`, `- Status: ${task.status}`, `- Priority: ${task.priority}`]
+  if (task.description) lines.push(`- Description: ${task.description}`)
+  if (task.dueDate) lines.push(`- Due: ${task.dueDate}`)
+  if (task.source.externalUrl) lines.push(`- Source: ${task.source.externalUrl}`)
+  lines.push(`\n> The user is in this task's chat. You can operate on it directly with update_task(id: "${task.id}", ...).`)
   return lines.join('\n')
 }
 
 function formatProjectContext(p: { name: string; description: string; techStack: string | null }): string {
-  return `## 关联项目: ${p.name}\n${p.description}${p.techStack ? `\n技术栈: ${p.techStack}` : ''}`
+  return `## Related project: ${p.name}\n${p.description}${p.techStack ? `\nTech stack: ${p.techStack}` : ''}`
 }
 
 function formatRelationsContext(rels: Array<{ name: string; role: string; expertise: string[]; communicationStyle: string | null }>): string {
-  return '## 相关人员\n' + rels.map(r =>
+  return '## Related people\n' + rels.map(r =>
     `- ${r.name} (${r.role})${r.expertise.length ? ' — ' + r.expertise.join(', ') : ''}${r.communicationStyle ? ' — ' + r.communicationStyle : ''}`
   ).join('\n')
 }

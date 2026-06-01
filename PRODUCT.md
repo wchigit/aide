@@ -1,226 +1,226 @@
-# Aide - 产品定义
+# Aide — Product Definition
 
 > A personal work agent that sees the full picture, learns as you work, and helps you get things done.
 
 ---
 
-## 1. 问题定义
+## 1. Problem
 
-### 核心痛点
+### Core pain points
 
-**痛点一：任务散落，无统一管理**
+**Pain 1: Tasks are scattered, with no unified view**
 
-工作任务散在邮件、Teams、GitHub、会议纪要里，没有一个地方能看到全貌。优先级判断难，隐性承诺容易忘。传统任务管理工具（ADO、Loop）需要自己手动建任务、维护状态，本质上是给自己增加了一层负担。
+Work is spread across email, Teams, GitHub, and meeting notes — there's no single place to see the whole picture. Prioritizing is hard, and implicit commitments slip through the cracks. Traditional task managers (ADO, Loop) require you to create tasks and maintain their status by hand, which is really just one more layer of overhead.
 
-**痛点二：AI 每次都要从零开始**
+**Pain 2: AI starts from zero every time**
 
-现有 AI 工具（ChatGPT、Copilot、Claude 等）每次对话都需要大量 context 铺垫——解释项目背景、人物关系、历史决策。铺垫 5 分钟，帮忙 2 分钟。没有一个 AI 能持续积累对用户工作的理解。
+Today's AI tools (ChatGPT, Copilot, Claude, etc.) need extensive context setup for every conversation — explaining the project background, who's who, and past decisions. Five minutes of setup for two minutes of help. No AI continuously accumulates an understanding of your work.
 
-**痛点三：工作无痕，复盘靠回忆**
+**Pain 3: Work leaves no trace; reviews rely on memory**
 
-每天做了大量工作，但没有自动记录。到了写日报周报时，只能靠翻聊天记录、邮件、Git log 拼凑。手动维护日报周报耗时费力，大多数人要么不写，要么写了也不完整。
+You do a lot every day, but none of it is recorded automatically. When it's time to write a daily or weekly report, you're left piecing it together from chat logs, email, and git history. Maintaining those reports by hand is tedious, so most people either skip them or write incomplete ones.
 
-### 核心需求
+### Core need
 
-> 一个地方，统一管理我的所有工作任务——自动从各处收集、自动维护状态、随时看到全貌。AI 已经了解我的工作背景，直接说事就能帮我处理。
+> One place to manage all my work tasks — automatically collected from everywhere, automatically kept up to date, with the full picture always visible. The AI already knows my work context, so I can just say what I need and it helps.
 
-### 现有方案为什么不够
+### Why existing solutions fall short
 
-| 类型 | 代表产品 | 能力 | 缺什么 |
+| Category | Examples | Strengths | What's missing |
 |------|---------|------|--------|
-| AI Agent 助手 | Copilot、Claude | 有 agent 能力，能执行复杂任务，有记忆，有项目上下文，有工具集成 | 以对话为中心，无持久的任务生命周期管理，不主动运行 |
-| 自主 AI Agent | OpenClaw、Hermes | 持续运行，深度个性化，主动学习用户，能连接多种服务 | 不聚焦工作场景的任务管理和追踪 |
-| 任务管理 | ADO、Loop | 结构化任务管理，团队协作 | 不智能，需手动建任务和维护 |
-| 自动化 | Zapier、Power Automate | 跨系统连接，触发式执行 | 死规则，无判断力 |
+| AI assistants | Copilot, Claude | Agentic, can run complex tasks, have memory, project context, tool integration | Conversation-centric; no persistent task lifecycle; not proactive |
+| Autonomous agents | OpenClaw, Hermes | Always running, deeply personalized, proactively learn the user, connect to many services | Not focused on work-task management and tracking |
+| Task managers | ADO, Loop | Structured task management, team collaboration | Not intelligent; tasks must be created and maintained by hand |
+| Automation | Zapier, Power Automate | Cross-system connectivity, trigger-based execution | Rigid rules, no judgment |
 
 ---
 
-## 2. 目标用户
+## 2. Target user
 
-**使用规范化工作流的大厂员工。**
+**Employees at large companies who work within structured workflows.**
 
-### 用户特征
+### User characteristics
 
-- 日常使用多个工作系统（Teams、Outlook、ADO、SharePoint、GitHub 等）
-- 信息从多个渠道涌入：邮件、聊天、会议、PR、work items
-- 有汇报义务：需要定期产出日报、周报或 status update
-- 任务来源分散：来自会议 action item、邮件请求、Teams 消息、ADO 分配等
-- 所在组织有规范流程，不是"一个人随便干"的模式
+- Use multiple work systems daily (Teams, Outlook, ADO, SharePoint, GitHub, etc.)
+- Information pours in from many channels: email, chat, meetings, PRs, work items
+- Have reporting obligations: regular daily/weekly reports or status updates
+- Tasks come from scattered sources: meeting action items, email requests, Teams messages, ADO assignments, etc.
+- Work in an organization with defined processes — not a "do whatever" solo setup
 
-## 3. 产品定位
+## 3. Positioning
 
-### 一句话
+### In one sentence
 
-一个帮你看清工作全貌、持续积累工作上下文、并辅助你处理任务的个人 AI Agent。
+A personal AI agent that helps you see the full picture of your work, continuously builds up your work context, and assists you in getting tasks done.
 
-### 我们做什么
+### What we do
 
-- **聚合**：自动从用户的各工作系统中收集、整理、追踪任务，统一到一个地方
-- **理解**：主动、持续积累对用户项目、人际、历史的理解，不需要每次铺垫上下文
-- **处理**：基于上下文，像你自己一样处理任务——排优先级、沟通、执行、交付
+- **Aggregate** — automatically collect, organize, and track tasks from all your work systems, unified in one place
+- **Understand** — proactively and continuously build an understanding of your projects, people, and history, so you never have to re-explain context
+- **Act** — handle tasks the way you would, using that context: prioritize, communicate, execute, deliver
 
-## 4. 用户场景
+## 4. User scenarios
 
-### 典型的一天
+### A typical day
 
-**早上 9:00 — 开工，看全貌**
+**9:00 AM — Start work, see the whole picture**
 
-打开产品，agent 已经把昨晚到现在的邮件、Teams 消息、GitHub 通知、日历会议整理好，生成今天的任务列表并按优先级排序。30 秒扫完，知道今天最重要的几件事。
+Open the app. The agent has already organized the email, Teams messages, GitHub notifications, and calendar events from last night until now, generated today's task list, and sorted it by priority. Thirty seconds to scan it and know the few most important things today.
 
-**上午 10:00 — 会后跟进，承诺不丢**
+**10:00 AM — Post-meeting follow-up, no dropped commitments**
 
-开完一个 30 分钟的 Teams 会议，agent 自动从会议纪要中提取 action items，关联到对应项目，标记负责人和 deadline。不需要手动记录"我答应了什么"。
+A 30-minute Teams meeting ends. The agent automatically extracts action items from the meeting notes, links them to the right project, and tags owners and deadlines. No need to manually record "what I promised."
 
-**下午 2:00 — 处理任务，不用铺垫**
+**2:00 PM — Handle a task, no context setup**
 
-点开一个任务"修复用户反馈的分页 bug"，agent 已经知道这是哪个项目、代码结构、相关的 issue 讨论，直接定位到问题代码，生成修复方案和测试用例，提交 PR。
+Open a task "fix the pagination bug a user reported." The agent already knows which project this is, the code structure, and the related issue discussion. It goes straight to the problem code, produces a fix and test cases, and opens a PR.
 
-**下午 3:00 — 利用 agent 的记忆和全局视角**
+**3:00 PM — Lean on the agent's memory and global view**
 
-"上周 A 跟我说那个 API 变更结论是什么？"——agent 从邮件、Teams、会议记录中直接给出答案，不用自己翻。要准备明天的汇报，agent 把散落在 ADO、邮件、Teams、GitHub 的相关信息自动关联成完整视图。
+"What did A conclude about that API change last week?" — the agent answers directly from email, Teams, and meeting records, no digging required. Preparing for tomorrow's report, the agent pulls the relevant information scattered across ADO, email, Teams, and GitHub into one complete view.
 
-**下班前 6:00 — 自动对账，生成日报**
+**6:00 PM — Auto-reconcile and generate the daily report**
 
-agent 检查今天所有信息流：有些任务用户已经自己处理了（直接回复了邮件），有些事情还没来得及创建任务就已经解决了。agent 识别出来，更新任务状态，补建记录，生成当天日报。
+The agent reviews all of today's information flow: some tasks the user already handled themselves (replied to an email directly), some things were resolved before a task was even created. The agent identifies these, updates task statuses, backfills records, and generates the daily report.
 
-## 5. 核心概念
+## 5. Core concepts
 
-### 实体定义
+### Entity definitions
 
-**Task（任务）** — 核心实体，一切围绕它展开
-- 来源：从 Connection 自动采集、从 Job 定时生成、用户与 agent 对话创建
-- 状态：待处理 / 进行中 / 已完成 / 已取消
+**Task** — the central entity; everything revolves around it
+- Sources: auto-collected from Connections, generated on schedule by Jobs, or created through user–agent conversation
+- Status: pending / in progress / completed / cancelled
 
-**Connection（连接）** — 外部工作系统
-- 类型：Outlook、Teams、GitHub、ADO、SharePoint、Calendar 等
-- 能力：读取信息、（授权后）执行写操作
-- 是 Task 的信息来源，也是 Task 执行的操作通道
+**Connection** — an external work system
+- Types: Outlook, Teams, GitHub, ADO, SharePoint, Calendar, etc.
+- Capabilities: read information, and (once authorized) perform write actions
+- Both the source of Tasks and the channel through which Tasks are executed
 
-**Project（项目）** — 用户的工作项目
-- 内容：代码仓库、项目文档、wiki
-- 用途：为 agent 处理 Task 时提供项目背景知识
+**Project** — the user's work project
+- Contents: code repository, project docs, wiki
+- Purpose: provide background knowledge when the agent handles a Task
 
-**Relation（人际）** — 用户的工作关系网络
-- 属性：角色（老板/同事/下属/外部）、沟通偏好、时区、专长
-- 用途：帮 agent 理解任务优先级、选择沟通方式、确定交付对象
+**Relation** — the user's network of working relationships
+- Attributes: role (manager/peer/report/external), communication preferences, time zone, expertise
+- Purpose: help the agent judge task priority, choose the communication channel, and identify the delivery target
 
-**Skill（能力）** — 可扩展的能力单元，和 MCP tool 平级
-- 类型：内置（邮件起草、摘要、代码生成等）+ MCP server + 社区 / 用户自定义
-- 形式：`SKILL.md`（指令 / 知识注入）+ 可选自带 tool + 可选依赖 MCP server
-- 用途：让 Aide 的能力可被安装、发布、组合，而非写死在代码里；agent 处理 Task 时按需加载合适的 Skill
-- 来源：内置 / MCP Registry / 社区 catalog / 本地项目（详见 docs/skill.md）
+**Skill** — an extensible capability unit, peer to MCP tools
+- Types: built-in (email drafting, summarization, code generation, etc.) + MCP servers + community / user-defined
+- Form: `SKILL.md` (instruction / knowledge injection) + optional bundled tools + optional MCP server dependency
+- Purpose: make Aide's capabilities installable, publishable, and composable instead of hard-coded; the agent loads the right Skill on demand when handling a Task
+- Sources: built-in / MCP Registry / community catalog / local project (see docs/skill.md)
 
-**Job（调度）** — 定时运行的自动化
-- 例：每天早上聚合信息生成任务列表、每天下班前对账生成日报
-- 定时从各 Connection 中检查新信息，发现需要处理的事项则创建 Task
+**Job** — scheduled automation
+- Examples: aggregate information every morning to generate the task list; reconcile and generate a daily report before end of day
+- Periodically checks each Connection for new information and creates a Task when it finds something that needs handling
 
-**Memory（记忆）** — agent 对用户工作的持续理解
-- 内容：用户偏好、历史决策、项目进展、人际互动模式
-- 来源：从日常 Task 处理中自动积累
-- 可由用户查看、纠正、删除
+**Memory** — the agent's continuous understanding of the user's work
+- Contents: user preferences, past decisions, project progress, interpersonal interaction patterns
+- Source: accumulated automatically from day-to-day Task handling
+- Can be viewed, corrected, and deleted by the user
 
-### 实体关系
+### Entity relationships
 
 ```
-信息采集（主动）：
-  Job --[定时触发]--> Connection --[拉取信息]--> Agent --[识别/创建]--> Task
+Information collection (proactive):
+  Job --[scheduled trigger]--> Connection --[pull info]--> Agent --[identify/create]--> Task
 
-信息采集（被动）：
-  用户对话 --[指令]--> Agent --[创建]--> Task
+Information collection (passive):
+  User conversation --[instruction]--> Agent --[create]--> Task
 
-Agent 处理 Task 时：
-  读取 Project（项目上下文）
-  读取 Relation（人际关系）
-  读取 Memory（历史经验）
-  选择 Skill（执行能力）
-  调用 Connection（读写外部系统）
+When the Agent handles a Task:
+  read Project (project context)
+  read Relation (working relationships)
+  read Memory (past experience)
+  select Skill (execution capability)
+  call Connection (read/write external systems)
 
-Memory 积累：
-  Task 处理过程 --[沉淀]--> Memory
-  Agent 观察到的信息 --[沉淀]--> Memory
+Memory accumulation:
+  Task-handling process --[distill]--> Memory
+  Information observed by the Agent --[distill]--> Memory
 ```
 
-## 6. 功能定义
+## 6. Features
 
-### 总体原则
+### General principle
 
-所有实体（Task、Connection、Project、Relation、Skill、Job、Memory）都可以通过两种方式创建和维护：
-1. **Agent 自主**：用户与 agent 对话指示，或 agent 从日常信息流中自动发现、创建、更新
-2. **用户 UI 操作**：用户通过界面直接查看、编辑、管理
+Every entity (Task, Connection, Project, Relation, Skill, Job, Memory) can be created and maintained two ways:
+1. **By the agent** — the user instructs the agent in conversation, or the agent discovers, creates, and updates things automatically from the daily information flow
+2. **By the user in the UI** — the user views, edits, and manages directly through the interface
 
-### Task 相关
+### Task
 
-- 查看任务列表（按优先级、按项目、按状态筛选）
-- 查看单个任务详情（关联的信息来源、上下文、历史）
-- 让 agent 处理某个任务（起草回复、写文档、写代码等）
-- 确认 / 修改 / 拒绝 agent 的执行结果
-- 生成日报 / 周报（基于任务记录自动生成）
+- View the task list (filter by priority, project, status)
+- View a single task's details (linked sources, context, history)
+- Have the agent handle a task (draft a reply, write a doc, write code, etc.)
+- Confirm / modify / reject the agent's results
+- Generate daily / weekly reports (auto-generated from task records)
 
-### Connection 相关
+### Connection
 
-- 添加 / 移除外部系统连接
-- 配置每个 Connection 的权限（只读 / 读写）
+- Add / remove external system connections
+- Configure each Connection's permissions (read-only / read-write)
 
-### Project 相关
+### Project
 
-- 配置项目的上下文信息（指向代码仓库、文档目录等）
+- Configure project context (point to the code repo, docs directory, etc.)
 
-### Relation 相关
+### Relation
 
-- 设置角色、沟通偏好、时区、专长等属性
+- Set role, communication preferences, time zone, expertise, and other attributes
 
-### Skill 相关
+### Skill
 
-- 查看已安装的 Skill / MCP 能力列表
-- 从 MCP Registry / 社区 catalog 搜索并一键安装新能力
-- 添加 / 创建 / 编辑本地自定义 Skill
-- 查看每个 Skill 声明的 tool 权限
+- View the list of installed Skills / MCP capabilities
+- Search and one-click install new capabilities from the MCP Registry / community catalog
+- Add / create / edit local custom Skills
+- View the tool permissions each Skill declares
 
-### Job 相关
+### Job
 
-- 创建 / 编辑 / 删除定时任务（含执行频率配置）
-- 查看 Job 执行记录
+- Create / edit / delete scheduled jobs (including run-frequency configuration)
+- View Job run history
 
-### Memory 相关
+### Memory
 
-- 查看 agent 积累的记忆
-- 纠正 / 删除错误的记忆
+- View the memory the agent has accumulated
+- Correct / delete incorrect memories
 
-## 7. 交互设计
+## 7. Interaction design
 
-独立桌面 App，以对话为主，Dashboard 为辅。
+A standalone desktop app, conversation-first with a supporting Dashboard.
 
-App 内包含：
-- **Dashboard**：展示任务全貌、状态概览、agent 的 briefing，是"看"的入口
-- **对话窗口**：跟 agent 说事、下指令、问问题、确认结果，是"做"的入口
-- **配置页面**：管理 Connection、Project、Relation、Skill、Job、Memory
+The app contains:
+- **Dashboard** — shows the full task picture, status overview, and the agent's briefing; the entry point for "seeing"
+- **Chat window** — tell the agent things, give instructions, ask questions, confirm results; the entry point for "doing"
+- **Settings pages** — manage Connections, Projects, Relations, Skills, Jobs, Memory
 
-用户可以从 Dashboard 点击任务进入对话，也可以直接在对话中描述，agent 自动识别对应任务。所有配置既可通过 UI 操作，也可通过对话让 agent 完成。
+Users can click a task from the Dashboard to enter the conversation, or simply describe it in chat and let the agent identify the matching task. All configuration can be done through the UI or by asking the agent.
 
-## 8. 技术路线
+## 8. Technical approach
 
-| 决策 | 选择 | 理由 |
+| Decision | Choice | Rationale |
 |------|------|------|
-| 产品形态 | 本地桌面 App（Electron） | 个人工具，数据敏感，本地优先；Copilot SDK TypeScript 最成熟，Electron 天然匹配 |
-| AI 引擎 | GitHub Copilot SDK | 提供 agent 推理循环、工具编排、session 持久化；不用自建 LLM 调用层 |
-| 外部连接 | MCP 协议 | 标准化的 tool/resource 协议，生态最大，TS 实现多 |
-| 存储 | 本地 SQLite + 文件系统 | 无需服务端，单用户场景够用，便于迁移和备份 |
-| 语言 | TypeScript 全栈 | Electron + Copilot SDK + MCP 三者统一，一套语言贯穿 |
+| Product form | Local desktop app (Electron) | Personal tool, sensitive data, local-first; the Copilot SDK for TypeScript is the most mature, and Electron is a natural fit |
+| AI engine | GitHub Copilot SDK | Provides the agent reasoning loop, tool orchestration, and session persistence; no need to build our own LLM call layer |
+| External connections | MCP protocol | A standardized tool/resource protocol with the largest ecosystem and many TS implementations |
+| Storage | Local SQLite + filesystem | No server needed, sufficient for a single-user scenario, easy to migrate and back up |
+| Language | TypeScript everywhere | Unifies Electron + Copilot SDK + MCP; one language throughout |
 
-## 9. MVP 范围
+## 9. MVP scope
 
-上述 1-8 节定义的完整范围即为 MVP。目标：自己日常工作能用起来。
+The full scope defined in sections 1–8 is the MVP. Goal: be usable for my own daily work.
 
-## 10. 路线图（MVP 之后）
+## 10. Roadmap (post-MVP)
 
-| 方向 | 说明 |
+| Direction | Description |
 |------|------|
-| 权限控制系统 | 按操作类型/来源配置自主级别：哪些 agent 自动处理，哪些需确认 |
-| 外部 Channel 接入 | 通过微信/Telegram/Slack 等接受指令和接收汇报，不必打开 App |
-| Agent 自我改进 | 从执行反馈中学习，自动创建、安装、维护skill |
-| Heartbeat 主动汇报 | Agent 定期主动检查并推送值得关注的变化 |
-| 浏览器操控 | Agent 通过 Playwright/CDP 控制浏览器：自动填表、抓取网页内容、操作 Web 应用（如 ADO、SharePoint、内部系统） |
-| 系统应用操控 | Agent 操控本地桌面应用：读写文件系统、操作 Excel/Word/PowerPoint、控制终端执行命令 |
-| 屏幕理解 | 通过截图 + 视觉模型理解当前屏幕内容，支持 agent 在任意 GUI 场景下执行操作 |
-| Computer Use | 完整的键鼠操控能力：点击、拖拽、输入，让 agent 像人一样操作任何没有 API 的应用 |
-| 工作流编排 | 将多步骤操作（跨浏览器 + 系统 + API）编排为可复用工作流，一次定义反复执行 |
+| Permission control system | Configure autonomy level by action type/source: which actions the agent runs automatically, which need confirmation |
+| External channel integration | Receive instructions and reports via WeChat/Telegram/Slack, without opening the app |
+| Agent self-improvement | Learn from execution feedback; automatically create, install, and maintain skills |
+| Heartbeat proactive reporting | The agent periodically checks and pushes changes worth your attention |
+| Browser control | The agent drives the browser via Playwright/CDP: auto-fill forms, scrape web content, operate web apps (ADO, SharePoint, internal systems) |
+| System app control | The agent controls local desktop apps: read/write the filesystem, operate Excel/Word/PowerPoint, run terminal commands |
+| Screen understanding | Understand on-screen content via screenshots + vision models, enabling the agent to act in any GUI scenario |
+| Computer use | Full mouse/keyboard control — click, drag, type — so the agent can operate any app without an API, like a human |
+| Workflow orchestration | Compose multi-step actions (across browser + system + API) into reusable workflows: define once, run repeatedly |

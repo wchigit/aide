@@ -1,28 +1,28 @@
 # Task
 
-核心实体。系统的一切围绕 Task 运转。
+The central entity. Everything in the system revolves around the Task.
 
-## Task 来源
+## Task sources
 
-| 来源 | 触发方式 | 示例 |
+| Source | Trigger | Example |
 |------|---------|------|
-| Connection 轮询 | Job 定时拉信息 → Agent 识别出任务 | 收到一封需要回复的邮件 |
-| 用户对话 | 用户直接告诉 agent | "帮我写个 PR review" |
-| 会议纪要 | Job 拉取会议记录 → Agent 提取 action items | "你来跟进 API 变更" |
-| Agent 自主发现 | Agent 在处理过程中发现关联任务 | 处理 bug 时发现需要更新文档 |
+| Connection poll | A Job pulls info on a schedule → Agent identifies a task | An email that needs a reply |
+| User conversation | The user tells the agent directly | "Write me a PR review" |
+| Meeting notes | A Job pulls meeting records → Agent extracts action items | "You follow up on the API change" |
+| Agent self-discovery | The agent finds a related task while working | While fixing a bug, it notices the docs need updating |
 
-## 状态机
+## State machine
 
 ```
-待处理 (pending)
-  → 进行中 (in_progress)  -- Agent 开始处理或用户标记
-  → 已取消 (cancelled)    -- 用户取消或 Agent 判断无需处理
+pending
+  → in_progress   -- Agent starts handling it, or the user marks it
+  → cancelled     -- User cancels, or the Agent decides no action is needed
 
-进行中 (in_progress)
-  → 已完成 (completed)    -- 处理完毕
-  → 待处理 (pending)      -- 挂起，稍后再说
+in_progress
+  → completed     -- Handling finished
+  → pending       -- Parked for later
 
-已完成 / 已取消 → 不可逆
+completed / cancelled → irreversible
 ```
 
 ## Schema
@@ -34,47 +34,47 @@ interface Task {
   description: string;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   priority: 'high' | 'medium' | 'low';
-  
-  // 来源追溯
+
+  // Source tracing
   source: {
-    type: 'email' | 'teams' | 'github' | 'calendar' | 'user' | 'agent';
+    type: 'email' | 'teams' | 'github' | 'calendar' | 'chat';
     connectionId?: string;
-    externalId?: string;      // 原始系统中的 ID
-    externalUrl?: string;     // 链接回原始系统
+    externalId?: string;      // ID in the original system
+    externalUrl?: string;     // Link back to the original system
   };
-  
-  // 关联
+
+  // Associations
   projectId?: string;
   relatedRelationIds: string[];
-  
-  // 时间
+
+  // Time
   createdAt: Date;
   updatedAt: Date;
   dueDate?: Date;
   completedAt?: Date;
-  
-  // UI 状态
-  seenAt?: Date;              // 用户首次查看时间（null = •new 标记）
-  snoozedUntil?: Date;        // 延后到此时间后重新出现在 Active
-  
-  // Agent 处理记录
-  sessionId?: string;         // 关联的 Copilot SDK session
-  result?: string;            // 处理结果摘要
+
+  // UI state
+  seenAt?: Date;              // First time the user viewed it (null = •new badge)
+  snoozedUntil?: Date;        // Snooze until this time, then reappear in Active
+
+  // Agent processing record
+  sessionId?: string;         // Associated Copilot SDK session
+  result?: string;            // Summary of the result
 }
 ```
 
-## 去重策略
+## Deduplication
 
-同一件事可能从多个渠道进入（邮件 + Teams 都提到同一件事）：
-- 基于 `externalId` 精确去重（同一封邮件不会创建两个 Task）
-- 基于内容相似度模糊去重：Agent 创建 Task 前先 query 现有 Task，判断是否重复
+The same thing may arrive from multiple channels (an email and a Teams message about the same item):
+- Exact dedup by `externalId` (the same email won't create two Tasks)
+- Fuzzy dedup by content similarity: before creating a Task, the Agent queries existing Tasks to check for duplicates
 
-## 优先级判断
+## Prioritization
 
-Agent 根据以下因素自动排序：
-- 来源人的角色（Relation：老板 > 同事 > 外部）
-- 是否有明确 deadline
-- 是否被催促过
-- 关联项目的重要程度
+The Agent sorts automatically based on:
+- The sender's role (Relation: manager > peer > external)
+- Whether there's an explicit deadline
+- Whether it's been chased
+- The importance of the associated project
 
-用户可手动覆盖优先级。
+The user can manually override the priority.

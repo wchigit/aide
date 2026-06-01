@@ -1,40 +1,40 @@
 # Skill
 
-**Skill 是 Aide 的一等扩展单元，和 MCP tool 平级。它是让 Aide 能力可被持续扩展、而非写死在代码里的核心机制。**
+**A Skill is Aide's first-class unit of extension, on par with an MCP tool. It is the core mechanism that lets Aide's capabilities be continuously extended rather than hard-coded.**
 
-## 定位
+## Role
 
-Aide 的目标是「能力可扩展」——新能力可以被安装、发布、组合，而不是每次都改代码重新编译。为此 Aide 有两类平级的扩展点：
+Aide's goal is "extensible capabilities" — new capabilities can be installed, published, and composed, instead of changing code and recompiling every time. To that end, Aide has two peer extension points:
 
-| 扩展点 | 本质 | 产出 | 格式 |
+| Extension point | Essence | Output | Format |
 |--------|------|------|------|
-| **Skill** | 行为 / 知识 / 上下文注入单元，可声明依赖、可携带本地 tool | 改变 Agent 处理某类任务的方式 | `SKILL.md` + frontmatter |
-| **MCP Server** | 外部工具提供者 | 返回可执行的工具调用结果 | MCP 协议 (stdio / http) |
+| **Skill** | A behavior / knowledge / context-injection unit; can declare dependencies and carry a local tool | Changes how the Agent handles a class of tasks | `SKILL.md` + frontmatter |
+| **MCP Server** | An external tool provider | Returns executable tool-call results | MCP protocol (stdio / http) |
 
-两者**不是从属关系**：Skill 可以依赖 MCP server，MCP server 也可以被任意 Skill 引用；但 Skill 本身是独立的能力单元，可以只注入指令、也可以自带 tool 实现。
+The two are **not in a hierarchy**: a Skill can depend on an MCP server, and an MCP server can be referenced by any Skill; but a Skill is itself an independent capability unit — it can inject instructions only, or ship its own tool implementation.
 
-> 注意：早期文档曾把 Skill 描述成「Tool 的 UI 分组视图，运行时不存在」。这是错误的。Copilot SDK 原生支持 Skill（见下），Skill 在运行时是真实存在的能力单元。
+> Note: an early doc described a Skill as "a UI grouping view of Tools that doesn't exist at runtime". That was wrong. The Copilot SDK natively supports Skills (see below); a Skill is a real capability unit at runtime.
 
-## 基于 Copilot SDK 的原生 Skill 能力
+## Native Skill capability based on the Copilot SDK
 
-Aide 建在 `@github/copilot-sdk` 上，SDK 已原生提供 Skill 机制，**不需要自建 skill 加载器**：
+Aide is built on `@github/copilot-sdk`, which already provides a native Skill mechanism, so **there's no need to build a custom skill loader**:
 
-- `SessionConfig.skillDirectories: string[]` — 指定加载 Skill 的目录，SDK 自动扫描其中的 `SKILL.md`
-- `CustomAgentConfig.skills: string[]` — 子 agent 可预加载指定 Skill
-- Skill 触发时发出 `skill.invoked` 事件，把 `content` 注入对话
-- Skill frontmatter 支持 `allowed_tools`、`description`、`plugin_name` 等字段
+- `SessionConfig.skillDirectories: string[]` — directories from which to load Skills; the SDK automatically scans them for `SKILL.md`
+- `CustomAgentConfig.skills: string[]` — a sub-agent can preload specified Skills
+- When a Skill triggers, a `skill.invoked` event is emitted, injecting the `content` into the conversation
+- Skill frontmatter supports fields like `allowed_tools`, `description`, `plugin_name`
 
-这意味着 Aide 的扩展架构应「顺着 SDK 建」：把安装好的 Skill 放进 `skillDirectories`，把 MCP server 配置注入 session，剩下的加载 / 匹配 / 注入由 SDK 负责。
+This means Aide's extension architecture should be "built along the grain of the SDK": put installed Skills into `skillDirectories`, inject MCP server configuration into the session, and let the SDK handle the rest — loading / matching / injection.
 
-## Skill 包结构
+## Skill package structure
 
 ```
 <skill-name>/
-├── SKILL.md            # 必需：frontmatter (元数据) + markdown 指令
-├── tools/              # 可选：该 Skill 自带的本地 tool 实现 (TypeScript)
-├── mcp.json            # 可选：该 Skill 依赖 / 捆绑的 MCP server 配置
-├── prompts/            # 可选：分场景的 prompt 模板
-└── assets/             # 可选：图标等资源
+├── SKILL.md            # required: frontmatter (metadata) + markdown instructions
+├── tools/              # optional: local tool implementations the Skill ships (TypeScript)
+├── mcp.json            # optional: MCP server config the Skill depends on / bundles
+├── prompts/            # optional: scenario-specific prompt templates
+└── assets/             # optional: icons and other resources
 ```
 
 ### SKILL.md frontmatter
@@ -42,74 +42,74 @@ Aide 建在 `@github/copilot-sdk` 上，SDK 已原生提供 Skill 机制，**不
 ```yaml
 ---
 name: draft-email
-description: "起草、润色邮件回复。当用户需要回邮件或写正式邮件时使用。"
+description: "Draft and polish email replies. Use when the user needs to reply to email or write a formal email."
 allowed_tools: [create_entity_work_iq, fetch_work_iq]
 ---
-# 起草邮件的指令正文（仅在 Skill 触发时注入 context）
+# The instruction body for drafting email (injected into context only when the Skill triggers)
 ...
 ```
 
-- `name` / `description` — 启动时加载，用于语义匹配
-- `description` 决定 Skill 何时被自动触发；也可被用户显式调用
-- 正文内容**按需注入**，不污染初始 context
+- `name` / `description` — loaded at startup, used for semantic matching
+- `description` decides when the Skill is auto-triggered; it can also be invoked explicitly by the user
+- The body content is **injected on demand**, not polluting the initial context
 
-## 加载与触发策略
+## Loading and triggering strategy
 
 ```
-启动时：扫描 skillDirectories，只加载所有 Skill 的 name + description
-          │
-          ▼ 用户发消息
-匹配：    基于 description 语义匹配，或用户显式引用
-          │
-          ▼ 命中
-注入：    将 SKILL.md 正文加入 context
-注册：    将 tools/ 中的 tool 注册到 session
-启动：    启动该 Skill 依赖的 MCP server（若尚未运行）
+At startup: scan skillDirectories, load only every Skill's name + description
+          |
+          v  user sends a message
+Match:    semantic match on description, or explicit user reference
+          |
+          v  hit
+Inject:   add the SKILL.md body to the context
+Register: register the tools in tools/ into the session
+Start:    start the MCP server the Skill depends on (if not already running)
 ```
 
-这套延迟加载（deferred loading）是业界（Codex / Claude / OpenClaw）的共识做法，解决「Skill 数量增长后 context 爆炸」的问题。
+This deferred loading is the industry consensus (Codex / Claude / OpenClaw), solving the "context explosion as the number of Skills grows" problem.
 
-## Skill 来源（可扩展性的核心）
+## Skill sources (the core of extensibility)
 
-让「加一个新能力」从「改代码」变成「装一个 Skill / 配一个 MCP」。来源采用混合模式：
+This turns "adding a new capability" from "changing code" into "installing a Skill / configuring an MCP". Sources use a hybrid model:
 
-| 来源 | 说明 |
+| Source | Description |
 |------|------|
-| **内置 Skill** | 随 Aide 发布，覆盖核心场景（邮件起草、摘要、日报等） |
-| **MCP Registry** | 直接搜索 `registry.modelcontextprotocol.io`，一键安装 MCP server 作为 tool provider |
-| **社区 Skill catalog** | git-based 目录（类似 agentskills.io / Claude community marketplace），可发布 / 安装 |
-| **本地 / 项目 Skill** | 用户自定义，放在 `~/.aide/skills/` 或项目级 `.aide/skills/` |
+| **Built-in Skills** | Shipped with Aide, covering core scenarios (email drafting, summarization, daily reports, etc.) |
+| **MCP Registry** | Search `registry.modelcontextprotocol.io` directly and install an MCP server as a tool provider with one click |
+| **Community Skill catalog** | A git-based catalog (similar to agentskills.io / the Claude community marketplace) that can be published to / installed from |
+| **Local / project Skills** | User-defined, placed in `~/.aide/skills/` or the project-level `.aide/skills/` |
 
-## 现有 Tool 清单（内置核心能力）
+## Existing tool inventory (built-in core capabilities)
 
-以下内置 tool 不通过 Skill 提供，是 Agent 的核心能力；Skill 可以引用它们：
+The following built-in tools are not provided through Skills; they are the Agent's core capabilities, and Skills may reference them:
 
-| 来源 | Tools |
+| Source | Tools |
 |------|-------|
 | Work IQ MCP | ask_work_iq, fetch_work_iq, search_paths_work_iq, get_schema_work_iq, create_entity_work_iq, update_entity_work_iq, delete_entity_work_iq, do_action_work_iq, fetch_blob_work_iq, upload_blob_work_iq |
 | GitHub MCP | list_issues, create_issue, create_pr, review_pr |
-| 内部模块 | create_task, update_task, query_tasks, memory_write, memory_search, manage_job, manage_preferences, generate_report |
+| Internal modules | create_task, update_task, query_tasks, memory_write, memory_search, manage_job, manage_preferences, generate_report |
 
-## 与现有系统的关系
+## Relationship with the existing system
 
-| 现有概念 | 与 Skill 的关系 |
+| Existing concept | Relationship with Skill |
 |----------|----------------|
-| MCP tools (workiq, github) | Skill 可依赖 MCP，也可独立于 MCP；MCP server 可被一键安装为能力 |
-| 内部 Agent tools (manage_job, create_task 等) | 内置核心 tool，不通过 Skill 提供 |
-| Memory | Skill 可声明需要的记忆上下文 |
-| Connection | MCP 类 Skill 安装时可能需要先建立 connection / 授权 |
+| MCP tools (workiq, github) | A Skill can depend on MCP or be independent of it; an MCP server can be installed as a capability with one click |
+| Internal Agent tools (manage_job, create_task, etc.) | Built-in core tools, not provided through Skills |
+| Memory | A Skill can declare the memory context it needs |
+| Connection | An MCP-type Skill may need to first establish a connection / authorization at install time |
 
-## 权限
+## Permissions
 
-Skill 自带或依赖的 tool 同样走 SDK 的 permission 系统：
-- `allowed_tools` 限定该 Skill 能调用的 tool 范围
-- 写操作 / MCP 调用仍触发 `onPermissionRequest`（`kind: 'mcp' | 'custom-tool' | 'write'`）
-- 社区来源的 Skill 在安装前应提示其声明的 tool 权限，由用户确认
+Tools a Skill ships or depends on also go through the SDK's permission system:
+- `allowed_tools` limits the range of tools the Skill can call
+- Write operations / MCP calls still trigger `onPermissionRequest` (`kind: 'mcp' | 'custom-tool' | 'write'`)
+- A community-sourced Skill should, before installation, show the tool permissions it declares for the user to confirm
 
-## 开放问题
+## Open questions
 
-1. **Skill tool 的实现语言**：TypeScript（与 Aide 同栈）还是任意语言（via stdio/MCP）？
-2. **版本管理**：semver + lockfile，还是轻量 git ref？
-3. **安全审核**：社区 Skill 的 tool 代码如何沙箱 / 限权？
-4. **UI 呈现**：marketplace 界面是 in-app 还是 web？
-5. **付费 Skill**：是否需要考虑商业化？
+1. **The implementation language for Skill tools**: TypeScript (same stack as Aide) or any language (via stdio/MCP)?
+2. **Version management**: semver + lockfile, or a lightweight git ref?
+3. **Security review**: how to sandbox / restrict the tool code of community Skills?
+4. **UI presentation**: is the marketplace UI in-app or web?
+5. **Paid Skills**: do we need to consider monetization?

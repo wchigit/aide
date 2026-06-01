@@ -27,13 +27,30 @@ export interface Task {
   // Agent processing
   sessionId: string | null
   result: string | null
+
+  // Progress timeline
+  lastActivityAt?: string | null
 }
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
 export type Priority = 'p0' | 'p1' | 'p2'
 
+export type TaskActivityType = 'progress' | 'status_change' | 'comment' | 'blocker' | 'note'
+
+export interface TaskActivity {
+  id: string
+  taskId: string
+  timestamp: string
+  type: TaskActivityType
+  summary: string
+  statusFrom?: TaskStatus | null
+  statusTo?: TaskStatus | null
+  sourceRef?: string | null
+  createdAt: string
+}
+
 export interface TaskSource {
-  type: 'email' | 'teams' | 'github' | 'calendar' | 'user' | 'agent'
+  type: 'email' | 'teams' | 'github' | 'calendar' | 'chat'
   connectionId?: string
   externalId?: string
   externalUrl?: string
@@ -137,6 +154,7 @@ export interface AideAPI {
     update(id: string, changes: Partial<Task>): Promise<Task>
     markSeen(id: string): Promise<void>
     snooze(id: string, until: string): Promise<void>
+    listActivities(taskId: string): Promise<TaskActivity[]>
   }
   chat: {
     send(message: string, taskId: string | null, attachments?: { name: string; type: string; dataUrl: string }[]): Promise<ChatMessage>
@@ -285,18 +303,14 @@ export interface ToolCallRecord {
 // === Preferences ===
 
 export interface UserPreferences {
-  language: 'zh-CN' | 'en'
-  autonomyLevel: 'default' | 'auto' | 'confirm'
+  autonomyLevel: 'default' | 'confirm'
   systemNotifications: boolean
-  activeTaskCap: number
   onboardingComplete: boolean
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
-  language: 'zh-CN',
   autonomyLevel: 'default',
   systemNotifications: false,
-  activeTaskCap: 15,
   onboardingComplete: false
 }
 
@@ -313,6 +327,7 @@ export interface DeviceCodeInfo {
 export type AideEvent =
   | { type: 'task:created'; task: Task }
   | { type: 'task:updated'; task: Task }
+  | { type: 'task:activity'; taskId: string; activity: TaskActivity }
   | { type: 'chat:message'; message: ChatMessage }
   | { type: 'chat:stream'; taskId: string | null; delta: string }
   | { type: 'chat:stream-end'; taskId: string | null }

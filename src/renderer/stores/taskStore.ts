@@ -37,7 +37,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     set({ selectedTaskId: id })
     if (id) {
       window.aide.tasks.markSeen(id)
-      // Optimistically update local state so task moves from "新任务" to "处理中" immediately
+      // Optimistically update local state so the task moves from "New tasks" to "In progress" immediately
       set(state => ({
         tasks: state.tasks.map(t =>
           t.id === id && !t.seenAt ? { ...t, seenAt: new Date().toISOString() } : t

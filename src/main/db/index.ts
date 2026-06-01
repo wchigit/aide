@@ -10,10 +10,10 @@ let Database: typeof DatabaseConstructor
 try {
   Database = require('better-sqlite3')
 } catch (err: any) {
-  const msg = `无法加载数据库模块 (better-sqlite3)。请重新安装应用。\n${err?.message || err}`
+  const msg = `Failed to load the database module (better-sqlite3). Please reinstall the app.\n${err?.message || err}`
   if (typeof process !== 'undefined' && process.versions?.electron) {
     const { dialog } = require('electron') as typeof import('electron')
-    dialog.showErrorBox('Aide 启动失败', msg)
+    dialog.showErrorBox('Aide failed to start', msg)
   }
   throw new Error(msg)
 }
@@ -61,7 +61,21 @@ function initSchema(db: DatabaseInstance): void {
       snoozed_until TEXT,
       session_id TEXT,
       result TEXT,
+      last_activity_at TEXT,
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS task_activities (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'progress',
+      summary TEXT NOT NULL,
+      status_from TEXT,
+      status_to TEXT,
+      source_ref TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS memory_entries (
@@ -160,6 +174,7 @@ function initSchema(db: DatabaseInstance): void {
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
     CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_activity_task ON task_activities(task_id, timestamp);
     CREATE INDEX IF NOT EXISTS idx_memory_layer ON memory_entries(layer);
     CREATE INDEX IF NOT EXISTS idx_memory_status ON memory_entries(status);
     CREATE INDEX IF NOT EXISTS idx_memory_project ON memory_entries(project_id);
@@ -193,6 +208,26 @@ function runMigrations(db: DatabaseInstance): void {
   if (!taskCols.some(c => c.name === 'source_connection_id')) {
     db.exec("ALTER TABLE tasks ADD COLUMN source_connection_id TEXT")
   }
+  // Add last_activity_at to tasks (task progress timeline)
+  if (!taskCols.some(c => c.name === 'last_activity_at')) {
+    db.exec("ALTER TABLE tasks ADD COLUMN last_activity_at TEXT")
+  }
+  // Task activities timeline table (idempotent)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS task_activities (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'progress',
+      summary TEXT NOT NULL,
+      status_from TEXT,
+      status_to TEXT,
+      source_ref TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_activity_task ON task_activities(task_id, timestamp);
+  `)
   // Add last_polled_at to connections tracking
   db.exec(`
     CREATE TABLE IF NOT EXISTS connection_state (
@@ -209,17 +244,24 @@ function runMigrations(db: DatabaseInstance): void {
   `)
 }
 
-const DEFAULT_PERIODIC_POLL_INSTRUCTION = `检查上次执行以来的新邮件、Teams 消息和 GitHub 通知（首次执行看过去 24 小时）。用 ask_work_iq 时根据上方时间信息指定查询范围。
+const DEFAULT_PERIODIC_POLL_INSTRUCTION = `Check for new email, Teams messages, and GitHub notifications since the last run (on first run, look back 24 hours). When using ask_work_iq, set the query range based on the time info above.
 
-对需要我处理的事项创建 Task（附 sourceId）。同时检查已有任务是否已被自行解决（邮件已回、PR 已 merge 等），是则标记 completed。`
+Before handling each new item, call query_tasks to see current active tasks, then make one of four decisions:
 
-const DEFAULT_WORLD_SYNC_INSTRUCTION = `维护联系人和项目列表。不创建任务。
+1. Link to an existing task: if the item is a follow-up to an existing task. First use find_related_task (with sourceId/PR#/email ID, etc.) to confirm ownership; on a match, use add_task_activity to record progress, including sourceRef when possible.
+2. Update status: on objective complete/blocked signals (PR merged → completed, CI failing or changes requested → record a blocker, etc.) use update_task to change status (status changes are logged automatically).
+3. Create a new task: only when no related task exists. Always fill sourceType by the real source (GitHub → github, Teams → teams, email → email, calendar → calendar) and attach sourceId and sourceUrl (external link).
+4. Ignore: if unrelated to existing tasks and not worth creating, skip it.
 
-联系人：查过去一周 1:1 互动的人（单独邮件、单独回复、1:1 聊天）。只为这些人建/更联系人。跳过群发CC、只出现一次的人。
+Keep the bar for recording activity strict: only record when something actually moves forward, gets blocked, changes status, or requires substantive input from the user. Skip pleasantries, acknowledgements, forwards, CCs, bot notifications, and minor wording tweaks; default to ignoring — recording is the exception. Record each piece of progress only once (check with get_task_activities first), and merge multiple related items for the same task in one poll into a single note.`
 
-项目：查近期有 commit/PR/issue 活动的 GitHub 仓库。确保对应 project 存在（必须有 repo URL）。
+const DEFAULT_WORLD_SYNC_INSTRUCTION = `Maintain the contacts and projects lists. Do not create tasks.
 
-淘汰：3个月无互动的联系人 → inactive。无活动的项目 → archived。`
+Contacts: look at people with 1:1 interactions over the past week (direct emails, direct replies, 1:1 chats). Only create/update contacts for these people. Skip broadcast CCs and people who appear only once.
+
+Projects: look at GitHub repos with recent commit/PR/issue activity. Make sure a matching project exists (must have a repo URL).
+
+Retire: contacts with no interaction for 3 months → inactive. Projects with no activity → archived.`
 
 function seedDefaultJobs(db: DatabaseInstance): void {
   const insert = db.prepare(`
@@ -232,10 +274,10 @@ function seedDefaultJobs(db: DatabaseInstance): void {
 }
 
 const BUILTIN_JOBS: { id: string; name: string; cron: string; instruction: string }[] = [
-  { id: 'morning-briefing', name: '每日开工简报', cron: '0 9 * * 1-5', instruction: '检查上次执行以来的新邮件、Teams 消息、GitHub 通知，以及今天的日历事件。为需要我处理的事项创建 Task（附 sourceId），按优先级排序给出今日建议。' },
-  { id: 'periodic-poll', name: '定时轮询', cron: '*/30 * * * *', instruction: DEFAULT_PERIODIC_POLL_INSTRUCTION },
-  { id: 'daily-reconcile', name: '下班前回顾', cron: '0 18 * * 1-5', instruction: '回顾今天的任务状态。将已确认完成但未标记的任务标为 completed。对超过 7 天未动的 P2 任务建议清理。生成简短日报总结。' },
-  { id: 'world-sync', name: '人际关系和项目同步', cron: '0 10 * * 1', instruction: DEFAULT_WORLD_SYNC_INSTRUCTION },
+  { id: 'morning-briefing', name: 'Daily morning briefing', cron: '0 9 * * 1-5', instruction: 'Check for new email, Teams messages, and GitHub notifications since the last run, plus today\'s calendar events. Create a Task for items that need the user to act (fill sourceType by the real source: github/teams/email/calendar, and attach sourceId and sourceUrl), and give a prioritized summary of suggestions for today.' },
+  { id: 'periodic-poll', name: 'Periodic poll', cron: '*/30 * * * *', instruction: DEFAULT_PERIODIC_POLL_INSTRUCTION },
+  { id: 'daily-reconcile', name: 'End-of-day review', cron: '0 18 * * 1-5', instruction: 'Review today\'s task statuses. Mark tasks that are confirmed done but unmarked as completed. Suggest cleaning up P2 tasks untouched for over 7 days. Generate a short daily summary.' },
+  { id: 'world-sync', name: 'Relationships & projects sync', cron: '0 10 * * 1', instruction: DEFAULT_WORLD_SYNC_INSTRUCTION },
 ]
 
 function syncBuiltinJobs(db: DatabaseInstance): void {

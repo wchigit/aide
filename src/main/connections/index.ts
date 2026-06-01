@@ -303,7 +303,7 @@ export function authenticateGitHub(): Promise<void> {
         resolve()
       } else {
         const conn = connections.get('github')
-        if (conn) { conn.lastError = '认证失败'; conn.authenticated = false; conn.activeAccount = null }
+        if (conn) { conn.lastError = 'Authentication failed'; conn.authenticated = false; conn.activeAccount = null }
         for (const win of BrowserWindow.getAllWindows()) {
           win.webContents.send('aide:event', { type: 'connection:status', connections: getConnectionStatus() })
         }
@@ -321,7 +321,7 @@ export function authenticateGitHub(): Promise<void> {
       if (activeAuthProcess === proc) {
         proc.kill()
         activeAuthProcess = null
-        reject(new Error('认证超时'))
+        reject(new Error('Authentication timed out'))
       }
     }, 5 * 60 * 1000)
   })
@@ -387,7 +387,7 @@ export function authenticateMicrosoft(): Promise<void> {
           if (conn) { conn.verified = true }
         } catch (err: any) {
           console.error('[Aide] MCP workiq start:', err)
-          if (conn) { conn.verified = false; conn.lastError = '已登录但 MCP Server 启动失败，可能缺少 Teams/M365 权限' }
+          if (conn) { conn.verified = false; conn.lastError = 'Signed in, but the MCP server failed to start — you may be missing Teams/M365 permissions' }
         }
         for (const win of BrowserWindow.getAllWindows()) {
           win.webContents.send('aide:event', { type: 'connection:status', connections: getConnectionStatus() })
@@ -395,7 +395,7 @@ export function authenticateMicrosoft(): Promise<void> {
         resolve()
       } else {
         const conn = connections.get('workiq')
-        if (conn) { conn.lastError = '认证失败'; conn.authenticated = false }
+        if (conn) { conn.lastError = 'Authentication failed'; conn.authenticated = false }
         for (const win of BrowserWindow.getAllWindows()) {
           win.webContents.send('aide:event', { type: 'connection:status', connections: getConnectionStatus() })
         }
@@ -413,7 +413,7 @@ export function authenticateMicrosoft(): Promise<void> {
       if (activeAuthProcess === proc) {
         proc.kill()
         activeAuthProcess = null
-        reject(new Error('认证超时'))
+        reject(new Error('Authentication timed out'))
       }
     }, 5 * 60 * 1000)
   })
@@ -483,7 +483,7 @@ export async function initConnectionState(): Promise<void> {
       // Ensure EULA is accepted for returning users
       await acceptWorkiqEula()
     } else {
-      wiqConn.lastError = 'Work IQ 认证无效或权限不足，请重新登录'
+      wiqConn.lastError = 'Work IQ authentication is invalid or lacks permissions. Please sign in again.'
     }
   }
 }

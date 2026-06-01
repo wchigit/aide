@@ -60,7 +60,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         messages: [...state.messages, {
           id: `err-${Date.now()}`,
           role: 'agent' as const,
-          content: `⚠️ ${err instanceof Error ? err.message : '请求失败'}`,
+          content: `⚠️ ${err instanceof Error ? err.message : 'Request failed'}`,
           timestamp: new Date().toISOString(),
           taskId
         }],

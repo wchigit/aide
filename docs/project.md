@@ -1,6 +1,6 @@
 # Project
 
-用户工作项目的上下文信息。简单实体，为 Agent 处理 Task 时提供背景。
+Context for the user's work projects. A simple entity that gives the Agent background when handling a Task.
 
 ## Schema
 
@@ -8,25 +8,25 @@
 interface Project {
   id: string;
   name: string;
-  description: string;       // 一句话描述项目是什么
-  repoPath?: string;         // 本地代码仓库路径
-  docsPath?: string;         // 文档目录路径
-  techStack?: string;        // 技术栈摘要
-  team?: string[];           // 核心成员（关联 Relation）
-  notes?: string;            // Agent/用户补充的项目备注
+  description: string;       // One-line description of what the project is
+  repoPath?: string;         // Local code repository path
+  docsPath?: string;         // Docs directory path
+  techStack?: string;        // Tech stack summary
+  team?: string[];           // Core members (linked to Relation)
+  notes?: string;            // Project notes added by the Agent/user
   createdAt: Date;
   updatedAt: Date;
 }
 ```
 
-## Agent 如何使用 Project
+## How the Agent uses Project
 
-当 Agent 处理一个 Task 时，如果 Task 关联了 Project：
-1. 将 `description` + `techStack` + `notes` 注入上下文
-2. 如果需要看代码，通过 `repoPath` 定位
-3. 如果需要查文档，通过 `docsPath` 搜索
+When the Agent handles a Task that's linked to a Project:
+1. Inject `description` + `techStack` + `notes` into the context
+2. If it needs to look at code, locate it via `repoPath`
+3. If it needs to check docs, search via `docsPath`
 
-## 决策
+## Decisions
 
-- **不自动索引**。只存路径，Agent 需要时按需读取文件。避免复杂的索引维护。
-- **维护方式**：用户在 Settings 中手动创建 Project 并指定路径。Agent 在日常对话中补充 `description`、`techStack`、`notes` 等软信息。
+- **No automatic indexing.** Store only paths; the Agent reads files on demand when needed. Avoids complex index maintenance.
+- **Maintenance:** the user creates a Project and specifies paths manually in Settings. The Agent fills in soft information like `description`, `techStack`, and `notes` during day-to-day conversation.

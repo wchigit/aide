@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { listTasks, getTask, createTask, updateTask, markTaskSeen, snoozeTask } from '../tasks'
+import { listTasks, getTask, createTask, updateTask, markTaskSeen, snoozeTask, listTaskActivities } from '../tasks'
 import { sendMessage, getChatHistory, confirmAction, triggerFirstMessage, listModels, getSelectedModel, setSelectedModel, stopStream, resetSession } from '../agent'
 import { getL0Content, setL0Content, searchMemory, listMemory, updateMemory, deleteMemory } from '../memory'
 import { listJobs, toggleJob, getJobLastSummary, createJob, updateJob, deleteJob, runJob } from '../jobs'
@@ -17,6 +17,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('tasks:update', (_, id, changes) => updateTask(id, changes))
   ipcMain.handle('tasks:markSeen', (_, id) => markTaskSeen(id))
   ipcMain.handle('tasks:snooze', (_, id, until) => snoozeTask(id, until))
+  ipcMain.handle('tasks:listActivities', (_, taskId) => listTaskActivities(taskId))
 
   // === Chat ===
   ipcMain.handle('chat:send', async (event, message, taskId, attachments) => {

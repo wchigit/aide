@@ -225,11 +225,11 @@ function mcpToolToSdkTool(mcpTool: { name: string; description?: string; inputSc
                 type: server.type,
                 authenticated: true,
                 verified: false,
-                lastError: `权限不足: ${mcpTool.name} 调用被拒绝。可能需要 Tenant Admin 授权 Teams/M365 相关权限。`
+                lastError: `Insufficient permissions: ${mcpTool.name} call was denied. A Tenant Admin may need to grant the related Teams/M365 permissions.`
               }]
             })
           }
-          return { error: true, message: `权限不足，无法访问 ${mcpTool.name}。请确认 M365 管理员已授权必要的 Graph API 权限（Chat.Read, ChannelMessage.Read 等）。` }
+          return { error: true, message: `Insufficient permissions to access ${mcpTool.name}. Please confirm an M365 admin has granted the required Graph API permissions (Chat.Read, ChannelMessage.Read, etc.).` }
         }
         // Return non-auth errors as result so the model can see the message and self-correct
         console.error(`[MCP ${server.type}] Tool ${mcpTool.name} error:`, msg)

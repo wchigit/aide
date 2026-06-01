@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowUp, ChevronLeft, Check, X, Pencil, ChevronDown, ChevronRight, Paperclip, Copy, CheckCheck, Square, Wrench, Loader2 } from 'lucide-react'
+import { ArrowUp, ChevronLeft, Check, X, Pencil, ChevronDown, ChevronRight, Paperclip, Copy, CheckCheck, Square, Wrench, Loader2, Activity } from 'lucide-react'
 import { useTaskStore } from '../stores/taskStore'
 import { useChatStore } from '../stores/chatStore'
-import type { ChatMessage, PendingAction, ModelInfo, ToolCallRecord } from '@shared/types'
+import type { ChatMessage, PendingAction, ModelInfo, ToolCallRecord, TaskActivity } from '@shared/types'
 
 interface Attachment {
   id: string
@@ -126,7 +126,7 @@ export function ChatPanel() {
       ) : (
         <header className="shrink-0">
           <div className="h-[52px] flex items-center gap-2 px-5 drag-region">
-            <button onClick={() => goHome()} className="w-7 h-7 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors no-drag" title="返回">
+            <button onClick={() => goHome()} className="w-7 h-7 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors no-drag" title="Back">
               <ChevronLeft size={16} strokeWidth={2} />
             </button>
             <span className="text-[13px] font-medium text-text-secondary no-drag">Aide</span>
@@ -138,6 +138,8 @@ export function ChatPanel() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
         <div className="chat-content-width mx-auto px-6 py-6 space-y-5">
+          {selectedTask && <TaskActivityPanel taskId={selectedTask.id} lastActivityAt={selectedTask.lastActivityAt} />}
+
           {messages.length === 0 && !isStreaming && <EmptyState taskTitle={selectedTask?.title} />}
 
           {messages.map(msg => <MessageBubble key={msg.id} message={msg} />)}
@@ -195,7 +197,7 @@ export function ChatPanel() {
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                placeholder={selectedTask ? `关于「${selectedTask.title}」…` : '给 Aide 发消息…'}
+                placeholder={selectedTask ? `About “${selectedTask.title}”…` : 'Message Aide…'}
                 className="w-full bg-transparent text-[14px] text-text-primary placeholder:text-text-tertiary resize-none outline-none max-h-40 leading-[1.6]"
                 rows={1}
                 onInput={(e) => {
@@ -213,7 +215,7 @@ export function ChatPanel() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="w-7 h-7 rounded-lg flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
-                  title="添加附件（预览）"
+                  title="Add attachment (preview)"
                 >
                   <Paperclip size={15} />
                 </button>
@@ -231,7 +233,7 @@ export function ChatPanel() {
                     onClick={() => setShowModelPicker(!showModelPicker)}
                     className="h-7 px-2 rounded-lg flex items-center gap-1 text-[12px] text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
                   >
-                    {models.find(m => m.id === selectedModel)?.name || selectedModel || '模型'}
+                    {models.find(m => m.id === selectedModel)?.name || selectedModel || 'Model'}
                     <ChevronDown size={11} />
                   </button>
                   {showModelPicker && (
@@ -292,7 +294,7 @@ export function ChatPanel() {
                           )
                         })()}
                         {models.length === 0 && (
-                          <p className="px-3 py-2 text-[12px] text-text-tertiary">加载中…</p>
+                          <p className="px-3 py-2 text-[12px] text-text-tertiary">Loading…</p>
                         )}
                       </div>
                     </>
@@ -305,7 +307,7 @@ export function ChatPanel() {
                 <button
                   onClick={stopStream}
                   className="w-8 h-8 rounded-lg flex items-center justify-center bg-danger/12 text-danger hover:bg-danger/18 transition-all shrink-0"
-                  title="停止生成"
+                  title="Stop generating"
                 >
                   <Square size={14} fill="currentColor" />
                 </button>
@@ -329,24 +331,24 @@ export function ChatPanel() {
 /* === Task Header === */
 
 function TaskHeader({ task, onBack }: {
-  task: { id: string; title: string; status: string; priority: string; description: string; source: { type: string; externalUrl?: string }; dueDate: string | null; relatedRelationIds: string[]; projectId: string | null }
+  task: { id: string; title: string; status: string; priority: string; description: string; source: { type: string; externalUrl?: string }; dueDate: string | null; relatedRelationIds: string[]; projectId: string | null; lastActivityAt?: string | null }
   onBack: () => void
 }) {
   const { completeTask, cancelTask } = useTaskStore()
 
-  const sourceLabel: Record<string, string> = { email: '邮件', github: 'GitHub', teams: 'Teams', calendar: '日历', user: '自建', agent: 'Agent' }
-  const statusLabel: Record<string, string> = { pending: '待处理', in_progress: '处理中', completed: '已完成', cancelled: '已取消' }
+  const sourceLabel: Record<string, string> = { email: 'Email', github: 'GitHub', teams: 'Teams', calendar: 'Calendar', user: 'Manual', agent: 'Agent' }
+  const statusLabel: Record<string, string> = { pending: 'Pending', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled' }
 
   return (
     <header className="shrink-0">
       <div className="flex items-center gap-2 px-5 h-[52px] drag-region">
-        <button onClick={onBack} className="w-7 h-7 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors no-drag" title="返回">
+        <button onClick={onBack} className="w-7 h-7 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors no-drag" title="Back">
           <ChevronLeft size={16} strokeWidth={2} />
         </button>
         <h2 className="text-[13px] font-medium text-text-primary truncate flex-1 no-drag">{task.title}</h2>
         <div className="flex items-center gap-1 shrink-0 no-drag">
           <button onClick={() => completeTask(task.id)} className="h-7 px-2.5 rounded-md text-[12px] text-text-tertiary hover:text-success hover:bg-success/8 transition-colors flex items-center gap-1">
-            <Check size={13} /> 完成
+            <Check size={13} /> Done
           </button>
           <button onClick={() => cancelTask(task.id)} className="w-7 h-7 rounded-md flex items-center justify-center text-text-tertiary hover:text-danger hover:bg-danger/8 transition-colors">
             <X size={14} />
@@ -374,6 +376,97 @@ function TaskHeader({ task, onBack }: {
       <div className="h-px bg-edge" />
     </header>
   )
+}
+
+/* === Task Activity Panel — prominent card at top of conversation === */
+
+function TaskActivityPanel({ taskId, lastActivityAt }: { taskId: string; lastActivityAt?: string | null }) {
+  const [activities, setActivities] = useState<TaskActivity[]>([])
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    window.aide.tasks.listActivities(taskId).then(a => { if (alive) setActivities(a) })
+    return () => { alive = false }
+  }, [taskId, lastActivityAt])
+
+  if (activities.length === 0) return null
+
+  const latest = activities[0]
+  const typeMeta: Record<string, { label: string; dot: string; text: string }> = {
+    progress: { label: 'Progress', dot: 'bg-accent', text: 'text-accent' },
+    status_change: { label: 'Status', dot: 'bg-text-tertiary', text: 'text-text-secondary' },
+    blocker: { label: 'Blocked', dot: 'bg-danger', text: 'text-danger' },
+    comment: { label: 'Needs reply', dot: 'bg-success', text: 'text-success' },
+    note: { label: 'Note', dot: 'bg-text-tertiary', text: 'text-text-tertiary' }
+  }
+
+  return (
+    <div className="rounded-xl border border-accent/25 bg-accent/[0.04] overflow-hidden anim-fade-up">
+      {/* Header — clickable to toggle */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-accent/[0.06] transition-colors text-left"
+      >
+        <div className="w-7 h-7 rounded-lg bg-accent/12 flex items-center justify-center shrink-0">
+          <Activity size={15} className="text-accent" strokeWidth={2} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold text-text-primary">Task activity</span>
+            <span className="text-[11px] font-medium text-accent bg-accent/12 rounded-full px-1.5 py-[1px]">{activities.length}</span>
+          </div>
+          {!expanded && (
+            <div className="text-[12px] text-text-tertiary truncate mt-0.5">
+              Latest · {latest.summary}
+            </div>
+          )}
+        </div>
+        <div className="shrink-0 text-text-tertiary">
+          {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </div>
+      </button>
+
+      {/* Expanded timeline */}
+      {expanded && (
+        <div className="px-4 pb-4 pt-1">
+          <div className="relative pl-5">
+            {/* vertical connector line */}
+            <div className="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-edge" />
+            <div className="space-y-4">
+              {activities.map(a => {
+                const m = typeMeta[a.type] || typeMeta.note
+                return (
+                  <div key={a.id} className="relative">
+                    {/* dot on the line */}
+                    <div className={`absolute -left-5 top-1 w-[11px] h-[11px] rounded-full ring-2 ring-surface-0 ${m.dot}`} />
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`text-[11px] font-medium ${m.text}`}>{m.label}</span>
+                      <span className="text-[11px] text-text-tertiary/70">{formatActivityTime(a.timestamp)}</span>
+                    </div>
+                    <div className="text-[13px] text-text-secondary leading-[1.55] break-words select-text">{a.summary}</div>
+                    {a.sourceRef && (
+                      <div className="inline-flex items-center mt-1 text-[10.5px] text-text-tertiary/70 bg-surface-1 border border-edge rounded px-1.5 py-[1px] font-mono max-w-full truncate">
+                        {a.sourceRef}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function formatActivityTime(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const sameDay = d.toDateString() === now.toDateString()
+  if (sameDay) return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 }
 
 /* === Message Bubble === */
@@ -416,12 +509,12 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             <button
               onClick={handleCopy}
               className="w-6 h-6 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors"
-              title="复制全部"
+              title="Copy all"
             >
               {copied ? <CheckCheck size={13} className="text-success" /> : <Copy size={13} />}
             </button>
             <span className="text-[11px] text-text-tertiary">
-              {new Date(message.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+              {new Date(message.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
         )}
@@ -431,7 +524,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         )}
         {message.pendingAction && message.pendingAction.status !== 'pending' && (
           <p className="mt-1.5 text-[11px] text-text-tertiary">
-            {message.pendingAction.status === 'confirmed' ? '已确认' : '已取消'}
+            {message.pendingAction.status === 'confirmed' ? 'Confirmed' : 'Cancelled'}
           </p>
         )}
       </div>
@@ -456,9 +549,9 @@ function ActionCard({ action, onConfirm }: { action: PendingAction; onConfirm: (
     if (toolName.includes('send_email') || toolName.includes('reply_email') || toolName.includes('forward_email')) {
       return (
         <div className="mb-2.5 space-y-2 text-[13px]">
-          {d('to') && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">收件人</span><span className="text-text-primary font-medium">{d('to')}</span></div>}
-          {d('cc') && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">抄送</span><span className="text-text-secondary">{d('cc')}</span></div>}
-          {d('subject') && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">主题</span><span className="text-text-primary">{d('subject')}</span></div>}
+          {d('to') && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">To</span><span className="text-text-primary font-medium">{d('to')}</span></div>}
+          {d('cc') && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">Cc</span><span className="text-text-secondary">{d('cc')}</span></div>}
+          {d('subject') && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">Subject</span><span className="text-text-primary">{d('subject')}</span></div>}
           {d('body') && (
             <div className="mt-2 p-3 rounded-lg bg-surface-2/60 border border-edge-subtle text-[13px] text-text-secondary leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto">
               {d('body')}
@@ -472,7 +565,7 @@ function ActionCard({ action, onConfirm }: { action: PendingAction; onConfirm: (
     if (toolName.includes('message_work_iq') || toolName.includes('teams')) {
       return (
         <div className="mb-2.5 space-y-2 text-[13px]">
-          {(d('chatId') || d('channel')) && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">目标</span><span className="text-text-primary font-medium">{d('channel') || d('chatId')}</span></div>}
+          {(d('chatId') || d('channel')) && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">Target</span><span className="text-text-primary font-medium">{d('channel') || d('chatId')}</span></div>}
           {d('content') && (
             <div className="mt-2 p-3 rounded-lg bg-surface-2/60 border border-edge-subtle text-[13px] text-text-secondary leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto">
               {d('content')}
@@ -487,9 +580,9 @@ function ActionCard({ action, onConfirm }: { action: PendingAction; onConfirm: (
       const eventVal = d('event')
       return (
         <div className="mb-2.5 space-y-2 text-[13px]">
-          {d('repo') && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">仓库</span><span className="text-text-primary font-mono text-[12px]">{d('repo')}</span></div>}
-          {(d('issue_number') || d('pull_number')) && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">编号</span><span className="text-text-primary">#{d('issue_number') || d('pull_number')}</span></div>}
-          {eventVal && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">操作</span><span className="text-text-primary">{eventVal === 'APPROVE' ? '批准' : eventVal === 'REQUEST_CHANGES' ? '请求修改' : '评论'}</span></div>}
+          {d('repo') && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">Repo</span><span className="text-text-primary font-mono text-[12px]">{d('repo')}</span></div>}
+          {(d('issue_number') || d('pull_number')) && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">Number</span><span className="text-text-primary">#{d('issue_number') || d('pull_number')}</span></div>}
+          {eventVal && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">Action</span><span className="text-text-primary">{eventVal === 'APPROVE' ? 'Approve' : eventVal === 'REQUEST_CHANGES' ? 'Request changes' : 'Comment'}</span></div>}
           {(d('body') || d('comment')) && (
             <div className="mt-2 p-3 rounded-lg bg-surface-2/60 border border-edge-subtle text-[13px] text-text-secondary leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto">
               {d('body') || d('comment')}
@@ -505,7 +598,7 @@ function ActionCard({ action, onConfirm }: { action: PendingAction; onConfirm: (
       const actionVal = d('action')
       return entries.length > 0 ? (
         <div className="mb-2.5 space-y-1.5 text-[13px]">
-          {actionVal && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">操作</span><span className="text-text-primary">{actionVal === 'create' ? '新建' : '更新'}</span></div>}
+          {actionVal && <div className="flex gap-2"><span className="text-text-tertiary shrink-0 w-12">Action</span><span className="text-text-primary">{actionVal === 'create' ? 'Create' : 'Update'}</span></div>}
           {entries.map(([key, val]) => (
             <div key={key} className="flex gap-2">
               <span className="text-text-tertiary shrink-0 w-12">{key}</span>
@@ -531,10 +624,10 @@ function ActionCard({ action, onConfirm }: { action: PendingAction; onConfirm: (
   }
 
   // Context-aware button labels
-  const confirmLabel = toolName.includes('email') || toolName.includes('forward') ? '确认发送'
-    : toolName.includes('message') || toolName.includes('teams') ? '确认发送'
-    : toolName.includes('review') || toolName.includes('comment') ? '确认提交'
-    : '确认执行'
+  const confirmLabel = toolName.includes('email') || toolName.includes('forward') ? 'Confirm send'
+    : toolName.includes('message') || toolName.includes('teams') ? 'Confirm send'
+    : toolName.includes('review') || toolName.includes('comment') ? 'Confirm submit'
+    : 'Confirm'
 
   return (
     <div className="mt-2.5 p-3.5 rounded-xl bg-surface-1 border border-edge">
@@ -545,10 +638,10 @@ function ActionCard({ action, onConfirm }: { action: PendingAction; onConfirm: (
           <Check size={12} /> {confirmLabel}
         </button>
         <button onClick={() => onConfirm(action.id, 'modify')} className="h-7 px-3 rounded-lg text-[12px] bg-surface-2 text-text-secondary border border-edge hover:bg-surface-3 transition-colors flex items-center gap-1.5">
-          <Pencil size={11} /> 编辑草稿
+          <Pencil size={11} /> Edit draft
         </button>
         <button onClick={() => onConfirm(action.id, 'cancel')} className="h-7 px-3 rounded-lg text-[12px] text-text-tertiary hover:text-danger hover:bg-danger/8 transition-colors">
-          取消发送
+          Cancel
         </button>
       </div>
     </div>
@@ -586,29 +679,29 @@ const TOOL_NAME_MAP: Record<string, string> = {
   powershell: 'PowerShell',
   shell: 'Shell',
   bash: 'Bash',
-  terminal: '终端',
-  memory_write: '写入记忆',
-  memory_search: '搜索记忆',
-  create_task: '创建任务',
-  update_task: '更新任务',
-  query_tasks: '查询任务',
-  query_projects: '查询项目',
-  query_relations: '查询联系人',
-  manage_project: '管理项目',
-  manage_relation: '管理联系人',
-  generate_report: '生成报告',
-  send_email_work_iq: '发送邮件',
-  reply_email_work_iq: '回复邮件',
-  forward_email_work_iq: '转发邮件',
-  send_message_work_iq: '发送消息',
-  reply_message_work_iq: '回复消息',
-  search_emails_work_iq: '搜索邮件',
-  search_messages_work_iq: '搜索消息',
-  get_calendar_work_iq: '查看日历',
-  create_issue_comment: '评论 Issue',
-  create_pull_request_review: '提交 Review',
-  list_notifications: '查看通知',
-  search_issues: '搜索 Issue',
+  terminal: 'Terminal',
+  memory_write: 'Write memory',
+  memory_search: 'Search memory',
+  create_task: 'Create task',
+  update_task: 'Update task',
+  query_tasks: 'Query tasks',
+  query_projects: 'Query projects',
+  query_relations: 'Query contacts',
+  manage_project: 'Manage project',
+  manage_relation: 'Manage contact',
+  generate_report: 'Generate report',
+  send_email_work_iq: 'Send email',
+  reply_email_work_iq: 'Reply email',
+  forward_email_work_iq: 'Forward email',
+  send_message_work_iq: 'Send message',
+  reply_message_work_iq: 'Reply message',
+  search_emails_work_iq: 'Search emails',
+  search_messages_work_iq: 'Search messages',
+  get_calendar_work_iq: 'View calendar',
+  create_issue_comment: 'Comment on Issue',
+  create_pull_request_review: 'Submit review',
+  list_notifications: 'View notifications',
+  search_issues: 'Search issues',
 }
 
 function getToolLabel(name: string): string {
@@ -622,7 +715,7 @@ function ToolCallsRow({ calls }: { calls: ToolCallRecord[] }) {
   const latestPreview = latest?.inputPreview
   const label = running.length > 0
     ? `${getToolLabel(latest.toolName)}${latestPreview ? ` · ${latestPreview}` : '…'}`
-    : `${calls.length} 次工具调用${latestPreview ? ` · ${latestPreview}` : ''}`
+    : `${calls.length} tool call${calls.length > 1 ? 's' : ''}${latestPreview ? ` · ${latestPreview}` : ''}`
 
   return (
     <div className="my-0.5">
@@ -679,10 +772,10 @@ function EmptyState({ taskTitle }: { taskTitle?: string }) {
           </svg>
         </div>
         <p className="text-[14px] text-text-primary font-medium">
-          {taskTitle ? `关于「${taskTitle}」` : '你好'}
+          {taskTitle ? `About “${taskTitle}”` : 'Hi there'}
         </p>
         <p className="text-[13px] text-text-tertiary mt-1 leading-relaxed">
-          {taskTitle ? '有什么需要帮你处理？' : '有什么可以帮你的？'}
+          {taskTitle ? 'What would you like me to help with?' : 'How can I help you?'}
         </p>
       </div>
     </div>
@@ -705,9 +798,9 @@ function getDueLabel(dueDate: string): string {
   const diffMs = due.getTime() - now.getTime()
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
 
-  if (diffDays < 0) return `已逾期 ${Math.abs(diffDays)} 天`
-  if (diffDays === 0) return '今天截止'
-  if (diffDays === 1) return '明天截止'
-  if (diffDays <= 7) return `${diffDays} 天后截止`
-  return due.toLocaleDateString('zh-CN')
+  if (diffDays < 0) return `${Math.abs(diffDays)}d overdue`
+  if (diffDays === 0) return 'Due today'
+  if (diffDays === 1) return 'Due tomorrow'
+  if (diffDays <= 7) return `Due in ${diffDays}d`
+  return due.toLocaleDateString('en-US')
 }

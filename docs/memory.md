@@ -1,158 +1,158 @@
 # Memory
 
-记忆子系统设计。
+Memory subsystem design.
 
-## 设计原则
+## Design principles
 
-1. **信息无限增长 vs context window 有限** — 核心矛盾，决定了必须有检索层
-2. **部分记忆必须永远在场** — 核心档案每次 session 固定注入，不依赖检索
-3. **双通道写入** — agent 主动记 + 系统窄范围补漏，互补覆盖
-4. **零 ML 依赖** — 不依赖本地 neural embedding model，用 FTS5 + 结构化标签
-5. **用户拥有数据** — 所有记忆可查看、编辑、删除
-6. **不重复 SDK 的活** — SDK 管 session 内对话历史和压缩，Memory 管跨 session 持久知识
-7. **错误可修正** — 记忆出错时必须有机制发现和修正，不能让错误记忆无限传播
+1. **Unbounded information growth vs. a finite context window** — the core tension, which mandates a retrieval layer
+2. **Some memories must always be present** — the core profile is injected into every session, not dependent on retrieval
+3. **Dual-channel writes** — the agent writes proactively + the system fills gaps with a narrow scope, complementary coverage
+4. **Zero ML dependency** — no local neural embedding model; uses FTS5 + structured tags
+5. **The user owns the data** — every memory can be viewed, edited, and deleted
+6. **Don't redo the SDK's work** — the SDK manages in-session conversation history and compaction; Memory manages cross-session persistent knowledge
+7. **Errors are correctable** — when a memory is wrong there must be a mechanism to detect and fix it; a wrong memory must not propagate indefinitely
 
-## 分层架构
+## Layered architecture
 
-| 层 | 名称 | 定位 | 加载策略 | 写入方式 | 容量 |
+| Layer | Name | Role | Loading strategy | Write method | Capacity |
 |---|---|---|---|---|---|
-| L0 | Identity | 用户核心档案 | session 启动注入 system prompt | agent 主动 + 用户直接编辑 | 8K chars 硬限 |
-| L1 | Knowledge | 长期学到的事实、惯例、经验 | 每轮对话检索 top-K 注入 user message | agent 主动 + session 结束补漏提取 | 无上限 |
-| L2 | Archive | 历史记录归档 | 通常不加载，按需检索 | 系统自动（session 结束/Task 完成） | 无上限 |
+| L0 | Identity | The user's core profile | Injected into the system prompt at session start | Agent-driven + direct user edits | 1K chars hard limit |
+| L1 | Knowledge | Long-term learned facts, conventions, experience | Top-K retrieved each turn, injected into the user message | Agent-driven + gap-fill extraction at session end | Unbounded |
+| L2 | Archive | Archived history | Usually not loaded, retrieved on demand | System-automatic (session end / Task completion) | Unbounded |
 
-三层分工明确：L0 永远在场，L1 按相关性检索，L2 只在追问历史时触发。Working memory 不属于 Memory 系统——由 Task 实体 + SDK session 管理。
+The three layers have clear roles: L0 is always present, L1 is retrieved by relevance, L2 only triggers when history is queried. Working memory does not belong to the Memory system — it's managed by the Task entity + the SDK session.
 
 ### L0 Identity
 
-用户核心身份信息，每次 session 启动时全量注入 system prompt。不依赖检索。
+The user's core identity information, injected in full into the system prompt at every session start. Not dependent on retrieval.
 
-**分层判断标准**：这个信息在没有任何上下文（不知道用户要做什么）的情况下，agent 是否需要知道？是 → L0，否 → L1。
+**Layering criterion**: with no context at all (not knowing what the user wants to do), does the agent need to know this? Yes → L0, no → L1.
 
-内容类型：
-- 姓名、角色、所在组织
-- 核心工作偏好（沟通风格、语言、时区）
-- 关键约束（"永远不要..."、"我总是..."）
-- 工具环境摘要（OS、主力编辑器、常用技术栈）
+Content types:
+- Name, role, organization
+- Core work preferences (communication style, language, timezone)
+- Key constraints ("never...", "I always...")
+- Tool-environment summary (OS, primary editor, common tech stack)
 
-容量管理：8K 字符硬限。满时 agent 必须合并或淘汰旧条目才能写入新内容。硬限迫使质量——只留最重要的。
+Capacity management: a 1K-character hard limit. L0 is injected in full every turn, so it must stay at the "a few core facts" size. When full, the agent must merge or evict old entries before writing new content. The hard limit forces quality — keep only the most important.
 
-格式：结构化 Markdown，分 section。agent 和用户都可直接编辑。
+Format: structured Markdown, divided into sections. Both the agent and the user can edit it directly.
 
 ### L1 Knowledge
 
-长期积累的知识库，Memory 系统的主体。
+The long-term accumulated knowledge base, the main body of the Memory system.
 
-内容类型：
-- 用户纠正过的事实（最高优先级写入）
-- 工作惯例（"这个项目的部署流程是..."）
-- 技术知识（"这个 API 的 rate limit 是..."）
-- 人际关系信息（"张三负责审批预算"）
-- 反复出现的模式
+Content types:
+- Facts the user has corrected (written with the highest priority)
+- Work conventions ("this project's deployment process is...")
+- Technical knowledge ("this API's rate limit is...")
+- Interpersonal information ("Zhang San approves the budget")
+- Recurring patterns
 
-加载逻辑：每轮对话，系统以用户当前消息为 query 检索 top-K 条相关记忆，注入 user message 中（不是 system prompt，保护 KV cache）。
+Loading logic: each turn, the system uses the user's current message as a query to retrieve the top-K relevant memories and injects them into the user message (not the system prompt, to protect the KV cache).
 
 ### L2 Archive
 
-历史记录归档层，低频访问。
+The archived-history layer, accessed infrequently.
 
-内容类型：
-- 已完成 Task 的摘要（做了什么、结论、关键决策）
-- 不绑定 Task 的 session 摘要（自由对话的归档）
-- 历史事件时间线
+Content types:
+- Summaries of completed Tasks (what was done, conclusions, key decisions)
+- Session summaries not bound to a Task (archives of free-form conversation)
+- A timeline of historical events
 
-加载逻辑：通常不加载。两种情况触发检索：
-1. 用户明确追问历史（"上周那个 bug 是怎么解决的？"）
-2. 系统检测到当前问题与历史任务高度相关
+Loading logic: usually not loaded. Two situations trigger retrieval:
+1. The user explicitly asks about history ("how did we fix that bug last week?")
+2. The system detects that the current problem is highly relevant to a historical task
 
-Task 完成时：Task 的累积工作状态归档到 L2，Task 实体只保留元数据（标题、时间、状态、关联）。详细内容在 L2。
+When a Task completes: the Task's accumulated working state is archived to L2, and the Task entity keeps only metadata (title, time, status, associations). The detailed content lives in L2.
 
-## 与 Copilot SDK 的分工
+## Division of labor with the Copilot SDK
 
-| 职责 | 谁管 |
+| Responsibility | Who handles it |
 |------|------|
-| Session 内对话历史 | SDK（自动持久化） |
-| Context window 压缩 | SDK（80%/95% 自动 compaction） |
-| Session 恢复 | SDK（`resumeSession()`） |
-| 跨 session 用户档案 | Memory L0 |
-| 跨 session 知识积累 | Memory L1 |
-| 历史归档和检索 | Memory L2 |
-| Task 工作状态 | Task 实体自有字段 |
+| In-session conversation history | SDK (auto-persisted) |
+| Context-window compaction | SDK (automatic compaction at 80%/95%) |
+| Session recovery | SDK (`resumeSession()`) |
+| Cross-session user profile | Memory L0 |
+| Cross-session knowledge accumulation | Memory L1 |
+| History archiving and retrieval | Memory L2 |
+| Task working state | The Task entity's own fields |
 
-**SDK 钩子使用：**
-- `onSessionStart` → 注入 L0 Identity + 当前活跃 Task 的工作状态（来自 Task 实体）
-- `onUserPromptSubmitted` → 以用户消息为 query，检索 L1 Knowledge 注入
-- `onSessionEnd` → 获取 session summary → 更新 Task 工作状态；触发补漏提取
+**SDK hook usage:**
+- `onSessionStart` → inject L0 Identity + the active Task's working state (from the Task entity)
+- `onUserPromptSubmitted` → use the user message as a query, retrieve and inject L1 Knowledge
+- `onSessionEnd` → get the session summary → update the Task working state; trigger gap-fill extraction
 
-## 写入机制
+## Write mechanism
 
-### 通道一：Agent 主动写入
+### Channel 1: Agent-driven writes
 
-Agent 通过 memory tool 实时写入。
+The agent writes in real time via the memory tool.
 
-Tool 设计：
+Tool design:
 ```
 memory_write:
   action: add | update | remove
-  layer: L0 | L1           # agent 只能写 L0 和 L1
-  content: string           # 新内容
-  target_id?: string        # update/remove 时指定目标
-  tags?: string[]           # 结构化标签（Project 关联、分类）
+  layer: L0 | L1           # the agent can only write L0 and L1
+  content: string           # new content
+  target_id?: string        # specify the target for update/remove
+  tags?: string[]           # structured tags (Project association, classification)
 ```
 
-写入指导（注入 system prompt）：
-- **该记**：用户纠正、明确偏好、稳定事实、工具环境、人际关系
-- **不该记**：任务进度、session 内临时状态、会快速过期的信息、可从外部系统实时查询的数据
-- **格式**：陈述性事实，不是指令（"用户偏好简洁回复" ✓，"总是简洁回复" ✗）
+Write guidance (injected into the system prompt):
+- **Do record**: user corrections, explicit preferences, stable facts, tool environment, relationships
+- **Don't record**: task progress, transient in-session state, information that expires quickly, data that can be queried live from external systems
+- **Format**: declarative facts, not instructions ("the user prefers concise replies" ✓, "always reply concisely" ✗)
 
-**错误修正规则**：当用户纠正 agent 时，agent 不仅要写入正确事实，还要**检查是否有已存在的错误记忆导致了这次错误**。如果有，update 或 remove 它。不能只加新的不管旧的。
+**Error-correction rule**: when the user corrects the agent, the agent must not only write the correct fact but also **check whether an existing wrong memory caused this error**. If so, update or remove it. It can't just add the new one and ignore the old.
 
-### 通道二：系统补漏提取
+### Channel 2: System gap-fill extraction
 
-Session 结束时，系统做**窄范围**提取（不是全量提取所有知识）：
+At session end, the system does a **narrow-scope** extraction (not a full extraction of all knowledge):
 
-1. 检查对话中是否有用户纠正 agent 但 agent 没有调用 memory_write 的情况 → 补写入 L1
-2. 检查是否有用户明确声明偏好/事实但 agent 没存的情况 → 补写入 L1
-3. 生成 session 摘要 → 归入 L2（如果 session 绑定 Task，同时更新 Task 工作状态）
+1. Check whether the user corrected the agent but the agent didn't call memory_write → backfill into L1
+2. Check whether the user explicitly stated a preference/fact but the agent didn't store it → backfill into L1
+3. Generate a session summary → file into L2 (if the session is bound to a Task, also update the Task working state)
 
-**不做**全量"从对话中提取所有隐含知识"——这会产生大量低质量/重复条目，且去重困难。
+It **does not** do a full "extract all implicit knowledge from the conversation" — that produces a flood of low-quality/duplicate entries and is hard to deduplicate.
 
-### L2 的自动写入
+### Automatic L2 writes
 
-L2 Archive 由系统在特定事件时自动写入：
-- Session 结束 → session 摘要归入 L2
-- Task 完成 → Task 工作状态归档到 L2，Task 实体清理详细状态
+L2 Archive is written automatically by the system on specific events:
+- Session ends → the session summary is filed into L2
+- Task completes → the Task working state is archived to L2, and the Task entity clears its detailed state
 
-## 检索机制
+## Retrieval mechanism
 
-L1 和 L2 的检索采用 FTS5 + 结构化过滤。
+L1 and L2 retrieval uses FTS5 + structured filtering.
 
-### 检索方式
+### Retrieval methods
 
-1. **FTS5 全文搜索** — BM25 排序，处理关键词、专有名词、人名、技术术语
-2. **结构化过滤** — 基于 Project 关联、标签、时间范围缩小候选集
+1. **FTS5 full-text search** — BM25 ranking, handles keywords, proper nouns, names, technical terms
+2. **Structured filtering** — narrows the candidate set by Project association, tags, and time range
 
-两路结果融合排序：
-- FTS5 BM25 相关性得分
-- 时间衰减（近期轻微加权，不激进）
-- 来源可信度（用户纠正 > agent 主动 > 系统自动）
+The two result sets are fused and ranked by:
+- FTS5 BM25 relevance score
+- Time decay (recent items weighted slightly, not aggressively)
+- Source trustworthiness (user correction > agent-driven > system-automatic)
 
-**为什么没有向量搜索：** v1 不引入 HRR 或 embedding。FTS5 + 结构化标签能覆盖大部分检索场景。如果实际使用中发现检索质量不足（语义近似匹配差），再评估引入方案。不为"看起来完整"加未验证的组件。
+**Why there's no vector search:** v1 doesn't introduce HRR or embeddings. FTS5 + structured tags cover most retrieval scenarios. If real-world use reveals insufficient retrieval quality (poor semantic-approximation matching), we'll evaluate introducing a solution then. We don't add unverified components just to "look complete".
 
-### 注入方式
+### Injection method
 
-检索结果注入 user message（参考 Hermes Holographic 模式），不污染 system prompt：
+Retrieval results are injected into the user message (following the Hermes Holographic pattern), not polluting the system prompt:
 
 ```
 <memory-context>
-[检索到的相关记忆条目]
+[relevant retrieved memory entries]
 </memory-context>
 
-[用户的实际消息]
+[the user's actual message]
 ```
 
-## 存储设计
+## Storage design
 
-单一 SQLite 数据库。
+A single SQLite database.
 
 ```sql
 CREATE TABLE memory_entries (
@@ -163,16 +163,16 @@ CREATE TABLE memory_entries (
   status      TEXT NOT NULL DEFAULT 'active',  -- 'active' | 'inactive'
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
-  task_id     TEXT,                 -- L2 归档关联的 Task
-  project_id  TEXT,                 -- 关联 Project（检索过滤用）
+  task_id     TEXT,                 -- the Task an L2 archive is associated with
+  project_id  TEXT,                 -- associated Project (for retrieval filtering)
   tags        TEXT,                 -- JSON array
-  recall_count INTEGER DEFAULT 0,  -- 被检索命中次数
+  recall_count INTEGER DEFAULT 0,  -- number of times hit by retrieval
 
   FOREIGN KEY (task_id) REFERENCES tasks(id),
   FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
--- FTS5 索引
+-- FTS5 index
 CREATE VIRTUAL TABLE memory_fts USING fts5(
   content,
   tags,
@@ -181,46 +181,46 @@ CREATE VIRTUAL TABLE memory_fts USING fts5(
 );
 ```
 
-## 遗忘策略
+## Forgetting strategy
 
-**L0**：不自动遗忘。硬限 8K，满时 agent 自己管理（合并/删除）。
+**L0**: no automatic forgetting. A 1K-character hard limit; when full, the agent manages it itself (merge/delete).
 
-**L1**：不主动删除。被纠正的条目标记 `status = 'inactive'`（保留审计链，但不再被检索返回）。如果未来量大到检索质量下降，考虑合并语义重复条目。
+**L1**: no proactive deletion. Corrected entries are marked `status = 'inactive'` (preserving the audit trail, but no longer returned by retrieval). If the volume eventually grows large enough to degrade retrieval quality, consider merging semantically duplicate entries.
 
-**L2**：永久保留。用户工作历史，不该被系统删除。
+**L2**: kept permanently. It's the user's work history and should not be deleted by the system.
 
-**用户始终可以手动删除任何层的任何条目。**
+**The user can always manually delete any entry in any layer.**
 
-## 可观测性
+## Observability
 
-Memory 系统必须是可检视的，不能是黑盒：
+The Memory system must be inspectable, not a black box:
 
-- **检索日志**：每轮检索的 query、返回结果、分数记录在本地日志（debug 用）
-- **引用透明**：agent 在使用记忆信息时，应在回答中注明来源（"根据之前的记录..."）
-- **用户查询**：用户可以问"你这轮用了哪些记忆？"，agent 能列出
-- **Memory 面板**：UI 上可浏览所有记忆，看到 recall_count、来源、状态
+- **Retrieval logs**: each turn's query, returned results, and scores are recorded in a local log (for debugging)
+- **Citation transparency**: when the agent uses memory information, it should note the source in its answer ("according to earlier records...")
+- **User queries**: the user can ask "which memories did you use this turn?" and the agent can list them
+- **Memory panel**: the UI lets you browse all memories and see recall_count, source, and status
 
-## 用户控制
+## User control
 
-- **查看**：Memory 面板展示所有记忆，按层分组，支持搜索和过滤
-- **编辑**：L0 直接编辑（用户档案）。L1 可编辑内容和标签
-- **删除**：任何条目都可删除
-- **纠正**：对话中纠正 agent 时，agent 主动更新相关记忆（含清理错误旧条目）
-- **导出**：全量导出为 JSON/Markdown
+- **View**: the Memory panel shows all memories, grouped by layer, with search and filtering
+- **Edit**: L0 is edited directly (the user profile). L1 content and tags can be edited
+- **Delete**: any entry can be deleted
+- **Correct**: when the user corrects the agent in conversation, the agent proactively updates the relevant memory (including cleaning up the wrong old entry)
+- **Export**: full export to JSON/Markdown
 
-## 与其他实体的关系
+## Relationships with other entities
 
-- **Task** → Task 自己维护工作状态；完成时归档到 L2；L1 条目可标记关联 Task
-- **Project** → L1 条目可标记关联 Project（用于检索过滤）
-- **Relation** → 人际关系知识存在 L1
-- **Connection** → 不直接参与 Memory（tool 侧），但从 Connection 获取的信息可写入 L1
-- **Skill** → 不参与 Memory（tool 侧）
-- **Job** → 日报/周报生成时，从 L2 检索时间范围内的 Task 摘要
+- **Task** → a Task maintains its own working state; archived to L2 on completion; L1 entries can be tagged with an associated Task
+- **Project** → L1 entries can be tagged with an associated Project (used for retrieval filtering)
+- **Relation** → interpersonal knowledge lives in L1
+- **Connection** → not directly involved in Memory (it's on the tool side), but information obtained from a Connection can be written to L1
+- **Skill** → not involved in Memory (tool side)
+- **Job** → when generating daily/weekly reports, retrieves Task summaries within the time range from L2
 
-## 待细化
+## To be refined
 
-- L1 检索的 top-K 取多少（上下文预算分配）
-- memory-context 注入的 token 预算上限
-- 补漏提取的具体 prompt 设计
-- L0 使用率展示方式（参考 Hermes 的百分比显示）
-- 当 FTS5 检索质量不足时的升级路径评估标准
+- How large to set top-K for L1 retrieval (context budget allocation)
+- The token-budget cap for memory-context injection
+- The concrete prompt design for gap-fill extraction
+- How to display L0 usage (referencing Hermes's percentage display)
+- The criteria for evaluating an upgrade path when FTS5 retrieval quality is insufficient

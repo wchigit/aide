@@ -1,6 +1,6 @@
 # Relation
 
-用户工作关系网络。简单实体，帮 Agent 理解优先级和沟通方式。
+The user's network of working relationships. A simple entity that helps the Agent understand priority and communication style.
 
 ## Schema
 
@@ -9,28 +9,28 @@ interface Relation {
   id: string;
   name: string;
   role: 'manager' | 'peer' | 'report' | 'external' | 'stakeholder';
-  org?: string;              // 所在组织/团队
-  title?: string;            // 职位
+  org?: string;              // Organization/team
+  title?: string;            // Job title
   email?: string;
   teamsId?: string;
   timezone?: string;
-  expertise?: string[];      // 擅长领域
-  communicationStyle?: string; // "偏好简短邮件" / "喜欢 Teams 语音"
-  notes?: string;            // Agent/用户补充的备注
+  expertise?: string[];      // Areas of expertise
+  communicationStyle?: string; // "Prefers short emails" / "Likes Teams voice"
+  notes?: string;            // Notes added by the Agent/user
   createdAt: Date;
   updatedAt: Date;
 }
 ```
 
-## Agent 如何使用 Relation
+## How the Agent uses Relation
 
-- **优先级判断**：manager 发来的任务 > peer 发来的
-- **沟通方式选择**：根据对方偏好选择邮件/Teams/其他
-- **专长路由**：需要某领域帮助时，知道该找谁
-- **上下文理解**："A 说的那个事"——Agent 知道 A 是谁、什么角色
+- **Priority judgment**: a task from a manager > a task from a peer
+- **Channel choice**: pick email/Teams/other based on the person's preference
+- **Expertise routing**: knows who to ask when help is needed in a given area
+- **Context understanding**: "that thing A mentioned" — the Agent knows who A is and their role
 
-## 数据来源
+## Data sources
 
-- 用户手动配置核心关系（老板、直接同事）
-- Agent 从日常信息流中自动识别新人物，提议添加
-- Agent 从交互中逐渐补充属性（观察到 A 总是用 Teams 回复 → 记录沟通偏好）
+- The user manually configures core relationships (manager, immediate teammates)
+- The Agent automatically identifies new people from the daily information flow and proposes adding them
+- The Agent gradually fills in attributes from interactions (notices A always replies via Teams → records the communication preference)

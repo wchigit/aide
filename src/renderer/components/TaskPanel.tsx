@@ -17,9 +17,18 @@ export function TaskPanel() {
     (t.status === 'pending' || t.status === 'in_progress') && t.seenAt !== null
   )
 
+  // Surface tasks with unseen activity (lastActivityAt newer than seenAt) to the top
+  const hasNewActivity = (t: Task): boolean =>
+    !!t.lastActivityAt && (!t.seenAt || t.lastActivityAt > t.seenAt)
+  const sortedActive = [...activeTasks].sort((a, b) => {
+    const an = hasNewActivity(a) ? 1 : 0
+    const bn = hasNewActivity(b) ? 1 : 0
+    return bn - an
+  })
+
   const VISIBLE_CAP = 10
-  const visibleActive = expanded ? activeTasks : activeTasks.slice(0, VISIBLE_CAP)
-  const overflowCount = activeTasks.length - VISIBLE_CAP
+  const visibleActive = expanded ? sortedActive : sortedActive.slice(0, VISIBLE_CAP)
+  const overflowCount = sortedActive.length - VISIBLE_CAP
 
   return (
     <aside className="w-[260px] min-w-[260px] shrink-0 border-r border-edge flex flex-col bg-surface-1">
@@ -28,7 +37,7 @@ export function TaskPanel() {
         <button
           onClick={goHome}
           className="flex items-center gap-2.5 no-drag group"
-          title="回到主页"
+          title="Home"
         >
           <div className="w-[22px] h-[22px] rounded-[6px] overflow-hidden shadow-sm group-hover:shadow-md transition-shadow">
             <svg viewBox="0 0 512 512" className="w-full h-full">
@@ -43,10 +52,10 @@ export function TaskPanel() {
         <button
           onClick={() => openSettings()}
           className="h-7 px-2 rounded-md flex items-center gap-1.5 text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors no-drag"
-          title="管理"
+          title="Manage"
         >
           <SlidersHorizontal size={13} strokeWidth={1.75} />
-          <span className="text-[11px]">管理</span>
+          <span className="text-[11px]">Manage</span>
         </button>
       </header>
 
@@ -55,7 +64,7 @@ export function TaskPanel() {
         {/* New tasks section — always visible */}
         <section className="px-2 mb-1">
           <div className="flex items-center gap-2 px-2.5 py-1.5">
-            <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-[0.04em]">新任务</span>
+            <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-[0.04em]">New tasks</span>
             <span className="text-[10px] font-medium text-accent bg-accent-subtle rounded-full px-1.5 py-[1px] min-w-[18px] text-center">
               {newTasks.length}
             </span>
@@ -74,7 +83,7 @@ export function TaskPanel() {
             </div>
           ) : (
             <div className="px-3 py-2">
-              <span className="text-[11px] text-text-tertiary/50">没有新到达的任务</span>
+              <span className="text-[11px] text-text-tertiary/50">No new tasks</span>
             </div>
           )}
         </section>
@@ -82,7 +91,7 @@ export function TaskPanel() {
         {/* Active tasks section */}
         <section className="px-2">
           <div className="flex items-center gap-2 px-2.5 py-1.5">
-            <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-[0.04em]">处理中</span>
+            <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-[0.04em]">In progress</span>
             <span className="text-[10px] text-text-tertiary">{activeTasks.length}</span>
           </div>
           {activeTasks.length > 0 ? (
@@ -93,22 +102,23 @@ export function TaskPanel() {
                   task={task}
                   selected={task.id === selectedTaskId}
                   onSelect={() => selectTask(task.id)}
+                  hasActivity={hasNewActivity(task)}
                 />
               ))}
               {!expanded && overflowCount > 0 && (
                 <button onClick={() => setExpanded(true)} className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-text-tertiary hover:text-text-secondary transition-colors">
-                  <ChevronDown size={12} /> 还有 {overflowCount} 项
+                  <ChevronDown size={12} /> {overflowCount} more
                 </button>
               )}
               {expanded && overflowCount > 0 && (
                 <button onClick={() => setExpanded(false)} className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-text-tertiary hover:text-text-secondary transition-colors">
-                  <ChevronUp size={12} /> 收起
+                  <ChevronUp size={12} /> Collapse
                 </button>
               )}
             </div>
           ) : (
             <div className="px-3 py-2">
-              <span className="text-[11px] text-text-tertiary/50">没有处理中的任务</span>
+              <span className="text-[11px] text-text-tertiary/50">No tasks in progress</span>
             </div>
           )}
         </section>
@@ -121,7 +131,7 @@ export function TaskPanel() {
           className="w-full flex items-center justify-center gap-2.5 px-3.5 py-2.5 rounded-xl border border-accent/20 bg-accent/[0.03] text-text-secondary hover:border-accent/40 hover:bg-accent/[0.06] transition-all"
         >
           <Zap size={14} className="text-accent" />
-          <span className="text-[13px] font-medium">有新想法？告诉 Aide</span>
+          <span className="text-[13px] font-medium">Ask Aide anything</span>
         </button>
       </div>
     </aside>
@@ -130,8 +140,8 @@ export function TaskPanel() {
 
 /* === Sidebar Task Item === */
 
-function SidebarTaskItem({ task, selected, onSelect, isNew }: {
-  task: Task; selected: boolean; onSelect: () => void; isNew?: boolean
+function SidebarTaskItem({ task, selected, onSelect, isNew, hasActivity }: {
+  task: Task; selected: boolean; onSelect: () => void; isNew?: boolean; hasActivity?: boolean
 }) {
   const { completeTask, snooze } = useTaskStore()
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
@@ -166,27 +176,32 @@ function SidebarTaskItem({ task, selected, onSelect, isNew }: {
         )}
 
         {!isNew && (
-          <div className="flex items-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={e => { e.stopPropagation(); completeTask(task.id) }}
-              className="w-5 h-5 rounded flex items-center justify-center text-text-tertiary hover:text-success hover:bg-success/10 transition-colors"
-              title="完成"
-            >
-              <Check size={12} strokeWidth={2} />
-            </button>
-            <button
-              onClick={e => {
-                e.stopPropagation()
-                const t = new Date()
-                t.setDate(t.getDate() + 1)
-                t.setHours(9, 0, 0, 0)
-                snooze(task.id, t.toISOString())
-              }}
-              className="w-5 h-5 rounded flex items-center justify-center text-text-tertiary hover:text-warning hover:bg-warning/10 transition-colors"
-              title="延后"
-            >
-              <Clock size={12} strokeWidth={2} />
-            </button>
+          <div className="flex items-center shrink-0">
+            {hasActivity && (
+              <span className="w-[5px] h-[5px] rounded-full bg-accent shrink-0 mr-1 group-hover:hidden anim-pulse-dot" title="New activity" />
+            )}
+            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={e => { e.stopPropagation(); completeTask(task.id) }}
+                className="w-5 h-5 rounded flex items-center justify-center text-text-tertiary hover:text-success hover:bg-success/10 transition-colors"
+                title="Done"
+              >
+                <Check size={12} strokeWidth={2} />
+              </button>
+              <button
+                onClick={e => {
+                  e.stopPropagation()
+                  const t = new Date()
+                  t.setDate(t.getDate() + 1)
+                  t.setHours(9, 0, 0, 0)
+                  snooze(task.id, t.toISOString())
+                }}
+                className="w-5 h-5 rounded flex items-center justify-center text-text-tertiary hover:text-warning hover:bg-warning/10 transition-colors"
+                title="Snooze"
+              >
+                <Clock size={12} strokeWidth={2} />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -211,11 +226,11 @@ function ContextMenu({ x, y, onClose, task }: { x: number; y: number; onClose: (
   }, [onClose])
 
   const items = [
-    { icon: <Check size={13} />, label: '完成', action: () => completeTask(task.id) },
-    { icon: <X size={13} />, label: '取消', action: () => cancelTask(task.id) },
-    { icon: <ChevronDown size={13} />, label: '降低优先级', action: () => updateTask(task.id, { priority: 'p2' }) },
-    { icon: <Clock size={13} />, label: '延后到明天', action: () => { const t = new Date(); t.setDate(t.getDate() + 1); t.setHours(9, 0, 0, 0); snooze(task.id, t.toISOString()) } },
-    { icon: <Clock size={13} />, label: '延后到下周一', action: () => { const t = new Date(); const daysUntilMon = ((8 - t.getDay()) % 7) || 7; t.setDate(t.getDate() + daysUntilMon); t.setHours(9, 0, 0, 0); snooze(task.id, t.toISOString()) } },
+    { icon: <Check size={13} />, label: 'Done', action: () => completeTask(task.id) },
+    { icon: <X size={13} />, label: 'Cancel', action: () => cancelTask(task.id) },
+    { icon: <ChevronDown size={13} />, label: 'Lower priority', action: () => updateTask(task.id, { priority: 'p2' }) },
+    { icon: <Clock size={13} />, label: 'Snooze to tomorrow', action: () => { const t = new Date(); t.setDate(t.getDate() + 1); t.setHours(9, 0, 0, 0); snooze(task.id, t.toISOString()) } },
+    { icon: <Clock size={13} />, label: 'Snooze to next Monday', action: () => { const t = new Date(); const daysUntilMon = ((8 - t.getDay()) % 7) || 7; t.setDate(t.getDate() + daysUntilMon); t.setHours(9, 0, 0, 0); snooze(task.id, t.toISOString()) } },
   ]
 
   return (

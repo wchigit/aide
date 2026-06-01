@@ -4,10 +4,8 @@ import type { UserPreferences } from '@shared/types'
 const PREFS_KEY = '__user_preferences'
 
 const DEFAULT_PREFERENCES: UserPreferences = {
-  language: 'zh-CN',
   autonomyLevel: 'default',
   systemNotifications: false,
-  activeTaskCap: 15,
   onboardingComplete: false
 }
 

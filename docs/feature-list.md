@@ -1,51 +1,51 @@
 # Aide Feature List and Implementation Audit
 
-本文基于 PRODUCT.md 与 docs/ 下的产品设计文档，先拆出完整功能清单，再逐项对照当前代码实现进行核对。重点不只看代码是否存在，还看用户路径、交互闭环、错误状态、确认逻辑、信息可见性是否足够让真实用户完成工作。
+This document is based on PRODUCT.md and the product-design docs under docs/. It first breaks out the complete feature list, then audits each item against the current code implementation. The focus is not only whether the code exists, but whether the user path, interaction loop, error states, confirmation logic, and information visibility are sufficient for a real user to get work done.
 
-## 审计结论
+## Audit conclusion
 
-当前实现处于“产品骨架已成型，但核心工作路径尚未可用”的阶段。
+The current implementation is at the stage of "the product skeleton has taken shape, but the core work paths are not yet usable."
 
-- App Shell、左侧任务列表、右侧 Chat、Settings Drawer、SQLite schema、基础 CRUD 已经有雏形。
-- Task / Project / Relation / Memory / Jobs / Connections 都有数据模型或 UI 入口，但大量路径只是浅连通。
-- 最核心的承诺“自动从工作系统收集信息、用 Agent 理解并处理任务、持续记忆、主动 briefing、生成日报”当前已经不再被 TypeScript/build 阻断，但仍受 MCP/Connection 未验证、Job 无头执行缺少可观测性、Agent 写操作确认链路不完整等问题限制。
-- 从用户体验角度，最大风险不是某个按钮缺失，而是用户打开后不知道该怎么完成初始配置、看不到外部数据是否真的被拉取、Agent 写操作确认缺少可审查细节、任务状态不会自然流转，最终容易变成一个手工 todo + 空 chat。
+- The App Shell, left task list, right Chat, Settings Drawer, SQLite schema, and basic CRUD already have a prototype.
+- Task / Project / Relation / Memory / Jobs / Connections all have a data model or a UI entry, but many paths are only shallowly connected.
+- The most core promise — "automatically collect information from work systems, use the Agent to understand and handle tasks, persist memory, proactively brief, and generate daily reports" — is no longer blocked by TypeScript/build, but is still limited by unverified MCP/Connections, the lack of observability for headless Job execution, and an incomplete Agent write-operation confirmation chain.
+- From a UX perspective, the biggest risk is not a missing button, but that after opening the app the user doesn't know how to complete the initial setup, can't see whether external data was actually pulled, the Agent write-operation confirmation lacks reviewable detail, and task states don't flow naturally — so it easily degenerates into a manual todo list + empty chat.
 
-状态标记：
+Status markers:
 
-- [DONE] 主路径基本存在，可被用户直接使用。
-- [PARTIAL] 有入口或局部实现，但路径不完整。
-- [SKELETON] 只有模型、接口或占位骨架。
-- [MISSING] 产品承诺中存在，代码里没有可用路径。
-- [BLOCKED] 理论上实现了，但当前构建/运行会阻断验证或使用。
+- [DONE] The main path basically exists and can be used directly by the user.
+- [PARTIAL] There's an entry or partial implementation, but the path is incomplete.
+- [SKELETON] Only a model, interface, or placeholder skeleton.
+- [MISSING] Promised in the product but no usable path in the code.
+- [BLOCKED] Theoretically implemented, but the current build/runtime blocks verification or use.
 
-## 最高优先级问题
+## Highest-priority issues
 
-### P0-1: 构建已恢复，但 Agent 主链路仍缺少运行时验收
+### P0-1: The build is restored, but the Agent main path still lacks runtime acceptance
 
-结论：类型检查和 production build 均已通过，不再需要把 Agent/Chat/Job 标记为“构建阻断”。但这只证明代码能编译和打包，还不能证明 Copilot SDK session、MCP server、OAuth token、Job 无头 session 在真实运行时可用。下一步需要 runtime smoke test 和用户可见的 health 状态。
+Conclusion: type checking and the production build both pass, so there's no longer a need to mark Agent/Chat/Job as "build-blocked." But this only proves the code compiles and packages; it doesn't prove that the Copilot SDK session, MCP server, OAuth token, and headless Job session work at real runtime. The next step needs a runtime smoke test and a user-visible health state.
 
-### P0-2: 产品最核心的“自动收集并维护任务”还没有真实闭环
+### P0-2: The product's most core "automatically collect and maintain tasks" has no real loop yet
 
-文档要求 Job 定时从 Work IQ / GitHub 拉取信息，经 Agent 判断后创建/更新 Task。当前有 Job seed、cron、MCP spawn、Agent tools，且 build 已通过；但外部连接、MCP tool discovery、Agent 无头 session 和任务创建效果仍未被运行时验证。periodic-poll 的“预过滤”也只是检查上次运行时间，没有先低成本查询外部系统是否有新数据。
+The docs require a Job to periodically pull information from Work IQ / GitHub and, after Agent judgment, create/update Tasks. There's currently a Job seed, cron, MCP spawn, and Agent tools, and the build passes; but the external connections, MCP tool discovery, headless Agent session, and task-creation effect are still not verified at runtime. The periodic-poll "pre-filter" only checks the last run time; it doesn't first cheaply query whether external systems have new data.
 
-用户结果：早上打开 App 不一定真的有邮件、Teams、PR、日历聚合，也没有明确告诉用户为什么没有数据。
+User result: opening the app in the morning won't necessarily have email, Teams, PR, and calendar aggregated, and there's no clear explanation to the user of why there's no data.
 
-### P0-3: Chat 流式消息与历史刷新可能造成重复消息或错位
+### P0-3: Chat streaming messages and history refresh may cause duplicate or misplaced messages
 
-Renderer 发送消息时先本地插入用户消息；main 保存用户消息和 agent 消息；stream-end 事件触发 `fetchHistory`；随后 `sendMessage` Promise 返回又把 agent 消息 append 到当前 store。这个时序很容易产生重复 agent 消息，尤其网络慢或 stream-end 比返回先到时。
+When the renderer sends a message it first locally inserts the user message; main saves the user message and the agent message; the stream-end event triggers `fetchHistory`; then the `sendMessage` Promise returns and appends the agent message to the current store again. This timing easily produces duplicate agent messages, especially when the network is slow or stream-end arrives before the return.
 
-影响：用户会看到同一回复出现两次，或者 pending action 附着到错误消息，直接破坏 Chat 作为“做事入口”的可信度。
+Impact: the user sees the same reply twice, or the pending action attaches to the wrong message, directly damaging Chat's credibility as the "place to get things done."
 
-### P0-4: 写操作确认 UX 不足以让用户安全批准
+### P0-4: The write-operation confirmation UX is not enough for the user to safely approve
 
-产品要求在 Chat 中展示草稿、目标对象和确认/修改/取消按钮。当前 PendingAction 只有 `执行 ${request.kind}` 这样的描述，UI 没有渲染 details，也没有明确展示“要发给谁、内容是什么、会改哪里”。Modify 流程只是把 description 填进输入框，并且 main 侧只有在传入 modification 时才特殊处理；点击修改通常会同时 reject 原 action。
+The product requires showing the draft, the target object, and confirm/edit/cancel buttons in Chat. The current PendingAction only has a description like `execute ${request.kind}`; the UI doesn't render details and doesn't clearly show "who it's sent to, what the content is, what it will change." The Modify flow just fills the description into the input box, and the main side only handles it specially when a modification is passed in; clicking modify usually rejects the original action at the same time.
 
-影响：用户无法审查 Agent 即将执行的真实写操作，确认按钮不安全，修改路径不清楚。
+Impact: the user can't review the real write operation the Agent is about to execute, the confirm button isn't safe, and the modify path is unclear.
 
-### P0-5: First-run onboarding 缺失
+### P0-5: First-run onboarding is missing
 
-目标用户需要先完成 M365/GitHub 连接、身份记忆、项目、关键关系人、Job 配置。当前没有首次启动向导，也没有 dashboard health check。用户首次打开大概率看到空任务列表和空 chat，不知道下一步该连什么、为什么 Agent 没有 briefing、Job 有没有失败。
+The target user needs to first complete M365/GitHub connection, identity memory, projects, key relationships, and Job configuration. There's currently no first-launch wizard and no dashboard health check. On first open the user most likely sees an empty task list and empty chat, not knowing what to connect next, why the Agent has no briefing, or whether a Job failed.
 
 ## Product Module Feature List
 
@@ -53,332 +53,332 @@ Renderer 发送消息时先本地插入用户消息；main 保存用户消息和
 
 | ID | Feature | Expected user experience | Implementation status | Audit notes |
 |---|---|---|---|---|
-| APP-01 | 独立 Electron 桌面 App | 打开后进入单窗口工作台，本地优先保存数据。 | [DONE] | Electron main/renderer/preload 已存在，SQLite 存在。 |
-| APP-02 | 不切页面：任务列表 + Chat 同屏 | 用户始终看到任务全貌，并可随时对话。 | [DONE] | `TaskPanel` + `ChatPanel` 固定布局实现了核心结构。 |
-| APP-03 | Chat 永远可用 | 不管在 General 还是 Task 模式，底部输入框始终可用。 | [DONE] | `ChatPanel` 底部输入固定存在。 |
-| APP-04 | Dashboard briefing | 早上打开 App，Agent 主动给今日概览和优先建议。 | [PARTIAL] | main 有 `triggerMorningBriefingIfNeeded`，build 已通过；但依赖真实 Agent/Connection runtime，且 UI 没有 briefing loading/error 状态。 |
-| APP-05 | Settings 抽屉而非页面 | 齿轮打开右侧抽屉，管理配置。 | [DONE] | SettingsDrawer 已实现 tabs。 |
-| APP-06 | 首次启动向导 | 引导连接账号、创建项目、设置 L0、打开/关闭 Jobs。 | [MISSING] | 没有 onboarding，也没有“配置未完成”提示。 |
-| APP-07 | 全局错误/健康状态 | 告诉用户 SDK、MCP、Job、OAuth 是否工作。 | [MISSING] | 错误主要在 console 或局部 throw，用户不可见。 |
+| APP-01 | Standalone Electron desktop app | After opening, enter a single-window workbench with local-first data storage. | [DONE] | Electron main/renderer/preload exist, SQLite exists. |
+| APP-02 | No page switching: task list + Chat on one screen | The user always sees the full task picture and can chat at any time. | [DONE] | `TaskPanel` + `ChatPanel` fixed layout implements the core structure. |
+| APP-03 | Chat always available | Whether in General or Task mode, the bottom input box is always usable. | [DONE] | `ChatPanel`'s bottom input is always present. |
+| APP-04 | Dashboard briefing | When opening the app in the morning, the Agent proactively gives today's overview and priority suggestions. | [PARTIAL] | main has `triggerMorningBriefingIfNeeded`, build passes; but it depends on a real Agent/Connection runtime, and the UI has no briefing loading/error state. |
+| APP-05 | Settings drawer rather than page | The gear opens a right-side drawer to manage configuration. | [DONE] | SettingsDrawer implements tabs. |
+| APP-06 | First-launch wizard | Guides connecting accounts, creating projects, setting L0, and turning Jobs on/off. | [MISSING] | No onboarding, and no "configuration incomplete" prompt. |
+| APP-07 | Global error/health status | Tells the user whether the SDK, MCP, Job, and OAuth are working. | [MISSING] | Errors are mostly in the console or locally thrown, invisible to the user. |
 
 ### 2. Task Module
 
 | ID | Feature | Expected user experience | Implementation status | Audit notes |
 |---|---|---|---|---|
-| TASK-01 | Task 数据模型 | 标题、描述、状态、优先级、来源、项目、相关人、时间、UI 状态、Agent 处理记录。 | [PARTIAL] | shared/db 基本齐全，但 `source.connectionId` 缺失，source 不能追溯到具体 connection。 |
-| TASK-02 | 用户手动创建任务 | 用户可快速建任务，也应能补描述、优先级、截止、项目、相关人。 | [PARTIAL] | UI 只能输入标题，source=user；没有新建详情表单。 |
-| TASK-03 | Agent 从对话创建任务 | 用户说“帮我记一下/处理这个”，Agent 创建 Task。 | [PARTIAL] | `create_task` tool 存在且 build 已通过；但没有 runtime smoke test，也没有 UI 侧确认或反馈非高优任务已创建。 |
-| TASK-04 | Job/Connection 自动创建任务 | 邮件、Teams、会议、GitHub 通知进入任务池。 | [PARTIAL] | Job + MCP 骨架存在且 build 已通过，但外部数据拉取与 Agent 决策未被运行时验证。 |
-| TASK-05 | Active 列表 | 未完成任务按优先级排序，显示 new、due、overdue。 | [PARTIAL] | Active/Due/new 已显示；没有项目/来源摘要；排序逻辑较粗，deadline 比较依赖字符串。 |
-| TASK-06 | Done 历史 | 已完成按日期分组，今天/昨天优先，可展开更早。 | [PARTIAL] | UI 有分组和“更早”；但 cancelled 也被放进“已完成”，容易污染历史与日报语义。 |
-| TASK-07 | 任务筛选 | 按优先级、项目、状态筛选。 | [PARTIAL] | main `listTasks(filter)` 支持，UI 没有筛选入口。 |
-| TASK-08 | 单任务详情 | 点击任务进入 Task Chat，看到来源、状态、项目、deadline、相关人。 | [PARTIAL] | Header 只显示 priority/source/due/external link；不显示 description/project/relation/result/history。 |
-| TASK-09 | Agent 第一条任务说明 | 首次进入 Task，Agent 主动解释任务是什么和建议如何处理。 | [PARTIAL] | `triggerFirstMessage` 存在且 stream 字段已通过类型检查；但依赖真实 Agent runtime，失败后 UI 没 fallback。 |
-| TASK-10 | 状态机 | pending -> in_progress -> completed/cancelled；完成/取消不可逆。 | [PARTIAL] | 后端限制 terminal revert；但用户进入/Agent 开始处理不会自动变 in_progress。 |
-| TASK-11 | 完成/取消快捷操作 | 用户可 hover、右键、header 完成或取消。 | [DONE] | UI 多处实现。 |
-| TASK-12 | 降低优先级 | 用户可把任务沉底。 | [DONE] | 右键菜单设置 priority=low。 |
-| TASK-13 | 延后到指定时间 | 用户可选择“周五再看”等；到点重新出现。 | [PARTIAL] | 只有明天/下周快捷项，没有任意时间选择；60s 刷新。 |
-| TASK-14 | 批量清理 | 多选批量完成/取消/延后。 | [PARTIAL] | 批量完成/取消存在；批量延后不存在。 |
-| TASK-15 | Active 膨胀控制 | 默认只显示 top N，Agent 日终建议清理长期低价值任务。 | [PARTIAL] | 可视上限存在；Agent 主动清理只是 job instruction，没有 UI 批量建议确认。 |
-| TASK-16 | 去重 | externalId 精确去重 + 内容相似去重。 | [PARTIAL] | externalId + Jaccard title 实现；中文无空格时相似度很弱，不足以覆盖目标用户语境。 |
-| TASK-17 | 自动优先级 | 根据 deadline、relation role、来源自动排序。 | [PARTIAL] | deadline/relation/source 简单评分；没有“被催促过”“项目重要程度”。 |
-| TASK-18 | 查看关联来源 | 从 task 跳回邮件/PR/事件。 | [PARTIAL] | externalUrl 只显示一个小箭头；没有来源标题、系统名、可访问错误处理。 |
-| TASK-19 | Task 编辑 | 用户能修改标题、描述、状态、优先级、项目、相关人、deadline。 | [MISSING] | 没有 task detail/edit 表单；只能局部快捷改状态/优先级。 |
-| TASK-20 | Task 处理结果确认/拒绝 | Agent 处理后用户确认、修改或拒绝结果。 | [PARTIAL] | PendingAction UI 有按钮，但内容和状态流不完整。 |
+| TASK-01 | Task data model | Title, description, status, priority, source, project, related people, time, UI state, Agent processing record. | [PARTIAL] | shared/db is basically complete, but `source.connectionId` is missing, so source can't be traced back to a specific connection. |
+| TASK-02 | User manually creates a task | The user can quickly create a task, and should also be able to add description, priority, due date, project, related people. | [PARTIAL] | The UI can only input a title, source=user; there's no new-task detail form. |
+| TASK-03 | Agent creates tasks from conversation | The user says "note this down / handle this," and the Agent creates a Task. | [PARTIAL] | The `create_task` tool exists and the build passes; but there's no runtime smoke test, and no UI-side confirmation or feedback that a non-high-priority task was created. |
+| TASK-04 | Job/Connection auto-creates tasks | Email, Teams, meetings, GitHub notifications enter the task pool. | [PARTIAL] | The Job + MCP skeleton exists and the build passes, but external data pulling and Agent decisions are not verified at runtime. |
+| TASK-05 | Active list | Incomplete tasks sorted by priority, showing new, due, overdue. | [PARTIAL] | Active/Due/new are shown; no project/source summary; the sort logic is coarse, and deadline comparison relies on strings. |
+| TASK-06 | Done history | Completed tasks grouped by date, today/yesterday first, expandable to earlier. | [PARTIAL] | The UI has grouping and "earlier"; but cancelled tasks are also put into "completed," easily polluting history and daily-report semantics. |
+| TASK-07 | Task filtering | Filter by priority, project, status. | [PARTIAL] | main `listTasks(filter)` supports it, the UI has no filter entry. |
+| TASK-08 | Single-task detail | Click a task to enter Task Chat and see source, status, project, deadline, related people. | [PARTIAL] | The header only shows priority/source/due/external link; it doesn't show description/project/relation/result/history. |
+| TASK-09 | Agent's first task explanation | On first entering a Task, the Agent proactively explains what the task is and how it suggests handling it. | [PARTIAL] | `triggerFirstMessage` exists and the stream field passes type checking; but it depends on a real Agent runtime, with no UI fallback on failure. |
+| TASK-10 | State machine | pending -> in_progress -> completed/cancelled; complete/cancel are irreversible. | [PARTIAL] | The backend restricts terminal revert; but the user entering / the Agent starting processing doesn't automatically change to in_progress. |
+| TASK-11 | Complete/cancel quick actions | The user can complete or cancel via hover, right-click, or header. | [DONE] | Implemented in multiple places in the UI. |
+| TASK-12 | Lower priority | The user can sink a task to the bottom. | [DONE] | The right-click menu sets priority=low. |
+| TASK-13 | Snooze until a set time | The user can choose "look on Friday" etc.; it reappears at the time. | [PARTIAL] | Only tomorrow/next-week quick options, no arbitrary time selection; 60s refresh. |
+| TASK-14 | Batch cleanup | Multi-select batch complete/cancel/snooze. | [PARTIAL] | Batch complete/cancel exist; batch snooze doesn't. |
+| TASK-15 | Active bloat control | By default show only the top N; the Agent suggests cleaning up long-term low-value tasks at end of day. | [PARTIAL] | The visible cap exists; Agent proactive cleanup is only a job instruction, with no UI batch suggestion confirmation. |
+| TASK-16 | Deduplication | Exact externalId dedup + content-similarity dedup. | [PARTIAL] | externalId + Jaccard title implemented; with Chinese lacking spaces, similarity is very weak, insufficient for the target user's context. |
+| TASK-17 | Automatic priority | Auto-sort based on deadline, relation role, source. | [PARTIAL] | Simple scoring for deadline/relation/source; no "has been chased" or "project importance." |
+| TASK-18 | View linked source | Jump from a task back to the email/PR/event. | [PARTIAL] | externalUrl only shows a small arrow; no source title, system name, or accessible error handling. |
+| TASK-19 | Task editing | The user can modify title, description, status, priority, project, related people, deadline. | [MISSING] | No task detail/edit form; only local quick status/priority changes. |
+| TASK-20 | Task result confirm/reject | After the Agent processes, the user confirms, modifies, or rejects the result. | [PARTIAL] | The PendingAction UI has buttons, but the content and state flow are incomplete. |
 
 ### 3. Chat / Agent Module
 
 | ID | Feature | Expected user experience | Implementation status | Audit notes |
 |---|---|---|---|---|
-| CHAT-01 | General Chat | 用户可自由提问、指令 Agent 创建/查询/处理任务。 | [PARTIAL] | UI 和 Agent 调用路径存在且 build 已通过；仍缺 runtime smoke test 和可见错误状态。 |
-| CHAT-02 | Task Chat | 选中 Task 后 Chat 自动带任务上下文。 | [PARTIAL] | 上下文拼装存在且 build 已通过；仍依赖 Agent runtime，UI header 没完整上下文。 |
-| CHAT-03 | Chat 历史 | General 与每个 Task 都有持久历史。 | [PARTIAL] | `chat_messages` 存在；但 stream/fetch/append 时序可能重复。 |
-| CHAT-04 | Streaming 回复 | Agent 输出流式展示。 | [PARTIAL] | sendMessage 与 triggerFirstMessage 的 stream 字段已通过类型检查；仍未验证真实 SDK 事件顺序，且 chat history/final append 可能重复。 |
-| CHAT-05 | Dynamic system prompt | 固定角色 + L0 + Task + Project + Relation。 | [PARTIAL] | 构建函数存在；未见 token budget 真正截断。 |
-| CHAT-06 | L1 Memory 检索注入 | 每轮基于用户消息检索相关记忆。 | [PARTIAL] | hook 存在；没有检索日志/引用透明 UI。 |
-| CHAT-07 | Project 上下文注入 | 处理任务时知道 repo/docs/tech stack/notes。 | [PARTIAL] | 只注入 description + techStack；repoPath/docsPath/notes 没注入，也没有按需读取能力。 |
-| CHAT-08 | Relation 上下文注入 | 处理任务时知道人物角色、专长、沟通风格。 | [PARTIAL] | 已拼接 relation info；但关系自动发现/补充缺失。 |
-| CHAT-09 | 内部工具 | memory_write/search、create/update/query_task、generate_report。 | [PARTIAL] | 工具存在；但 update_task 默认确认路径未形成可审查 action card。 |
-| CHAT-10 | 外部 MCP tools | Work IQ + GitHub tools 注册到 Agent。 | [SKELETON] | MCP spawn/list/call 框架存在；未验证 server schema、auth token、tool permission。 |
-| CHAT-11 | 写操作权限 | 读自动、记忆通知、写确认。 | [PARTIAL] | 规则意图存在；但 `skipPermission` 绕过 create_task/memory_write，默认 handler 的 request kind 与真实 SDK 类型不确定。 |
-| CHAT-12 | PendingAction 卡片 | 展示操作内容、目标、确认/修改/取消。 | [PARTIAL] | UI 有按钮，缺少 details 渲染和 taskId 绑定。 |
-| CHAT-13 | 修改草稿 | 用户点击“修改”后编辑草稿并重新确认。 | [PARTIAL] | 当前只是把 description 塞进输入框，原 action 通常被 reject；没有二次确认卡片。 |
-| CHAT-14 | General 中识别已有 Task | Agent 建议切换到相关任务。 | [SKELETON] | 只有 prompt 指令，没有 UI affordance 或 task switch action。 |
-| CHAT-15 | Session 恢复 | Task session/general session 能恢复。 | [PARTIAL] | SDK resume 代码存在且 build 已通过；但 task session 固定 `task-{id}-1`，没有 attempt 管理，也未做恢复失败体验。 |
-| CHAT-16 | Session end 归档 | 会话总结进入 L2，Task 处理状态更新。 | [PARTIAL] | L2 写 summary；没有更新 Task working state/result，也没有补漏提取实现。 |
+| CHAT-01 | General Chat | The user can freely ask questions and instruct the Agent to create/query/handle tasks. | [PARTIAL] | The UI and Agent invocation path exist and the build passes; still lacks a runtime smoke test and visible error states. |
+| CHAT-02 | Task Chat | After selecting a Task, Chat automatically carries the task context. | [PARTIAL] | Context assembly exists and the build passes; still depends on the Agent runtime, and the UI header lacks full context. |
+| CHAT-03 | Chat history | General and each Task have persistent history. | [PARTIAL] | `chat_messages` exists; but the stream/fetch/append timing may duplicate. |
+| CHAT-04 | Streaming replies | Agent output is shown streaming. | [PARTIAL] | The stream fields of sendMessage and triggerFirstMessage pass type checking; the real SDK event order is still unverified, and chat history/final append may duplicate. |
+| CHAT-05 | Dynamic system prompt | Fixed role + L0 + Task + Project + Relation. | [PARTIAL] | The build function exists; no real token-budget truncation is seen. |
+| CHAT-06 | L1 Memory retrieval injection | Each turn retrieves relevant memory based on the user message. | [PARTIAL] | The hook exists; no retrieval log / citation-transparency UI. |
+| CHAT-07 | Project context injection | When handling a task, knows repo/docs/tech stack/notes. | [PARTIAL] | Only injects description + techStack; repoPath/docsPath/notes are not injected, and there's no on-demand read capability. |
+| CHAT-08 | Relation context injection | When handling a task, knows the person's role, expertise, communication style. | [PARTIAL] | relation info is assembled; but automatic relationship discovery/enrichment is missing. |
+| CHAT-09 | Internal tools | memory_write/search, create/update/query_task, generate_report. | [PARTIAL] | The tools exist; but update_task's default confirmation path doesn't form a reviewable action card. |
+| CHAT-10 | External MCP tools | Work IQ + GitHub tools registered to the Agent. | [SKELETON] | MCP spawn/list/call framework exists; server schema, auth token, and tool permission unverified. |
+| CHAT-11 | Write-operation permission | Reads automatic, memory notified, writes confirmed. | [PARTIAL] | The rule intent exists; but `skipPermission` bypasses create_task/memory_write, and the default handler's request kind vs. the real SDK type is uncertain. |
+| CHAT-12 | PendingAction card | Shows operation content, target, confirm/modify/cancel. | [PARTIAL] | The UI has buttons, lacks details rendering and taskId binding. |
+| CHAT-13 | Modify draft | After clicking "modify," the user edits the draft and re-confirms. | [PARTIAL] | Currently just stuffs the description into the input box, the original action is usually rejected; no secondary confirmation card. |
+| CHAT-14 | Recognize existing Tasks in General | The Agent suggests switching to the relevant task. | [SKELETON] | Only a prompt instruction, no UI affordance or task-switch action. |
+| CHAT-15 | Session restore | Task session / general session can be restored. | [PARTIAL] | The SDK resume code exists and the build passes; but the task session is fixed at `task-{id}-1`, with no attempt management and no restore-failure experience. |
+| CHAT-16 | Session-end archiving | The conversation summary enters L2, and the Task processing state is updated. | [PARTIAL] | L2 writes a summary; doesn't update the Task working state/result, and has no gap-filling extraction implementation. |
 
 ### 4. Connection Module
 
 | ID | Feature | Expected user experience | Implementation status | Audit notes |
 |---|---|---|---|---|
-| CONN-01 | M365/Work IQ 连接 | 用户授权后可读取 Outlook/Teams/Calendar/SharePoint/People。 | [SKELETON] | OAuth + MCP 配置存在；真实 Work IQ server/env/token 是否兼容未验证。 |
-| CONN-02 | GitHub 连接 | 用户授权后可读写 issues/PR/repos/notifications。 | [SKELETON] | OAuth + MCP 配置存在；MCP server 通常需要 token env 名称确认。 |
-| CONN-03 | 添加/移除外部连接 | 用户可连接、重新授权、断开。 | [PARTIAL] | UI 有连接/断开；断开后没有主动 stop MCP server，也没有状态事件。 |
-| CONN-04 | 权限配置只读/读写 | 每个 connection 可配置权限范围。 | [MISSING] | UI 只有 OAuth client config；没有只读/读写级别。 |
-| CONN-05 | OAuth 配置 | 用户填写 client id/tenant/token 配置。 | [PARTIAL] | 可保存；但 GitHub client secret 作为普通 config 明文存入 `memory_entries`，风险高。 |
-| CONN-06 | Token refresh | 授权过期后自动刷新或提示。 | [MISSING] | refresh token 被存储但没有使用刷新流程。 |
-| CONN-07 | 连接状态可解释 | 显示未配置/未授权/授权失败/MCP 启动失败。 | [PARTIAL] | lastError 只有 authenticate catch；MCP 启动失败只 console.error。 |
-| CONN-08 | 外部来源可追溯 | Task 可知道来自哪个 connection、哪条邮件/PR。 | [PARTIAL] | externalId/externalUrl 存在；connectionId 缺失。 |
+| CONN-01 | M365/Work IQ connection | After the user authorizes, can read Outlook/Teams/Calendar/SharePoint/People. | [SKELETON] | OAuth + MCP config exists; whether a real Work IQ server/env/token is compatible is unverified. |
+| CONN-02 | GitHub connection | After the user authorizes, can read/write issues/PR/repos/notifications. | [SKELETON] | OAuth + MCP config exists; the MCP server usually needs token env name confirmation. |
+| CONN-03 | Add/remove external connection | The user can connect, re-authorize, disconnect. | [PARTIAL] | The UI has connect/disconnect; after disconnect it doesn't proactively stop the MCP server, and there's no status event. |
+| CONN-04 | Permission config read-only/read-write | Each connection can configure a permission scope. | [MISSING] | The UI only has OAuth client config; no read-only/read-write level. |
+| CONN-05 | OAuth config | The user fills in client id/tenant/token config. | [PARTIAL] | Can be saved; but the GitHub client secret is stored in plaintext as ordinary config in `memory_entries`, high risk. |
+| CONN-06 | Token refresh | Auto-refresh or prompt when authorization expires. | [MISSING] | The refresh token is stored but no refresh flow is used. |
+| CONN-07 | Explainable connection status | Show not-configured / not-authorized / auth-failed / MCP-start-failed. | [PARTIAL] | lastError only has the authenticate catch; MCP start failure only console.error. |
+| CONN-08 | External source traceable | A Task can know which connection and which email/PR it came from. | [PARTIAL] | externalId/externalUrl exist; connectionId is missing. |
 
 ### 5. Project Module
 
 | ID | Feature | Expected user experience | Implementation status | Audit notes |
 |---|---|---|---|---|
-| PROJ-01 | Project CRUD | 用户可创建、查看、编辑、删除项目。 | [PARTIAL] | UI + IPC + DB 存在。创建时 `notes` 字段被 UI 提交但 `CreateProjectInput`/insert 没保存，用户输入会静默丢失。 |
-| PROJ-02 | repo/docs 路径 | Agent 处理代码/文档任务时能定位仓库和文档。 | [PARTIAL] | 字段保存；Agent 未用 repoPath/docsPath 搜索或读取。 |
-| PROJ-03 | techStack/team/notes | 为 Agent 提供软上下文。 | [PARTIAL] | techStack/team 保存；create notes 丢失；Agent 不注入 notes/team。 |
-| PROJ-04 | 任务关联项目 | Task 可关联 Project 并按项目过滤。 | [PARTIAL] | 数据模型/API 支持；UI 新建/编辑任务不能关联项目，列表也不显示项目。 |
-| PROJ-05 | Agent 补充项目信息 | 对话中学习项目描述、惯例、备注。 | [SKELETON] | 只有 updateProject API，没有 Agent tool。 |
+| PROJ-01 | Project CRUD | The user can create, view, edit, delete projects. | [PARTIAL] | UI + IPC + DB exist. On create, the `notes` field is submitted by the UI but not saved by `CreateProjectInput`/insert, so user input is silently lost. |
+| PROJ-02 | repo/docs paths | When the Agent handles code/doc tasks, it can locate the repo and docs. | [PARTIAL] | Fields are saved; the Agent doesn't use repoPath/docsPath to search or read. |
+| PROJ-03 | techStack/team/notes | Provide soft context to the Agent. | [PARTIAL] | techStack/team are saved; create notes are lost; the Agent doesn't inject notes/team. |
+| PROJ-04 | Tasks linked to projects | A Task can be linked to a Project and filtered by project. | [PARTIAL] | The data model/API support it; the UI for creating/editing tasks can't link a project, and the list doesn't show the project. |
+| PROJ-05 | Agent enriches project info | Learn project description, conventions, notes during conversation. | [SKELETON] | Only an updateProject API, no Agent tool. |
 
 ### 6. Relation Module
 
 | ID | Feature | Expected user experience | Implementation status | Audit notes |
 |---|---|---|---|---|
-| REL-01 | Relation CRUD | 用户配置老板、同事、外部人等。 | [PARTIAL] | UI + IPC + DB 存在。创建时 `notes` 字段同样会静默丢失。 |
-| REL-02 | role/timezone/expertise/style | Agent 用于优先级和沟通方式。 | [PARTIAL] | 字段存在；自动使用只体现在 priority role 简单加分和 context 拼接。 |
-| REL-03 | 关系自动发现 | Agent 从信息流中识别新人并提议添加。 | [MISSING] | 没有 tool、UI pending suggestion 或 job 逻辑。 |
-| REL-04 | 自动补充关系属性 | Agent 从交互观察沟通偏好、专长等。 | [SKELETON] | docs 有设想，代码无实现。 |
-| REL-05 | 删除后的引用清理 | 删除 relation 后任务/记忆引用不残留。 | [PARTIAL] | task related ids 会清理；memory 中的人物知识不会处理。 |
+| REL-01 | Relation CRUD | The user configures boss, colleagues, external people, etc. | [PARTIAL] | UI + IPC + DB exist. On create, the `notes` field is likewise silently lost. |
+| REL-02 | role/timezone/expertise/style | The Agent uses these for priority and communication style. | [PARTIAL] | Fields exist; automatic use only shows up as a simple priority-role bonus and context assembly. |
+| REL-03 | Automatic relationship discovery | The Agent identifies new people from the information stream and proposes adding them. | [MISSING] | No tool, UI pending suggestion, or job logic. |
+| REL-04 | Auto-enrich relationship attributes | The Agent observes communication preferences, expertise, etc. from interactions. | [SKELETON] | The docs have the idea, the code has no implementation. |
+| REL-05 | Reference cleanup after deletion | After deleting a relation, task/memory references don't linger. | [PARTIAL] | task related ids are cleaned up; person knowledge in memory isn't handled. |
 
 ### 7. Skill / Extensibility
 
 | ID | Feature | Expected user experience | Implementation status | Audit notes |
 |---|---|---|---|---|
-| SKILL-01 | 查看已安装的 Skill / 能力列表 | Settings 中看到 Agent 能做什么、装了哪些 Skill / MCP。 | [MISSING] | docs/skill.md 定义 Skill 为一等扩展单元（和 MCP tool 平级），Settings 尚无 Skill tab。 |
-| SKILL-02 | 安装 / 自定义 Skill | 用户从 MCP Registry / 社区 catalog 安装，或本地创建 / 编辑自定义 Skill。 | [MISSING] | 需要：SKILL.md 加载（SDK skillDirectories）+ MCP 安装流 + marketplace 来源。是可扩展架构的核心。 |
-| SKILL-03 | Tool 注册 | Agent session 注册内部 + MCP tools。 | [PARTIAL] | `buildTools` 存在且 build 已通过；MCP tool discovery/call 仍未运行时验证。 |
-| SKILL-04 | Tool 权限说明 | 用户知道哪些自动、哪些需确认，以及每个 Skill 声明的 tool 范围。 | [PARTIAL] | Preferences 有 autonomyLevel，但没有每个 tool / Skill 的可见解释。 |
+| SKILL-01 | View installed Skills / capability list | In Settings, see what the Agent can do and which Skills / MCPs are installed. | [MISSING] | docs/skill.md defines Skill as a first-class extension unit (on par with MCP tools), but Settings has no Skill tab yet. |
+| SKILL-02 | Install / customize Skills | The user installs from an MCP Registry / community catalog, or creates / edits a custom Skill locally. | [MISSING] | Needs: SKILL.md loading (SDK skillDirectories) + MCP install flow + marketplace source. This is the core of an extensible architecture. |
+| SKILL-03 | Tool registration | The Agent session registers internal + MCP tools. | [PARTIAL] | `buildTools` exists and the build passes; MCP tool discovery/call is still unverified at runtime. |
+| SKILL-04 | Tool permission explanation | The user knows which are automatic, which need confirmation, and the tool scope each Skill declares. | [PARTIAL] | Preferences has autonomyLevel, but there's no visible explanation per tool / Skill. |
 
 ### 8. Job Module
 
 | ID | Feature | Expected user experience | Implementation status | Audit notes |
 |---|---|---|---|---|
-| JOB-01 | 默认晨间聚合 | 工作日早上收集新信息并生成任务/briefing。 | [PARTIAL] | seed + scheduler 存在且 build 已通过；依赖 Agent/Connections runtime，缺少运行中/失败可见状态。 |
-| JOB-02 | 定时轮询 | 每 15 分钟检查新邮件/Teams/GitHub。 | [PARTIAL] | scheduler 存在；没有真实低成本外部预过滤，也未验证 MCP 数据拉取。 |
-| JOB-03 | 日终对账 | 补建遗漏任务、更新已完成状态、建议清理、生成日报。 | [PARTIAL] | job instruction 存在；没有可确认的清理 UI、日报入口或对账结果明细。 |
-| JOB-04 | Job 列表 | 用户查看内置 jobs、频率、上次结果。 | [PARTIAL] | Settings 展示 job 和 lastSummary。 |
-| JOB-05 | Job toggle | 用户可启用/停用。 | [PARTIAL] | IPC 有 toggle；UI 点击后不刷新 store，开关视觉状态可能不更新。 |
-| JOB-06 | 创建/编辑/删除 Job | 用户配置频率和指令。 | [MISSING] | docs 要求 CRUD，当前只有 toggle。 |
-| JOB-07 | Job 执行记录 | 用户查看历史运行日志。 | [PARTIAL] | 只有 last result/summary，没有历史列表、耗时、错误堆栈、创建了哪些任务。 |
-| JOB-08 | Job 失败通知 | SDK/connection/auth 失败时用户知道。 | [MISSING] | catch 写 last_summary，但没有事件通知，也没有 dashboard health。 |
+| JOB-01 | Default morning aggregation | On weekday mornings, collect new info and generate tasks/briefing. | [PARTIAL] | seed + scheduler exist and the build passes; depend on the Agent/Connections runtime, lacking running/failure visibility. |
+| JOB-02 | Periodic polling | Check for new email/Teams/GitHub every 15 minutes. | [PARTIAL] | The scheduler exists; no real low-cost external pre-filter, and MCP data pulling unverified. |
+| JOB-03 | End-of-day reconciliation | Backfill missed tasks, update completed status, suggest cleanup, generate the daily report. | [PARTIAL] | The job instruction exists; no confirmable cleanup UI, daily-report entry, or reconciliation result detail. |
+| JOB-04 | Job list | The user views built-in jobs, frequency, last result. | [PARTIAL] | Settings shows jobs and lastSummary. |
+| JOB-05 | Job toggle | The user can enable/disable. | [PARTIAL] | IPC has toggle; after clicking, the UI doesn't refresh the store, so the toggle visual state may not update. |
+| JOB-06 | Create/edit/delete Job | The user configures frequency and instructions. | [MISSING] | The docs require CRUD; currently only toggle. |
+| JOB-07 | Job execution records | The user views historical run logs. | [PARTIAL] | Only last result/summary, no history list, duration, error stack, or which tasks were created. |
+| JOB-08 | Job failure notification | The user knows when SDK/connection/auth fails. | [MISSING] | catch writes last_summary, but there's no event notification and no dashboard health. |
 
 ### 9. Memory Module
 
 | ID | Feature | Expected user experience | Implementation status | Audit notes |
 |---|---|---|---|---|
-| MEM-01 | L0 Identity 查看/编辑 | 用户编辑核心身份档案，8K 限制可见。 | [DONE] | Memory tab 有 textarea 和字数。 |
-| MEM-02 | L1/L2 列表 | 用户浏览 Agent 积累的记忆。 | [PARTIAL] | 只列 active L1/L2 前 100 条；无分页。 |
-| MEM-03 | Memory 搜索/过滤 | 按层、项目、标签、状态搜索。 | [MISSING] | API 有 list/search 部分能力；UI 无搜索/过滤。 |
-| MEM-04 | L1 编辑 | 用户纠正错误记忆内容和标签。 | [MISSING] | UI 只能删除。 |
-| MEM-05 | 删除任何记忆 | 用户可删除错误/敏感记忆。 | [PARTIAL] | UI 删除 L1/L2；L0 可覆盖；没有删除确认。 |
-| MEM-06 | inactive 审计链 | 错误记忆标记 inactive，不再检索但可审计。 | [PARTIAL] | `markMemoryInactive` 存在但 UI/Agent tool remove 是硬删除。 |
-| MEM-07 | FTS5 检索 | Agent 可用关键词检索记忆。 | [PARTIAL] | searchMemory 实现；中文分词和 query escaping 可能不足。 |
-| MEM-08 | 检索透明 | 用户能问“这轮用了哪些记忆”，并看到来源。 | [MISSING] | 没有 retrieval log，也没有回答引用机制。 |
-| MEM-09 | Session/Task 归档到 L2 | 完成任务后长期保留结论。 | [PARTIAL] | onSessionEnd 写 finalMessage；没有 task completed hook，也不清理 task 工作状态。 |
-| MEM-10 | Memory 导出 | 导出 JSON/Markdown。 | [MISSING] | 路线图/用户控制提到，代码无。 |
-| MEM-11 | Secret 与 Memory 隔离 | OAuth secret/token 不应混在用户记忆模型里。 | [PARTIAL] | token 加密后放 L0 表；GitHub client secret 明文放 config；架构上容易和用户可编辑 memory 混淆。 |
+| MEM-01 | View/edit L0 Identity | The user edits the core identity profile, with the 1K limit visible. | [DONE] | The Memory tab has a textarea and a character count. |
+| MEM-02 | L1/L2 list | The user browses the memories the Agent has accumulated. | [PARTIAL] | Only lists the top 100 active L1/L2; no pagination. |
+| MEM-03 | Memory search/filter | Search by layer, project, tag, status. | [MISSING] | The API has some list/search capability; the UI has no search/filter. |
+| MEM-04 | L1 editing | The user corrects wrong memory content and tags. | [MISSING] | The UI can only delete. |
+| MEM-05 | Delete any memory | The user can delete wrong/sensitive memories. | [PARTIAL] | The UI deletes L1/L2; L0 can be overwritten; no delete confirmation. |
+| MEM-06 | inactive audit chain | Wrong memories marked inactive, no longer retrieved but auditable. | [PARTIAL] | `markMemoryInactive` exists but the UI/Agent tool remove is a hard delete. |
+| MEM-07 | FTS5 retrieval | The Agent can retrieve memories by keyword. | [PARTIAL] | searchMemory is implemented; Chinese tokenization and query escaping may be insufficient. |
+| MEM-08 | Retrieval transparency | The user can ask "which memories were used this turn" and see the sources. | [MISSING] | No retrieval log and no answer-citation mechanism. |
+| MEM-09 | Archive Session/Task to L2 | After completing a task, retain conclusions long-term. | [PARTIAL] | onSessionEnd writes finalMessage; no task-completed hook, and doesn't clean up task working state. |
+| MEM-10 | Memory export | Export JSON/Markdown. | [MISSING] | Mentioned in the roadmap / user control, no code. |
+| MEM-11 | Secret and Memory isolation | OAuth secrets/tokens shouldn't be mixed into the user memory model. | [PARTIAL] | Tokens are encrypted and put in the L0 table; the GitHub client secret is plaintext in config; architecturally easy to confuse with user-editable memory. |
 
 ### 10. Report / Daily / Weekly Summary
 
 | ID | Feature | Expected user experience | Implementation status | Audit notes |
 |---|---|---|---|---|
-| RPT-01 | 生成日报 | 用户下班前看到基于任务和信息流的日报。 | [SKELETON] | `generate_report` tool 只统计 task 状态；日终 job instruction 提到日报，但无 UI 查看/确认。 |
-| RPT-02 | 生成周报 | 用户可主动让 Agent 汇总一周。 | [SKELETON] | Tool 支持 weekly 参数；无明确 UI 或 prompt shortcut。 |
-| RPT-03 | 把外部已完成事项纳入报告 | 邮件已回复、PR 已 merge 等自动对账。 | [MISSING] | 需要 Connection + Job + Agent 判断，当前无真实闭环。 |
-| RPT-04 | 报告可编辑/确认/复制 | 用户能审查、修改、发送或复制。 | [MISSING] | 没有 report view 或 confirmation card。 |
+| RPT-01 | Generate daily report | Before leaving work, the user sees a daily report based on tasks and the information stream. | [SKELETON] | The `generate_report` tool only tallies task status; the end-of-day job instruction mentions a daily report, but there's no UI to view/confirm. |
+| RPT-02 | Generate weekly report | The user can proactively have the Agent summarize a week. | [SKELETON] | The tool supports a weekly parameter; no clear UI or prompt shortcut. |
+| RPT-03 | Include external completed items in the report | Emails replied, PRs merged, etc. auto-reconciled. | [MISSING] | Needs Connection + Job + Agent judgment, currently no real loop. |
+| RPT-04 | Report editable/confirmable/copyable | The user can review, modify, send, or copy. | [MISSING] | No report view or confirmation card. |
 
 ### 11. Preferences / Notifications
 
 | ID | Feature | Expected user experience | Implementation status | Audit notes |
 |---|---|---|---|---|
-| PREF-01 | 语言偏好 | Agent 按中文/英文回复。 | [PARTIAL] | 写入 preferences 并进入 system prompt；依赖 Agent。 |
-| PREF-02 | 自主级别 | default/auto/confirm 控制确认策略。 | [PARTIAL] | UI 与 handler 存在；tool skipPermission 和真实 SDK request kind 可能让策略失效。 |
-| PREF-03 | 系统通知 | 高优紧急任务弹系统通知。 | [PARTIAL] | 仅 create_task tool 创建 high priority 时触发；外部 Job/连接状态失败不通知。 |
-| PREF-04 | Active 上限 | 用户配置侧边栏显示任务数。 | [DONE] | UI + store 使用。 |
-| PREF-05 | 主题偏好 | 用户配置主题。 | [MISSING] | PRODUCT 提到通知/主题偏好，代码无主题选项。 |
+| PREF-01 | Language preference | The Agent replies in Chinese/English. | [PARTIAL] | Written into preferences and into the system prompt; depends on the Agent. |
+| PREF-02 | Autonomy level | default/auto/confirm controls the confirmation policy. | [PARTIAL] | The UI and handler exist; tool skipPermission and the real SDK request kind may render the policy ineffective. |
+| PREF-03 | System notifications | High-priority urgent tasks trigger a system notification. | [PARTIAL] | Only triggered when the create_task tool creates a high-priority task; external Job/connection-status failures don't notify. |
+| PREF-04 | Active cap | The user configures the number of tasks shown in the sidebar. | [DONE] | UI + store use it. |
+| PREF-05 | Theme preference | The user configures the theme. | [MISSING] | PRODUCT mentions notification/theme preferences, the code has no theme option. |
 
 ## User Journey Audit
 
-### UF-01: 第一次启动 App
+### UF-01: First launch of the app
 
-期望路径：打开 App -> 看到欢迎/健康状态 -> 连接 M365/GitHub -> 填写身份记忆 -> 添加项目/关系人 -> 确认 Jobs -> 得到第一份 briefing。
+Expected path: open the app -> see welcome/health status -> connect M365/GitHub -> fill in identity memory -> add projects/relationships -> confirm Jobs -> get the first briefing.
 
-当前状态：[MISSING]
+Current status: [MISSING]
 
-实际体验：用户会看到空任务列表和空 Chat。Settings 里能连接，但没有明确顺序、没有缺失项检查、没有解释 Work IQ/GitHub OAuth 配置从哪里来。SDK 初始化失败或 MCP 启动失败主要进入 console。
+Actual experience: the user sees an empty task list and empty Chat. Connections can be made in Settings, but there's no clear order, no missing-item check, and no explanation of where Work IQ/GitHub OAuth config comes from. SDK init failure or MCP start failure mostly go to the console.
 
-关键问题：这个产品高度依赖外部连接和个人上下文，缺少 onboarding 会让用户误以为产品“什么都没做”。
+Key issue: this product depends heavily on external connections and personal context; without onboarding the user will mistakenly think the product "does nothing."
 
-### UF-02: 早上 9 点开工看全貌
+### UF-02: See the full picture at 9 AM
 
-期望路径：App 已后台/打开后自动运行晨间聚合 -> 左侧出现新任务 -> 右侧 General Chat 有 briefing -> 用户点击最高优任务。
+Expected path: the app has run morning aggregation in the background / after opening -> new tasks appear on the left -> the right General Chat has a briefing -> the user clicks the highest-priority task.
 
-当前状态：[PARTIAL]
+Current status: [PARTIAL]
 
-已有：default morning job、`triggerMorningBriefingIfNeeded`、Chat message 注入。
+Existing: the default morning job, `triggerMorningBriefingIfNeeded`, Chat message injection.
 
-缺口：build 已通过，但未验证真实 Agent/Connection runtime；没有显示 job 正在运行；没有“上次聚合失败，因为未连接 M365/GitHub”；没有展示本次创建了哪些任务；briefing 可能仅保存为 chat message，Dashboard 没有专门摘要区域。
+Gaps: the build passes, but a real Agent/Connection runtime is unverified; there's no indication the job is running; no "last aggregation failed because M365/GitHub isn't connected"; no display of which tasks were created this time; the briefing may only be saved as a chat message, and the Dashboard has no dedicated summary area.
 
-### UF-03: 扫描任务全貌
+### UF-03: Scan the full task picture
 
-期望路径：用户 30 秒内看到 Active 顶部、优先级、deadline、new 标记、来源、项目和任务数量。
+Expected path: within 30 seconds the user sees the top of Active, priority, deadline, new markers, source, project, and task count.
 
-当前状态：[PARTIAL]
+Current status: [PARTIAL]
 
-已有：Active/Done 分区、优先级色点、new 点、due 文案、上限展开。
+Existing: Active/Done sections, priority color dots, new dots, due text, cap expansion.
 
-缺口：来源和项目不可见；无法按项目/状态/优先级筛选；没有“为什么这个任务高优先级”的解释；cancelled 混入 Done；列表健康清理只是隐藏/展开，不是真维护。
+Gaps: source and project are invisible; can't filter by project/status/priority; no explanation of "why is this task high priority"; cancelled tasks mix into Done; list health cleanup is just hide/expand, not real maintenance.
 
-### UF-04: 用户手动创建任务
+### UF-04: User manually creates a task
 
-期望路径：用户快速输入标题；必要时补 deadline/project/relation/priority；任务进入 Active 并可立即处理。
+Expected path: the user quickly types a title; if needed adds deadline/project/relation/priority; the task enters Active and can be handled immediately.
 
-当前状态：[PARTIAL]
+Current status: [PARTIAL]
 
-已有：侧栏 `+` 输入标题创建。
+Existing: the sidebar `+` inputs a title to create.
 
-缺口：只能填标题；不能填描述、截止、项目、相关人；新任务创建后不自动选中，也没有进入 Task Chat 的引导。
+Gaps: can only fill in a title; can't fill description, due, project, related people; a newly created task isn't auto-selected, and there's no guidance into Task Chat.
 
-### UF-05: 点击任务进入处理上下文
+### UF-05: Click a task to enter the processing context
 
-期望路径：点击任务 -> new 标记消失 -> Chat 进入 Task 模式 -> Agent 第一条说明任务来源/背景/建议 -> 用户直接说“处理它”。
+Expected path: click a task -> the new marker disappears -> Chat enters Task mode -> the Agent's first message explains the task's source/background/suggestion -> the user directly says "handle it."
 
-当前状态：[PARTIAL]
+Current status: [PARTIAL]
 
-已有：selectTask、markSeen、TaskHeader、triggerFirstMessage 入口。
+Existing: selectTask, markSeen, TaskHeader, triggerFirstMessage entry.
 
-缺口：build 已通过，但 first message 仍未做 runtime smoke test；失败无 fallback；header 信息太薄；任务不会进入 in_progress；没有静态详情兜底。
+Gaps: the build passes, but the first message still has no runtime smoke test; no fallback on failure; the header info is too thin; the task doesn't enter in_progress; no static-detail fallback.
 
-### UF-06: General 快速提问历史事实
+### UF-06: Quickly ask about a historical fact in General
 
-期望路径：用户问“上周 A 说 deadline 是几号？” -> Agent 检索 Memory + Work IQ -> 给答案和来源。
+Expected path: the user asks "what date did A say the deadline was last week?" -> the Agent searches Memory + Work IQ -> gives the answer and source.
 
-当前状态：[PARTIAL]
+Current status: [PARTIAL]
 
-已有：General chat、memory_search、Work IQ MCP 设计。
+Existing: General chat, memory_search, the Work IQ MCP design.
 
-缺口：build 已通过，但 Agent runtime、Work IQ、Memory 检索注入效果未验证；Memory 检索没有来源透明；没有告诉用户答案来自哪里。
+Gaps: the build passes, but the Agent runtime, Work IQ, and Memory retrieval injection effect are unverified; Memory retrieval has no source transparency; doesn't tell the user where the answer came from.
 
-### UF-07: Agent 处理任务并执行写操作
+### UF-07: The Agent handles a task and executes a write operation
 
-期望路径：用户说“approve PR 并评论 LGTM” -> Agent 读取 PR diff -> 生成计划 -> 显示确认卡片，包含目标 PR、评论内容、影响 -> 用户确认 -> 执行 -> 任务完成。
+Expected path: the user says "approve the PR and comment LGTM" -> the Agent reads the PR diff -> generates a plan -> shows a confirmation card with the target PR, comment content, and impact -> the user confirms -> executes -> the task is completed.
 
-当前状态：[SKELETON]
+Current status: [SKELETON]
 
-已有：MCP tools 框架、permission request、PendingAction UI。
+Existing: the MCP tools framework, permission request, PendingAction UI.
 
-缺口：MCP/GitHub 未验证；确认卡片不展示实际操作细节；pending action 无 taskId；执行后没有强绑定 task completion；失败恢复缺失。
+Gaps: MCP/GitHub unverified; the confirmation card doesn't show the actual operation details; the pending action has no taskId; after execution it doesn't firmly bind to task completion; failure recovery is missing.
 
-### UF-08: 修改 Agent 草稿
+### UF-08: Modify the Agent's draft
 
-期望路径：Agent 给邮件草稿 -> 用户点修改 -> 草稿进入编辑态 -> 用户改完 -> 再次确认发送。
+Expected path: the Agent gives an email draft -> the user clicks modify -> the draft enters edit mode -> the user finishes editing -> confirms send again.
 
-当前状态：[PARTIAL]
+Current status: [PARTIAL]
 
-已有：ActionCard 的修改按钮、modifyDraft store。
+Existing: the ActionCard's modify button, the modifyDraft store.
 
-缺口：填入的是 action description，不是真实草稿；修改后只是普通 chat 输入，没有重新生成确认卡；原 permission promise 可能已 reject。
+Gaps: what's filled in is the action description, not the real draft; after modifying it's just normal chat input, with no regenerated confirmation card; the original permission promise may already be rejected.
 
-### UF-09: 用户自己完成/取消/延后任务
+### UF-09: The user completes/cancels/snoozes a task themselves
 
-期望路径：用户 hover/右键/header 完成、取消、降低优先级、延后到某天；列表立即更新；Done 记录完成时间。
+Expected path: the user completes, cancels, lowers priority, or snoozes to a day via hover/right-click/header; the list updates immediately; Done records the completion time.
 
-当前状态：[PARTIAL]
+Current status: [PARTIAL]
 
-已有：完成/取消/降低/明天/下周延后、批量完成/取消。
+Existing: complete/cancel/lower/tomorrow/next-week snooze, batch complete/cancel.
 
-缺口：没有任意日期；取消任务在 Done 中像已完成一样显示；完成/取消没有 undo；没有错误 toast；完成后仍停留在已完成 task chat。
+Gaps: no arbitrary date; cancelled tasks appear in Done like completed ones; complete/cancel have no undo; no error toast; after completing, the user still stays in the completed task chat.
 
-### UF-10: 配置外部连接
+### UF-10: Configure external connections
 
-期望路径：用户在 Settings 看到 M365/GitHub 状态，点连接，完成授权，状态变绿；失败时知道原因和下一步。
+Expected path: the user sees M365/GitHub status in Settings, clicks connect, completes authorization, the status turns green; on failure, knows the reason and next step.
 
-当前状态：[PARTIAL]
+Current status: [PARTIAL]
 
-已有：连接列表、OAuth window、config 表单、status event。
+Existing: the connection list, OAuth window, config form, status event.
 
-缺口：没有 admin consent/redirect URI 指引；GitHub secret 明文保存；MCP 启动失败不可见；断开不停止 server；没有只读/读写权限配置。
+Gaps: no admin consent/redirect URI guidance; the GitHub secret is stored in plaintext; MCP start failure is invisible; disconnect doesn't stop the server; no read-only/read-write permission config.
 
-### UF-11: 配置 Project / Relation
+### UF-11: Configure Project / Relation
 
-期望路径：用户添加项目和关系人；Agent 后续自动用这些信息。
+Expected path: the user adds projects and relationships; the Agent automatically uses this info later.
 
-当前状态：[PARTIAL]
+Current status: [PARTIAL]
 
-已有：CRUD UI 和 DB。
+Existing: CRUD UI and DB.
 
-缺口：Project/Relation 创建时 notes 静默丢失；Task 不能在 UI 上关联项目/关系人；Agent 只用少量字段；没有自动补全或提议添加。
+Gaps: Project/Relation notes are silently lost on create; Tasks can't be linked to a project/relationship in the UI; the Agent uses only a few fields; no auto-completion or proposal to add.
 
-### UF-12: 查看与纠正 Memory
+### UF-12: View and correct Memory
 
-期望路径：用户看到 L0/L1/L2，搜索、过滤、编辑、删除；纠正后 Agent 不再重复错误。
+Expected path: the user sees L0/L1/L2, searches, filters, edits, deletes; after correction the Agent no longer repeats the error.
 
-当前状态：[PARTIAL]
+Current status: [PARTIAL]
 
-已有：L0 编辑、L1/L2 列表、删除。
+Existing: L0 editing, L1/L2 list, delete.
 
-缺口：不能搜索/过滤/编辑 L1；删除无确认；inactive 审计链没有 UI；Agent 更正旧记忆只是 prompt 要求，缺少工具流验证。
+Gaps: can't search/filter/edit L1; delete has no confirmation; the inactive audit chain has no UI; the Agent correcting old memory is just a prompt requirement, lacking a verified tool flow.
 
-### UF-13: 管理 Jobs
+### UF-13: Manage Jobs
 
-期望路径：用户查看晨间/轮询/日终 job，修改时间，手动运行，查看历史。
+Expected path: the user views the morning/poll/end-of-day jobs, modifies times, runs manually, views history.
 
-当前状态：[PARTIAL]
+Current status: [PARTIAL]
 
-已有：列表、toggle、last summary。
+Existing: list, toggle, last summary.
 
-缺口：toggle 后视觉可能不刷新；无创建/编辑/删除/手动运行；无历史执行记录；失败不主动提示。
+Gaps: the visual may not refresh after toggle; no create/edit/delete/manual-run; no historical execution records; failures don't proactively prompt.
 
-### UF-14: 生成日报/周报
+### UF-14: Generate daily/weekly reports
 
-期望路径：用户或日终 job 触发 -> Agent 汇总任务、外部事件、已完成未建任务 -> 生成可编辑报告。
+Expected path: the user or the end-of-day job triggers -> the Agent summarizes tasks, external events, completed-but-uncreated tasks -> generates an editable report.
 
-当前状态：[SKELETON]
+Current status: [SKELETON]
 
-已有：generate_report tool 统计 task 数量。
+Existing: the generate_report tool tallies task counts.
 
-缺口：不检索 L2 或外部系统；无 report UI；无编辑/确认/复制路径；日终对账不能自动识别“用户已在外部完成”。
+Gaps: doesn't retrieve L2 or external systems; no report UI; no edit/confirm/copy path; end-of-day reconciliation can't automatically recognize "the user already completed it externally."
 
-### UF-15: 出错和恢复
+### UF-15: Errors and recovery
 
-期望路径：OAuth 失败、SDK 失败、MCP 失败、Job 失败、DB 失败、Agent 超时都有用户可理解的提示和重试。
+Expected path: OAuth failure, SDK failure, MCP failure, Job failure, DB failure, and Agent timeout all have user-understandable prompts and retries.
 
-当前状态：[MISSING]
+Current status: [MISSING]
 
-当前多数失败路径只进入 console、throw，或在 chat 中显示一条错误消息。没有全局 toast、health panel、retry button、debug export。
+Currently most failure paths just go to the console, throw, or show one error message in chat. There's no global toast, health panel, retry button, or debug export.
 
 ## Key Product Risks
 
-1. Agent 依赖太集中，但没有降级体验。当前 Chat/Job/Briefing/Task first message 都依赖 SDK；一旦 SDK 失败，产品需要仍然像一个可靠任务台，而不是空白。
-2. “任务即上下文”的设计还没有落地。Task Header 太薄，Task 详情没有静态兜底，Project/Relation/Memory 注入也未覆盖关键字段。
-3. 确认交互没有达到“可审查”。写操作必须展示操作对象、内容、权限、后果和失败恢复；当前只是 generic action。
-4. Settings 是配置表单集合，不是成功路径。用户需要知道哪些配置必需、当前缺什么、下一步是什么。
-5. 自动化没有可观测性。Job 到底检查了什么、创建了哪些 task、跳过了什么、失败在哪，用户不可见。
-6. Memory 的“可纠正”还不够。能看和删不等于可纠正；需要搜索、编辑、来源、inactive 状态和本轮使用透明。
-7. 数据安全边界不清楚。OAuth token/config/preference/window state 与 Memory 共享一张表，GitHub secret 明文保存，这会让“用户拥有记忆”与“应用内部机密”混在一起。
+1. Agent dependency is too concentrated, but there's no degraded experience. Chat/Job/Briefing/Task first message all depend on the SDK; once the SDK fails, the product needs to still behave like a reliable task board, not a blank screen.
+2. The "task as context" design hasn't landed yet. The Task Header is too thin, Task details have no static fallback, and Project/Relation/Memory injection doesn't cover key fields.
+3. The confirmation interaction hasn't reached "reviewable." Write operations must show the operation target, content, permission, consequences, and failure recovery; currently it's just a generic action.
+4. Settings is a collection of config forms, not a success path. The user needs to know which config is required, what's currently missing, and what's next.
+5. Automation has no observability. What the Job actually checked, which tasks it created, what it skipped, and where it failed are invisible to the user.
+6. Memory's "correctability" isn't enough yet. Being able to view and delete isn't the same as being correctable; it needs search, edit, source, inactive status, and transparency about what was used this turn.
+7. The data security boundary is unclear. OAuth token/config/preference/window state share one table with Memory, and the GitHub secret is stored in plaintext, which mixes "the user owns their memory" with "app-internal secrets."
 
 ## Recommended Implementation Order
 
 ### Phase 1: Make the existing skeleton trustworthy
 
-1. 增加 Agent runtime smoke test：General chat、Task first message、create_task tool、job session 各跑一条可复现路径。
-2. 修复 Chat store/main IPC 的 stream-end/history/final append 时序，保证消息不重复。
-3. 为 SDK/MCP/Job 增加可见 health 状态：未初始化、未授权、运行中、失败、可重试。
-4. 补齐 PendingAction 的 details 渲染和 taskId 绑定，修改流程改成“编辑草稿 -> 重新确认”。
-5. 修复 Project/Relation create 时 notes 静默丢失。
+1. Add an Agent runtime smoke test: run one reproducible path each for General chat, Task first message, the create_task tool, and the job session.
+2. Fix the stream-end/history/final-append timing of the Chat store / main IPC to ensure messages don't duplicate.
+3. Add visible health states for SDK/MCP/Job: not-initialized, not-authorized, running, failed, retryable.
+4. Complete PendingAction's details rendering and taskId binding, and change the modify flow to "edit draft -> re-confirm."
+5. Fix the silent loss of notes on Project/Relation create.
 
 ### Phase 2: Close core MVP user paths
 
-1. 做首次启动 checklist：连接 M365/GitHub、填写 L0、添加项目、添加关系人、确认 Jobs。
-2. 做 Task 详情/编辑能力：描述、优先级、deadline、project、relations、source、result。
-3. 让 Task 进入/退出 in_progress 有明确规则：用户进入、Agent 开始处理、完成/取消。
-4. Job 增加手动运行、历史记录、失败展示；periodic-poll 做真实外部预过滤。
-5. Memory 增加搜索、过滤、编辑、inactive、来源展示。
+1. Build a first-launch checklist: connect M365/GitHub, fill in L0, add projects, add relationships, confirm Jobs.
+2. Build Task detail/edit capability: description, priority, deadline, project, relations, source, result.
+3. Give Task entering/leaving in_progress clear rules: user enters, Agent starts processing, completes/cancels.
+4. Add manual run, history records, and failure display to Jobs; make periodic-poll do a real external pre-filter.
+5. Add search, filter, edit, inactive, and source display to Memory.
 
 ### Phase 3: Make the product feel like an agent, not a todo app
 
-1. Morning briefing 显示本次读取范围、创建/更新任务、跳过原因和建议。
-2. 日终对账增加“建议清理”确认卡，而不是只写在 summary 里。
-3. Report view 支持编辑、复制、确认发送。
-4. Skill/Tool 可视化：告诉用户 Agent 能做什么、装了哪些 Skill/MCP、哪些操作需要确认；提供从 MCP Registry / 社区 catalog 安装新能力的入口。
-5. 外部来源深链接与权限配置完善：只读/读写、连接级 scope、token refresh。
+1. The morning briefing shows the read scope this time, created/updated tasks, skip reasons, and suggestions.
+2. End-of-day reconciliation adds a "suggested cleanup" confirmation card instead of just writing it in the summary.
+3. The report view supports edit, copy, confirm-send.
+4. Skill/Tool visualization: tell the user what the Agent can do, which Skills/MCPs are installed, and which operations need confirmation; provide an entry to install new capabilities from an MCP Registry / community catalog.
+5. Improve external-source deep links and permission config: read-only/read-write, connection-level scope, token refresh.

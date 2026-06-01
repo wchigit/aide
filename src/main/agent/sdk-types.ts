@@ -1,8 +1,8 @@
 // ============================================================
 // Copilot SDK Type Definitions
 // ============================================================
-// 基于 investigation/copilot-sdk/ 调研定义的接口
-// 当 @github/copilot-sdk 正式发布后，替换为真实类型
+// Interfaces defined based on research in investigation/copilot-sdk/
+// Replace with the real types once @github/copilot-sdk is officially released
 // ============================================================
 
 export interface CopilotClient {

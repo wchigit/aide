@@ -29,9 +29,9 @@ export function getL0Content(): string {
 }
 
 export function setL0Content(content: string, source: MemorySource = 'user'): void {
-  // Enforce 8K character hard limit
-  if (content.length > 8000) {
-    throw new Error(`L0 content exceeds 8K character limit (${content.length} chars). Condense or remove entries.`)
+  // Enforce 1K character hard limit
+  if (content.length > 1000) {
+    throw new Error(`L0 content exceeds 1K character limit (${content.length} chars). Condense or remove entries.`)
   }
 
   const db = getDb()
