@@ -69,6 +69,14 @@ const api: AideAPI = {
     get: () => ipcRenderer.invoke('preferences:get'),
     set: (prefs) => ipcRenderer.invoke('preferences:set', prefs)
   },
+  wechat: {
+    getStatus: () => ipcRenderer.invoke('wechat:getStatus'),
+    connect: () => ipcRenderer.invoke('wechat:connect'),
+    disconnect: () => ipcRenderer.invoke('wechat:disconnect'),
+    push: (text) => ipcRenderer.invoke('wechat:push', text),
+    setTargetUser: (userId) => ipcRenderer.invoke('wechat:setTargetUser', userId),
+    setBaseUrl: (url) => ipcRenderer.invoke('wechat:setBaseUrl', url)
+  },
   system: {
     health: () => ipcRenderer.invoke('system:health')
   }

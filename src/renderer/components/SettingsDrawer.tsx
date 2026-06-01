@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github } from 'lucide-react'
+import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, MessageCircle } from 'lucide-react'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { Project, Relation, Job, ConnectionStatus, MemoryEntry } from '@shared/types'
+import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus } from '@shared/types'
 
 function MicrosoftIcon() {
   return (
@@ -206,6 +206,7 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
         </Card>
       ))}
 
+      <WeChatConnectionCard />
 
     </div>
   )
@@ -734,6 +735,120 @@ function PreferencesTab() {
         <Toggle checked={preferences.systemNotifications} onChange={v => setPreferences({ systemNotifications: v })} />
       </SettingRow>
     </div>
+  )
+}
+
+/* ═══════════════════════════════════════════
+   WeChat Connection Card
+   ═══════════════════════════════════════════ */
+
+function WeChatConnectionCard() {
+  const [status, setStatus] = useState<WeChatStatus | null>(null)
+  const [connecting, setConnecting] = useState(false)
+  const [qrImg, setQrImg] = useState<string | null>(null)
+
+  useEffect(() => {
+    window.aide.wechat.getStatus().then(setStatus)
+  }, [])
+
+  // Listen for QR code and login progress events
+  useEffect(() => {
+    const handler = (event: any) => {
+      if (event.type === 'wechat:qrcode') {
+        setQrImg(event.imgContent)
+      } else if (event.type === 'wechat:login-progress') {
+        if (event.stage === 'confirmed') {
+          setQrImg(null)
+          setConnecting(false)
+          window.aide.wechat.getStatus().then(setStatus)
+        } else if (event.stage === 'expired' || event.stage === 'timeout') {
+          setQrImg(null)
+          setConnecting(false)
+        }
+      }
+    }
+    const unsub = window.aideEvents.on(handler)
+    return unsub
+  }, [])
+
+  const handleConnect = async () => {
+    setConnecting(true)
+    try {
+      const result = await window.aide.wechat.connect()
+      setStatus(result)
+      if (result.connection !== 'connected' || result.lastError) {
+        setQrImg(null)
+        setConnecting(false)
+      }
+    } catch {
+      setConnecting(false)
+      window.aide.wechat.getStatus().then(setStatus)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    const result = await window.aide.wechat.disconnect()
+    setStatus(result)
+    setQrImg(null)
+  }
+
+  const isConnected = status?.connection === 'connected'
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-green-500/10 text-green-600">
+            <MessageCircle size={18} />
+          </div>
+          <div>
+            <p className="text-[13px] font-medium text-text-primary">微信</p>
+            <p className="text-[12px] text-text-tertiary mt-0.5">日报推送 · 任务通知 · 远程对话</p>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <div className={`w-[6px] h-[6px] rounded-full ${
+                isConnected ? 'bg-success' : 'bg-text-tertiary'
+              }`} />
+              <span className={`text-[11px] ${isConnected ? 'text-success' : 'text-text-tertiary'}`}>
+                {isConnected
+                  ? `已连接${status?.monitorActive ? ' · 监听中' : ''}`
+                  : connecting ? '等待扫码…' : '未连接'}
+              </span>
+            </div>
+            {status?.lastError && <p className="text-[11px] text-danger mt-1">{status.lastError}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {isConnected && (
+            <Btn variant="danger" onClick={handleDisconnect}>断开</Btn>
+          )}
+          {!isConnected && (
+            <Btn onClick={handleConnect}>
+              {connecting ? '扫码中…' : '连接'}
+            </Btn>
+          )}
+        </div>
+      </div>
+
+      {/* QR Code display */}
+      {qrImg && (
+        <div className="mt-4 flex flex-col items-center gap-2 p-4 rounded-lg bg-surface-2 border border-edge">
+          <img
+            src={qrImg}
+            alt="WeChat QR Code"
+            className="w-48 h-48 rounded-md"
+          />
+          <p className="text-[11px] text-text-tertiary">用微信扫描二维码登录</p>
+        </div>
+      )}
+
+      {isConnected && (
+        <div className="mt-3 p-2.5 rounded-lg bg-surface-2/60 border border-edge-subtle">
+          <p className="text-[11px] text-text-tertiary">
+            连接后请从微信发一条消息给 Bot 以建立会话，之后即可双向通信。
+          </p>
+        </div>
+      )}
+    </Card>
   )
 }
 

@@ -144,6 +144,18 @@ export interface ConnectionStatus {
   activeAccount: string | null // e.g. GitHub username
 }
 
+// === WeChat ===
+
+export type WeChatConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
+
+export interface WeChatStatus {
+  connection: WeChatConnectionStatus
+  accountId: string | null
+  targetUser: string | null
+  lastError: string | null
+  monitorActive: boolean
+}
+
 // === IPC API ===
 
 export interface AideAPI {
@@ -212,6 +224,14 @@ export interface AideAPI {
   preferences: {
     get(): Promise<UserPreferences>
     set(prefs: Partial<UserPreferences>): Promise<void>
+  }
+  wechat: {
+    getStatus(): Promise<WeChatStatus>
+    connect(): Promise<WeChatStatus>
+    disconnect(): Promise<WeChatStatus>
+    push(text: string): Promise<void>
+    setTargetUser(userId: string): Promise<void>
+    setBaseUrl(url: string): Promise<void>
   }
   system: {
     health(): Promise<{ sdk: 'initializing' | 'ready' | 'error'; sdkError: string | null }>
@@ -338,3 +358,6 @@ export type AideEvent =
   | { type: 'job:failed'; jobId: string; error: string }
   | { type: 'connection:status'; connections: ConnectionStatus[] }
   | { type: 'connection:auth-progress'; connectionType: string; userCode: string; verificationUri: string }
+  | { type: 'wechat:qrcode'; qrcode: string; imgContent: string }
+  | { type: 'wechat:login-progress'; stage: 'scanned' | 'confirmed' | 'expired' | 'timeout' }
+  | { type: 'wechat:status'; status: WeChatStatus }
