@@ -37,7 +37,7 @@ The app is a single Electron project:
 
 ## Reporting bugs & requesting features
 
-Use the [issue templates](https://github.com/houk-ms/aide/issues/new/choose). For security issues, see [SECURITY.md](SECURITY.md) — please do **not** open a public issue.
+Open an issue on the [issues page](https://github.com/houk-ms/aide/issues). For security issues, see [SECURITY.md](SECURITY.md) — please do **not** open a public issue.
 
 ## Code of conduct
 
