@@ -59,8 +59,17 @@ The Agent gains its capabilities through the SDK's Custom Tools mechanism:
 | `memory_write` | Write memory (add/update/remove) | Memory |
 | `memory_search` | Retrieve past memories | Memory |
 | `create_task` | Create a new task | Task |
-| `update_task` | Update task status | Task |
+| `update_task` | Update a task | Task |
+| `find_related_task` | De-dup check before creating a task | Task |
+| `add_task_activity` | Append an entry to a task's activity timeline | Task |
+| `get_task_activities` | Read a task's activity timeline | Task |
 | `query_tasks` | Query the task list | Task |
+| `query_projects` | Query projects | Project |
+| `query_relations` | Query relationships | Relation |
+| `manage_project` | Create/update a project | Project |
+| `manage_relation` | Create/update a relationship | Relation |
+| `manage_job` | Create/update a scheduled job | Job |
+| `manage_preferences` | Read/update user preferences | Preferences |
 | `generate_report` | Generate daily/weekly reports | Report |
 
 **Design questions**:

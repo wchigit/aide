@@ -26,21 +26,23 @@ System-wide architecture.
 │  │ Store    │  │ Store    │  │ DB        │ │
 │  └──────────┘  └──────────┘  └───────────┘ │
 │                                              │
-│  ┌──────────────────────────────────────┐   │
-│  │ MCP Servers                          │   │
-│  │ • @microsoft/workiq (full M365)   │   │
-│  │ • GitHub MCP Server                  │   │  │ • User-installed MCP (from Registry) │   │
-  └──────────────────────────────────────┘   │
-  ┌──────────────────────────────────────┐   │
-  │ Skills (SDK skillDirectories)        │   │
-  │ • built-in / community / local SKILL.md │   ││  └──────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────┐  │
+│  │ MCP Servers                          │  │
+│  │ • @microsoft/workiq (full M365)      │  │
+│  │ • GitHub MCP Server                  │  │
+│  │ • User-installed MCP (from Registry) │  │
+│  └──────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────┐  │
+│  │ Skills (SDK skillDirectories)        │  │
+│  │ • built-in / community / local       │  │
+│  └──────────────────────────────────────┘  │
 └──────────────────────┬──────────────────────┘
                        │ IPC
 ┌──────────────────────▼──────────────────────┐
 │ Electron Renderer Process                    │
 │                                              │
-│  [Task List] │ [Chat Panel]                  │
-│  (React + Zustand + Tailwind + shadcn/ui)    │
+│  [Task Sidebar] │ [Dashboard / Chat]         │
+│  (React + Zustand + Tailwind + lucide-react) │
 └──────────────────────────────────────────────┘
 ```
 

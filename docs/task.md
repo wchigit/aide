@@ -33,7 +33,7 @@ interface Task {
   title: string;
   description: string;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-  priority: 'high' | 'medium' | 'low';
+  priority: 'p0' | 'p1' | 'p2';   // p0 = highest
 
   // Source tracing
   source: {
@@ -60,8 +60,32 @@ interface Task {
   // Agent processing record
   sessionId?: string;         // Associated Copilot SDK session
   result?: string;            // Summary of the result
+
+  // Progress timeline
+  lastActivityAt?: string;    // Newest activity; drives the sidebar activity dot
 }
 ```
+
+> Times are stored as ISO 8601 strings, and nullable fields are `null` (not `undefined`) in the actual `Task` type.
+
+## Activity timeline
+
+Each Task carries an append-only list of `TaskActivity` entries surfaced in the Task chat's activity panel:
+
+```typescript
+interface TaskActivity {
+  id: string;
+  taskId: string;
+  timestamp: string;
+  type: 'progress' | 'status_change' | 'comment' | 'blocker' | 'note';
+  summary: string;
+  statusFrom?: TaskStatus | null;
+  statusTo?: TaskStatus | null;
+  sourceRef?: string | null;   // e.g. a backing email/PR reference
+}
+```
+
+When `lastActivityAt` is newer than `seenAt`, the task floats to the top of the sidebar with an activity dot.
 
 ## Deduplication
 

@@ -6,13 +6,16 @@ The scheduling subsystem. It drives the execution of timed tasks.
 
 Jobs are what make the system run proactively. Without Jobs, the system can only passively wait for the user to open a conversation.
 
-## Built-in Jobs (MVP)
+## Built-in Jobs
 
-| Job | Frequency | What it does |
-|-----|------|--------|
-| Morning aggregation | Every morning (configurable) | Pulls all new information; the Agent analyzes it and generates today's task list |
-| Periodic polling | Every 15 minutes | Checks for new information (email, messages, PRs, etc.); creates/updates Tasks when found |
-| End-of-day reconciliation | Before the end of each workday (configurable) | The Agent reviews the day's information flow, backfills missed tasks, updates statuses, and generates a daily report |
+Four jobs are seeded on first run (definitions are re-synced from code on every startup):
+
+| Job (id) | Cron | What it does |
+|----------|------|--------------|
+| Daily morning briefing (`morning-briefing`) | `0 9 * * 1-5` | Pulls new email/Teams/GitHub since the last run plus today's calendar; creates Tasks for items needing action and gives a prioritized summary. Has a dedicated startup catch-up. |
+| Periodic poll (`periodic-poll`) | `*/30 * * * *` | Every 30 minutes, checks for new information and creates/updates Tasks when found. |
+| End-of-day review (`daily-reconcile`) | `0 18 * * 1-5` | Reviews the day's task statuses, marks confirmed-done tasks complete, suggests cleaning up stale P2 tasks, and generates a daily summary. |
+| Relationships & projects sync (`world-sync`) | `0 10 * * 1` | Weekly (Monday) bootstrap/refresh of Relations and Projects. Also triggered once at the end of onboarding. |
 
 ## Execution model
 
