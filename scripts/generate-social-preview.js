@@ -37,17 +37,25 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <text x="410" y="270" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="120" font-weight="700" fill="#FFFFFF">Aide</text>
   <text x="414" y="338" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="34" font-weight="500" fill="#DCE6FF">Your personal work agent</text>
 
-  <!-- feature chips -->
-  <g font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="26" font-weight="600" fill="#FFFFFF">
-    <rect x="412" y="392" width="290" height="56" rx="28" fill="#FFFFFF" opacity="0.12"/>
-    <text x="437" y="429">Aggregates your work</text>
-    <rect x="722" y="392" width="232" height="56" rx="28" fill="#FFFFFF" opacity="0.12"/>
-    <text x="747" y="429">Learns your context</text>
-  </g>
-  <g font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="26" font-weight="600" fill="#FFFFFF">
-    <rect x="412" y="464" width="200" height="56" rx="28" fill="#FFFFFF" opacity="0.12"/>
-    <text x="437" y="501">Acts for you</text>
-  </g>
+  <!-- feature chips (single row, auto-sized, left-aligned full width) -->
+  ${(() => {
+    const chips = ['Aggregates your work', 'Learns your context', 'Acts for you']
+    const fontSize = 26
+    const charW = fontSize * 0.56 // rough advance width for Segoe UI semibold
+    const padX = 26
+    const gap = 18
+    const h = 56
+    const y = 474
+    let x = 120
+    let out = ''
+    for (const label of chips) {
+      const w = Math.round(label.length * charW + padX * 2)
+      out += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${h / 2}" fill="#FFFFFF" opacity="0.12"/>`
+      out += `<text x="${x + w / 2}" y="${y + 37}" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="600" fill="#FFFFFF">${label}</text>`
+      x += w + gap
+    }
+    return out
+  })()}
 
   <!-- footer -->
   <text x="120" y="586" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="500" fill="#AFC2FF">Electron · GitHub Copilot SDK · MCP · Local-first</text>
