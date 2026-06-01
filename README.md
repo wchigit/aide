@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="resources/icon-256.png" alt="Aide" width="120" height="120" />
+
 # Aide
 
 ### Your personal work agent — sees the full picture, learns as you work, and helps you get things done.

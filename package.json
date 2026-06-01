@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "electron-vite preview",
     "icons": "node scripts/generate-icons.js",
+    "social": "node scripts/generate-social-preview.js",
     "dist": "electron-vite build && electron-builder",
     "dist:mac": "electron-vite build && electron-builder --mac",
     "dist:win": "electron-vite build && electron-builder --win",

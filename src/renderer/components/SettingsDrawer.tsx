@@ -768,11 +768,12 @@ function Empty({ children }: { children: string }) {
   )
 }
 
-function Btn({ children, onClick, variant }: { children: React.ReactNode; onClick?: () => void; variant?: 'danger' }) {
+function Btn({ children, onClick, variant, disabled }: { children: React.ReactNode; onClick?: () => void; variant?: 'danger'; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className={`h-7 px-3 rounded-lg text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors ${
+      disabled={disabled}
+      className={`h-7 px-3 rounded-lg text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
         variant === 'danger'
           ? 'bg-danger/10 text-danger hover:bg-danger/15 border border-danger/15'
           : 'bg-surface-2 text-text-secondary hover:bg-surface-3 border border-edge'
