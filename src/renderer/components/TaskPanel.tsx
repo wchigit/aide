@@ -31,7 +31,7 @@ export function TaskPanel() {
   const overflowCount = sortedActive.length - VISIBLE_CAP
 
   return (
-    <aside className="w-[260px] min-w-[260px] shrink-0 border-r border-edge flex flex-col bg-surface-1">
+    <aside className="w-[280px] min-w-[280px] shrink-0 border-r border-edge flex flex-col bg-surface-1">
       {/* Title bar — drag region */}
       <header className="flex items-center justify-between px-4 h-[52px] shrink-0 drag-region">
         <button
@@ -55,7 +55,7 @@ export function TaskPanel() {
           title="Manage"
         >
           <SlidersHorizontal size={13} strokeWidth={1.75} />
-          <span className="text-[11px]">Manage</span>
+          <span className="text-[12px]">Manage</span>
         </button>
       </header>
 
@@ -131,7 +131,7 @@ export function TaskPanel() {
           className="w-full flex items-center justify-center gap-2.5 px-3.5 py-2.5 rounded-xl border border-accent/20 bg-accent/[0.03] text-text-secondary hover:border-accent/40 hover:bg-accent/[0.06] transition-all"
         >
           <Zap size={14} className="text-accent" />
-          <span className="text-[13px] font-medium">Ask Aide anything</span>
+          <span className="text-[13px] font-medium">Tell Aide what you need</span>
         </button>
       </div>
     </aside>
@@ -160,12 +160,6 @@ function SidebarTaskItem({ task, selected, onSelect, isNew, hasActivity }: {
         <span className={`shrink-0 px-[4px] py-[1px] rounded text-[9px] font-semibold leading-none ${priorityStyles}`}>
           {task.priority.toUpperCase()}
         </span>
-        {task.status === 'in_progress' && (
-          <div className="relative shrink-0 -ml-0.5">
-            <div className="w-[5px] h-[5px] rounded-full bg-accent" />
-            <div className="absolute inset-0 w-[5px] h-[5px] rounded-full bg-accent animate-ping opacity-30" />
-          </div>
-        )}
 
         <span className={`text-[13px] leading-[1.4] truncate flex-1 ${
           selected ? 'text-text-primary font-medium' : 'text-text-secondary'
@@ -175,33 +169,34 @@ function SidebarTaskItem({ task, selected, onSelect, isNew, hasActivity }: {
           <div className="w-[5px] h-[5px] rounded-full bg-accent shrink-0 anim-pulse-dot" />
         )}
 
+        {!isNew && hasActivity && (
+          <span className="w-[5px] h-[5px] rounded-full bg-accent shrink-0 group-hover:opacity-0 transition-opacity anim-pulse-dot" title="New activity" />
+        )}
+
         {!isNew && (
-          <div className="flex items-center shrink-0">
-            {hasActivity && (
-              <span className="w-[5px] h-[5px] rounded-full bg-accent shrink-0 mr-1 group-hover:hidden anim-pulse-dot" title="New activity" />
-            )}
-            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={e => { e.stopPropagation(); completeTask(task.id) }}
-                className="w-5 h-5 rounded flex items-center justify-center text-text-tertiary hover:text-success hover:bg-success/10 transition-colors"
-                title="Done"
-              >
-                <Check size={12} strokeWidth={2} />
-              </button>
-              <button
-                onClick={e => {
-                  e.stopPropagation()
-                  const t = new Date()
-                  t.setDate(t.getDate() + 1)
-                  t.setHours(9, 0, 0, 0)
-                  snooze(task.id, t.toISOString())
-                }}
-                className="w-5 h-5 rounded flex items-center justify-center text-text-tertiary hover:text-warning hover:bg-warning/10 transition-colors"
-                title="Snooze"
-              >
-                <Clock size={12} strokeWidth={2} />
-              </button>
-            </div>
+          <div className={`absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center rounded-md pl-3 pr-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${
+            selected ? 'bg-accent-subtle' : 'bg-surface-2'
+          }`}>
+            <button
+              onClick={e => { e.stopPropagation(); completeTask(task.id) }}
+              className="w-5 h-5 rounded flex items-center justify-center text-text-tertiary hover:text-success hover:bg-success/10 transition-colors"
+              title="Done"
+            >
+              <Check size={12} strokeWidth={2} />
+            </button>
+            <button
+              onClick={e => {
+                e.stopPropagation()
+                const t = new Date()
+                t.setDate(t.getDate() + 1)
+                t.setHours(9, 0, 0, 0)
+                snooze(task.id, t.toISOString())
+              }}
+              className="w-5 h-5 rounded flex items-center justify-center text-text-tertiary hover:text-warning hover:bg-warning/10 transition-colors"
+              title="Snooze"
+            >
+              <Clock size={12} strokeWidth={2} />
+            </button>
           </div>
         )}
       </div>

@@ -127,7 +127,7 @@ export function AppMock() {
             <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="oklch(55% 0.18 260)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" />
             </svg>
-            <span className="text-[11.5px] font-medium text-[oklch(40%_0.01_270)]">Ask Aide anything</span>
+            <span className="text-[11.5px] font-medium text-[oklch(40%_0.01_270)]">Tell Aide what you need</span>
           </div>
         </div>
       </aside>
