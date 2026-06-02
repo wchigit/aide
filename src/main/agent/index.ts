@@ -136,8 +136,8 @@ const hooks: SessionConfig['hooks'] = {
 
     const memories = searchMemory(input.prompt, 5)
     if (memories.length === 0) return {}
-    const block = memories.map(m => `- ${m.content}`).join('\n')
-    return { modifiedPrompt: `<memory-context>\n${block}\n</memory-context>\n\n${input.prompt}` }
+    const block = memories.map(m => `- [id: ${m.id}] ${m.content}`).join('\n')
+    return { modifiedPrompt: `<memory-context>\nRelevant memories (use the id with memory_write update/remove if one is wrong):\n${block}\n</memory-context>\n\n${input.prompt}` }
   },
 
   // On session end: extract summary → L2, plus catch-up extraction

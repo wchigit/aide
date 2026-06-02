@@ -39,13 +39,13 @@ export function buildTools(): Tool<any>[] {
 
 const memoryWriteTool: Tool<any> = {
   name: 'memory_write',
-  description: 'Manage memory. add = record new info, update = correct an existing memory, remove = delete a wrong memory. When the user corrects you, first check whether a wrong memory needs update/remove.',
+  description: 'Manage memory. action: add = record new info, update = correct an existing memory, remove = mark a wrong memory inactive. For update/remove you MUST pass the real target_id of an existing memory — get it from memory_search first (never guess an ID). When the user corrects you, search for the wrong memory, then update or remove it by its id before adding the corrected fact.',
   parameters: {
     type: 'object',
     properties: {
       action: { type: 'string', enum: ['add', 'update', 'remove'], description: 'Operation type' },
       content: { type: 'string', description: 'New content (required for add/update)' },
-      target_id: { type: 'string', description: 'Target memory ID (required for update/remove)' },
+      target_id: { type: 'string', description: 'Real ID of an existing memory (required for update/remove). Obtain it from memory_search — do not invent it.' },
       tags: { type: 'array', items: { type: 'string' }, description: 'Category tags, e.g. ["preference", "tech"]' },
       projectId: { type: 'string', description: 'Associated project ID (optional)' }
     },
@@ -54,13 +54,15 @@ const memoryWriteTool: Tool<any> = {
   skipPermission: true, // memory writes are auto-allowed
   handler: async (args: { action: 'add' | 'update' | 'remove'; content?: string; target_id?: string; tags?: string[]; projectId?: string }) => {
     if (args.action === 'remove') {
-      if (!args.target_id) return { success: false, error: 'remove requires target_id' }
-      markMemoryInactive(args.target_id)
+      if (!args.target_id) return { success: false, error: 'remove requires target_id. Call memory_search to find the memory and use its id.' }
+      const ok = markMemoryInactive(args.target_id)
+      if (!ok) return { success: false, error: `No memory found with id "${args.target_id}". Call memory_search to get a valid id — do not guess.` }
       return { success: true, message: 'Marked inactive (auditable)' }
     }
     if (args.action === 'update') {
-      if (!args.target_id || !args.content) return { success: false, error: 'update requires target_id and content' }
-      updateMemory(args.target_id, args.content)
+      if (!args.target_id || !args.content) return { success: false, error: 'update requires target_id and content. Call memory_search to find the memory and use its id.' }
+      const ok = updateMemory(args.target_id, args.content)
+      if (!ok) return { success: false, error: `No memory found with id "${args.target_id}". Call memory_search to get a valid id — do not guess.` }
       return { success: true, message: 'Updated' }
     }
     // add
@@ -87,6 +89,7 @@ const memorySearchTool: Tool<any> = {
     if (results.length === 0) return { memories: [], message: 'No relevant memories found' }
     return {
       memories: results.map(m => ({
+        id: m.id,
         content: m.content,
         tags: m.tags,
         createdAt: m.createdAt,

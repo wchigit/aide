@@ -206,21 +206,24 @@ export function listMemory(filter?: MemoryFilter): MemoryEntry[] {
   return rows.map(rowToMemory)
 }
 
-export function updateMemory(id: string, content: string): void {
+export function updateMemory(id: string, content: string): boolean {
   const db = getDb()
-  db.prepare('UPDATE memory_entries SET content = ?, updated_at = ? WHERE id = ?')
+  const info = db.prepare('UPDATE memory_entries SET content = ?, updated_at = ? WHERE id = ?')
     .run(content, new Date().toISOString(), id)
+  return info.changes > 0
 }
 
-export function deleteMemory(id: string): void {
+export function deleteMemory(id: string): boolean {
   const db = getDb()
-  db.prepare('DELETE FROM memory_entries WHERE id = ?').run(id)
+  const info = db.prepare('DELETE FROM memory_entries WHERE id = ?').run(id)
+  return info.changes > 0
 }
 
-export function markMemoryInactive(id: string): void {
+export function markMemoryInactive(id: string): boolean {
   const db = getDb()
-  db.prepare("UPDATE memory_entries SET status = 'inactive', updated_at = ? WHERE id = ?")
+  const info = db.prepare("UPDATE memory_entries SET status = 'inactive', updated_at = ? WHERE id = ?")
     .run(new Date().toISOString(), id)
+  return info.changes > 0
 }
 
 // === Archive (L2) — Session End Extraction ===
