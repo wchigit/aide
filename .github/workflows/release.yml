@@ -65,6 +65,8 @@ jobs:
             release/*.exe
             release/*.AppImage
             release/*.deb
+            release/*.yml
+            release/*.blockmap
           if-no-files-found: ignore
 
       - name: Publish to GitHub Release
@@ -77,6 +79,8 @@ jobs:
             release/*.exe
             release/*.AppImage
             release/*.deb
+            release/*.yml
+            release/*.blockmap
           draft: true
           fail_on_unmatched_files: false
         env:

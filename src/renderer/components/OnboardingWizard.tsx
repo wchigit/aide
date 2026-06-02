@@ -16,6 +16,13 @@ export function OnboardingWizard({ onComplete }: Props) {
   useEffect(() => {
     window.aide.connections.getStatus().then(setConnections)
     window.aide.connections.checkCli().then(setCliStatus)
+    // Keep in sync as the real MCP servers settle connection state in the background.
+    const unsub = window.aideEvents.on((event) => {
+      if (event.type === 'connection:status') {
+        window.aide.connections.getStatus().then(setConnections)
+      }
+    })
+    return unsub
   }, [])
 
   const isConnected = (type: string) => connections.find(c => c.type === type)?.authenticated ?? false

@@ -1,5 +1,5 @@
 import { Cron } from 'croner'
-import { getDb } from '../db'
+import { getDb, BUILTIN_JOB_IDS } from '../db'
 import { executeJobSession } from '../agent'
 import { BrowserWindow } from 'electron'
 import type { DeliveryTarget, Job } from '@shared/types'
@@ -25,6 +25,7 @@ function rowToJob(row: Record<string, unknown>): Job {
     instruction: row.instruction as string,
     enabled: (row.enabled as number) === 1,
     deliveryTargets: parseDeliveryTargets(row.delivery_targets),
+    isBuiltin: (row.is_builtin as number) === 1,
     lastRunAt: row.last_run_at as string | null,
     lastResult: row.last_result as 'success' | 'failed' | null,
     lastSummary: row.last_summary as string | null
@@ -211,9 +212,9 @@ export function createJob(data: { name: string; cron: string; instruction: strin
   const id = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const enabled = data.enabled !== false
   const deliveryTargets = data.deliveryTargets ?? []
-  db.prepare('INSERT INTO jobs (id, name, cron, instruction, enabled, delivery_targets) VALUES (?, ?, ?, ?, ?, ?)').run(id, data.name, data.cron, data.instruction, enabled ? 1 : 0, JSON.stringify(deliveryTargets))
+  db.prepare('INSERT INTO jobs (id, name, cron, instruction, enabled, delivery_targets, is_builtin) VALUES (?, ?, ?, ?, ?, ?, 0)').run(id, data.name, data.cron, data.instruction, enabled ? 1 : 0, JSON.stringify(deliveryTargets))
 
-  const job: Job = { id, name: data.name, cron: data.cron, instruction: data.instruction, enabled, deliveryTargets, lastRunAt: null, lastResult: null, lastSummary: null }
+  const job: Job = { id, name: data.name, cron: data.cron, instruction: data.instruction, enabled, deliveryTargets, isBuiltin: false, lastRunAt: null, lastResult: null, lastSummary: null }
   if (enabled) scheduleJob(job)
   return job
 }
@@ -225,20 +226,27 @@ export function updateJob(id: string, data: { name?: string; cron?: string; inst
   const current = db.prepare('SELECT * FROM jobs WHERE id = ?').get(id) as Record<string, unknown> | undefined
   if (!current) return
 
+  // Built-in jobs are app-managed: their name/cron/instruction are owned by Aide
+  // and re-synced on every launch, so only the user-owned delivery targets are
+  // mutable here. Custom jobs are fully editable.
+  const isBuiltin = BUILTIN_JOB_IDS.has(id)
+
   const sets: string[] = []
   const vals: unknown[] = []
 
-  if (data.name !== undefined && data.name !== current.name) { sets.push('name = ?'); vals.push(data.name) }
-  if (data.cron !== undefined && data.cron !== current.cron) { sets.push('cron = ?'); vals.push(data.cron) }
-  if (data.instruction !== undefined && data.instruction !== current.instruction) { sets.push('instruction = ?'); vals.push(data.instruction) }
+  if (!isBuiltin) {
+    if (data.name !== undefined && data.name !== current.name) { sets.push('name = ?'); vals.push(data.name) }
+    if (data.cron !== undefined && data.cron !== current.cron) { sets.push('cron = ?'); vals.push(data.cron) }
+    if (data.instruction !== undefined && data.instruction !== current.instruction) { sets.push('instruction = ?'); vals.push(data.instruction) }
+  }
   if (data.deliveryTargets !== undefined) { sets.push('delivery_targets = ?'); vals.push(JSON.stringify(data.deliveryTargets)) }
 
   if (sets.length === 0) return
   vals.push(id)
   db.prepare(`UPDATE jobs SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
 
-  // Reschedule if cron actually changed and job is enabled
-  if (data.cron !== undefined && data.cron !== current.cron && (current.enabled as number) === 1) {
+  // Reschedule if cron actually changed and job is enabled (custom jobs only).
+  if (!isBuiltin && data.cron !== undefined && data.cron !== current.cron && (current.enabled as number) === 1) {
     const row = db.prepare('SELECT * FROM jobs WHERE id = ?').get(id) as Record<string, unknown> | undefined
     if (row) scheduleJob(rowToJob(row))
   }
@@ -250,6 +258,12 @@ export function deleteJob(id: string): void {
   if (existing) {
     existing.stop()
     activeJobs.delete(id)
+  }
+  // Built-in jobs can't be deleted (sync would resurrect them next launch);
+  // disable instead so the user's intent sticks.
+  if (BUILTIN_JOB_IDS.has(id)) {
+    db.prepare('UPDATE jobs SET enabled = 0 WHERE id = ?').run(id)
+    return
   }
   db.prepare('DELETE FROM jobs WHERE id = ?').run(id)
 }

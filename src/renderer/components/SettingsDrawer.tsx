@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, MessageCircle, Send } from 'lucide-react'
+import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, MessageCircle, Send, RefreshCw, Download, CheckCircle2, AlertCircle } from 'lucide-react'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, DeliveryTarget } from '@shared/types'
+import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, DeliveryTarget, UpdateState } from '@shared/types'
 
 function MicrosoftIcon() {
   return (
@@ -139,12 +139,14 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
                 </p>
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <div className={`w-[6px] h-[6px] rounded-full ${
-                    conn.verified ? 'bg-success' : conn.authenticated ? 'bg-warning' : 'bg-text-tertiary'
+                    conn.checking ? 'bg-text-tertiary animate-pulse' : conn.verified ? 'bg-success' : conn.authenticated ? 'bg-warning' : 'bg-text-tertiary'
                   }`} />
                   <span className={`text-[11px] ${
-                    conn.verified ? 'text-success' : conn.authenticated ? 'text-warning' : 'text-text-tertiary'
+                    conn.checking ? 'text-text-tertiary' : conn.verified ? 'text-success' : conn.authenticated ? 'text-warning' : 'text-text-tertiary'
                   }`}>
-                    {conn.verified
+                    {conn.checking
+                      ? 'Checking connection…'
+                      : conn.verified
                       ? `Connected${conn.activeAccount ? ` · ${conn.activeAccount}` : ''}`
                       : conn.authenticated ? 'Signed in · verifying permissions' : 'Not connected'}
                   </span>
@@ -407,9 +409,10 @@ function JobsTab({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) {
         <JobForm
           key={job.id}
           initial={job}
+          managed={job.isBuiltin}
           onSave={async (data) => { await window.aide.jobs.update(job.id, data); setEditId(null); onRefresh() }}
           onCancel={() => setEditId(null)}
-          onDelete={async () => { await window.aide.jobs.delete(job.id); setEditId(null); onRefresh() }}
+          onDelete={job.isBuiltin ? undefined : async () => { await window.aide.jobs.delete(job.id); setEditId(null); onRefresh() }}
         />
       ) : (
         <Card key={job.id} className="group">
@@ -417,6 +420,9 @@ function JobsTab({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="text-[13px] font-medium text-text-primary truncate">{job.name}</p>
+                {job.isBuiltin && (
+                  <span className="text-[10px] text-text-tertiary border border-edge rounded px-1 py-px shrink-0">Built-in</span>
+                )}
                 {job.lastResult && (
                   <div className={`w-[6px] h-[6px] rounded-full shrink-0 ${job.lastResult === 'success' ? 'bg-success' : 'bg-danger'}`} />
                 )}
@@ -466,8 +472,8 @@ function JobsTab({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) {
   )
 }
 
-function JobForm({ initial, onSave, onCancel, onDelete }: {
-  initial?: Partial<Job>; onSave: (data: { name: string; cron: string; instruction: string; deliveryTargets: DeliveryTarget[] }) => Promise<void>; onCancel: () => void; onDelete?: () => Promise<void>
+function JobForm({ initial, managed, onSave, onCancel, onDelete }: {
+  initial?: Partial<Job>; managed?: boolean; onSave: (data: { name: string; cron: string; instruction: string; deliveryTargets: DeliveryTarget[] }) => Promise<void>; onCancel: () => void; onDelete?: () => Promise<void>
 }) {
   const [name, setName] = useState(initial?.name || '')
   const [instruction, setInstruction] = useState(initial?.instruction || '')
@@ -492,6 +498,48 @@ function JobForm({ initial, onSave, onCancel, onDelete }: {
 
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const toggleDay = (d: number) => setWeekdays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort())
+
+  // Built-in jobs are managed by Aide: name/schedule/instruction are owned by the
+  // app (re-synced each launch), so only the delivery target is editable here.
+  if (managed) {
+    return (
+      <FormCard>
+        <div>
+          <label className="text-[11px] text-text-tertiary font-medium block mb-1.5">Job name</label>
+          <p className="text-[13px] text-text-primary">{name}</p>
+        </div>
+        <div>
+          <label className="text-[11px] text-text-tertiary font-medium block mb-1.5">Frequency</label>
+          <p className="text-[13px] text-text-secondary">{describeCron(initial?.cron || cron)}</p>
+        </div>
+        <div>
+          <label className="text-[11px] text-text-tertiary font-medium block mb-1.5">Instruction</label>
+          <p className="text-[12px] text-text-tertiary whitespace-pre-wrap leading-relaxed">{instruction}</p>
+        </div>
+        <div>
+          <label className="text-[11px] text-text-tertiary font-medium block mb-1.5">Deliver result to</label>
+          <div className="flex gap-1.5">
+            {DELIVERY_OPTIONS.map(opt => {
+              const active = deliveryTargets.includes(opt.value)
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => toggleTarget(opt.value)}
+                  className={`px-2.5 py-1 rounded-md text-[12px] transition-colors ${
+                    active ? 'bg-accent text-white' : 'bg-surface-0 text-text-tertiary border border-edge hover:text-text-secondary'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-[11px] text-text-tertiary/80 mt-1.5">This is a built-in Aide job. You can change where its summary is delivered or turn it off.</p>
+        </div>
+        <FormActions onSave={() => onSave({ name, cron, instruction, deliveryTargets })} onCancel={onCancel} disabled={false} />
+      </FormCard>
+    )
+  }
 
   return (
     <FormCard>
@@ -780,8 +828,121 @@ function PreferencesTab() {
       <SettingRow label="System notifications" description="Get notified about high-priority tasks">
         <Toggle checked={preferences.systemNotifications} onChange={v => setPreferences({ systemNotifications: v })} />
       </SettingRow>
+
+      <UpdatesSection />
     </div>
   )
+}
+
+/* ═══════════════════════════════════════════
+   Updates / About
+   ═══════════════════════════════════════════ */
+
+function UpdatesSection() {
+  const [state, setState] = useState<UpdateState | null>(null)
+
+  useEffect(() => {
+    window.aide.updates.getState().then(setState)
+    const unsub = window.aideEvents.on((event: any) => {
+      if (event.type === 'update:state') setState(event.state)
+    })
+    return unsub
+  }, [])
+
+  if (!state) return null
+
+  const busy = state.status === 'checking' || state.status === 'downloading'
+
+  const check = () => window.aide.updates.check().then(setState)
+  const install = () => window.aide.updates.install()
+  const retryDownload = () => window.aide.updates.download().then(setState)
+
+  return (
+    <div className="mt-6 pt-5 border-t border-edge">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[12.5px] font-medium text-text-primary">About &amp; updates</div>
+          <div className="text-[11.5px] text-text-tertiary mt-0.5">Version {state.currentVersion}</div>
+        </div>
+        {state.supported && state.status !== 'downloaded' && (
+          <button
+            onClick={check}
+            disabled={busy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-text-secondary bg-surface-2 hover:bg-surface-3 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw size={12} className={busy ? 'animate-spin' : ''} />
+            {state.status === 'checking' ? 'Checking…' : 'Check for updates'}
+          </button>
+        )}
+      </div>
+
+      {state.supported ? (
+        <UpdateStatusLine state={state} onInstall={install} onRetry={retryDownload} />
+      ) : (
+        <div className="mt-3 text-[11.5px] text-text-tertiary">
+          Update checks run automatically in the installed app. They're unavailable in this development build.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function UpdateStatusLine({ state, onInstall, onRetry }: { state: UpdateState; onInstall: () => void; onRetry: () => void }) {
+  if (state.status === 'not-available') {
+    return (
+      <div className="flex items-center gap-1.5 mt-3 text-[11.5px] text-text-tertiary">
+        <CheckCircle2 size={13} className="text-emerald-500" />
+        You're on the latest version.
+      </div>
+    )
+  }
+
+  if (state.status === 'available' || state.status === 'downloading') {
+    return (
+      <div className="mt-3">
+        <div className="flex items-center justify-between text-[11.5px] text-text-secondary">
+          <span>Downloading version {state.latestVersion}…</span>
+          <span className="text-text-tertiary">{state.progressPercent ?? 0}%</span>
+        </div>
+        <div className="mt-1.5 h-1 rounded-full bg-surface-2 overflow-hidden">
+          <div className="h-full bg-accent transition-all duration-300" style={{ width: `${state.progressPercent ?? 0}%` }} />
+        </div>
+      </div>
+    )
+  }
+
+  if (state.status === 'downloaded') {
+    return (
+      <div className="flex items-center justify-between mt-3">
+        <div className="flex items-center gap-1.5 text-[11.5px] text-text-secondary">
+          <Download size={13} className="text-accent" />
+          Version {state.latestVersion} is ready.
+        </div>
+        <button
+          onClick={onInstall}
+          className="px-3 py-1.5 rounded-md text-[12px] font-medium text-white bg-accent hover:opacity-90 transition-opacity"
+        >
+          Restart &amp; install
+        </button>
+      </div>
+    )
+  }
+
+  if (state.status === 'error') {
+    return (
+      <div className="flex items-center justify-between mt-3">
+        <div className="flex items-center gap-1.5 text-[11.5px] text-red-500 min-w-0">
+          <AlertCircle size={13} className="shrink-0" />
+          <span className="truncate">{state.error || 'Update check failed.'}</span>
+        </div>
+        <button onClick={onRetry} className="shrink-0 ml-3 px-3 py-1.5 rounded-md text-[12px] font-medium text-text-secondary bg-surface-2 hover:bg-surface-3 transition-colors">
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  return null
 }
 
 /* ═══════════════════════════════════════════

@@ -2,7 +2,7 @@ import { createRequire } from 'module'
 import type DatabaseConstructor from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs'
 
 const require = createRequire(import.meta.url)
 
@@ -30,12 +30,13 @@ export function getDb(): DatabaseInstance {
       mkdirSync(dbDir, { recursive: true })
     }
     const dbPath = join(dbDir, 'aide.db')
+    const isFreshDb = !existsSync(dbPath)
     db = new Database(dbPath)
     db.pragma('journal_mode = WAL')
     db.pragma('foreign_keys = ON')
     initSchema(db)
-    runMigrations(db)
-    seedJobs(db)
+    runMigrations(db, { dbDir, isFreshDb })
+    syncBuiltinJobs(db)
   }
   return db
 }
@@ -158,6 +159,7 @@ function initSchema(db: DatabaseInstance): void {
       instruction TEXT NOT NULL,
       enabled INTEGER NOT NULL DEFAULT 1,
       delivery_targets TEXT NOT NULL DEFAULT '[]',
+      is_builtin INTEGER NOT NULL DEFAULT 0,
       last_run_at TEXT,
       last_result TEXT,
       last_summary TEXT
@@ -186,76 +188,157 @@ function initSchema(db: DatabaseInstance): void {
 
 }
 
-function seedJobs(db: DatabaseInstance): void {
-  // Seed default jobs if empty
-  const jobCount = db.prepare('SELECT COUNT(*) as count FROM jobs').get() as { count: number }
-  if (jobCount.count === 0) {
-    seedDefaultJobs(db)
+// ─────────────────────────────────────────────────────────────────────────────
+// Versioned migrations
+//
+// The schema version is tracked in SQLite's `PRAGMA user_version`. Each
+// migration runs exactly once, in order, inside its own transaction. Before
+// touching an existing database we snapshot it (VACUUM INTO) so a bad migration
+// shipped via auto-update can never silently corrupt a user's data — they can
+// recover from the backup.
+//
+// Fresh installs are born at the latest version (initSchema already builds the
+// current shape), so migrations only ever run on databases created by an older
+// build. Migrations that correspond to already-shipped ad-hoc changes stay
+// idempotent so existing production DBs (still at user_version 0) converge.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type Migration = { version: number; name: string; up: (db: DatabaseInstance) => void }
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    name: 'baseline columns, timeline & connection state',
+    up: (db) => {
+      const cols = (table: string) => (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name)
+
+      if (!cols('projects').includes('source')) {
+        db.exec("ALTER TABLE projects ADD COLUMN source TEXT NOT NULL DEFAULT 'user'")
+      }
+      if (!cols('relations').includes('source')) {
+        db.exec("ALTER TABLE relations ADD COLUMN source TEXT NOT NULL DEFAULT 'user'")
+      }
+      const taskCols = cols('tasks')
+      if (!taskCols.includes('source_connection_id')) {
+        db.exec("ALTER TABLE tasks ADD COLUMN source_connection_id TEXT")
+      }
+      if (!taskCols.includes('last_activity_at')) {
+        db.exec("ALTER TABLE tasks ADD COLUMN last_activity_at TEXT")
+      }
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS task_activities (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          type TEXT NOT NULL DEFAULT 'progress',
+          summary TEXT NOT NULL,
+          status_from TEXT,
+          status_to TEXT,
+          source_ref TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_activity_task ON task_activities(task_id, timestamp);
+      `)
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS connection_state (
+          connection_id TEXT PRIMARY KEY,
+          last_polled_at TEXT,
+          poll_cursor TEXT
+        )
+      `)
+      // Normalize legacy priority labels (runs once, here, instead of every boot).
+      db.exec(`
+        UPDATE tasks SET priority = 'p0' WHERE priority = 'high';
+        UPDATE tasks SET priority = 'p1' WHERE priority = 'medium';
+        UPDATE tasks SET priority = 'p2' WHERE priority = 'low';
+      `)
+      // Add delivery_targets to jobs; seed the morning briefing's default targets.
+      if (!cols('jobs').includes('delivery_targets')) {
+        db.exec("ALTER TABLE jobs ADD COLUMN delivery_targets TEXT NOT NULL DEFAULT '[]'")
+        db.prepare("UPDATE jobs SET delivery_targets = ? WHERE id = 'morning-briefing'").run(JSON.stringify(['desktop', 'wechat']))
+      }
+    },
+  },
+  {
+    version: 2,
+    name: 'distinguish built-in jobs from user jobs',
+    up: (db) => {
+      const jobCols = (db.prepare("PRAGMA table_info(jobs)").all() as { name: string }[]).map(c => c.name)
+      if (!jobCols.includes('is_builtin')) {
+        db.exec("ALTER TABLE jobs ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0")
+      }
+      // Mark the jobs that shipped as built-ins so future sync/cleanup can tell
+      // app-managed jobs apart from ones the user (or agent) created.
+      const ids = BUILTIN_JOBS.map(j => j.id)
+      const placeholders = ids.map(() => '?').join(', ')
+      db.prepare(`UPDATE jobs SET is_builtin = 1 WHERE id IN (${placeholders})`).run(...ids)
+    },
+  },
+]
+
+const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce((max, m) => Math.max(max, m.version), 0)
+
+function runMigrations(db: DatabaseInstance, opts: { dbDir: string; isFreshDb: boolean }): void {
+  // A brand-new database already matches the latest schema (initSchema built it),
+  // so stamp it current and skip migrations entirely — nothing to upgrade.
+  if (opts.isFreshDb) {
+    db.pragma(`user_version = ${LATEST_SCHEMA_VERSION}`)
+    return
   }
 
-  // Always sync built-in job definitions (instruction/name/cron) on startup
-  // Preserves runtime state (enabled, last_run_at, last_result, last_summary)
-  syncBuiltinJobs(db)
+  const current = db.pragma('user_version', { simple: true }) as number
+  const pending = MIGRATIONS.filter(m => m.version > current).sort((a, b) => a.version - b.version)
+  if (pending.length === 0) return
+
+  // Snapshot before mutating an existing database — the safety net for updates.
+  backupDatabase(db, opts.dbDir, current)
+
+  for (const migration of pending) {
+    const apply = db.transaction(() => {
+      migration.up(db)
+      db.pragma(`user_version = ${migration.version}`)
+    })
+    try {
+      apply()
+      console.log(`[Aide][db] Migrated to v${migration.version} (${migration.name}).`)
+    } catch (err) {
+      // The transaction rolled back this migration; the pre-migration backup is
+      // intact. Fail loudly rather than limp along on a half-migrated schema.
+      console.error(`[Aide][db] Migration v${migration.version} (${migration.name}) failed:`, err)
+      throw err
+    }
+  }
 }
 
-function runMigrations(db: DatabaseInstance): void {
-  // Add source column to projects/relations for existing DBs
-  const projCols = db.prepare("PRAGMA table_info(projects)").all() as { name: string }[]
-  if (!projCols.some(c => c.name === 'source')) {
-    db.exec("ALTER TABLE projects ADD COLUMN source TEXT NOT NULL DEFAULT 'user'")
+/** Snapshot the database to data/backups before applying migrations. */
+function backupDatabase(db: DatabaseInstance, dbDir: string, fromVersion: number): void {
+  try {
+    const backupDir = join(dbDir, 'backups')
+    if (!existsSync(backupDir)) mkdirSync(backupDir, { recursive: true })
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const dest = join(backupDir, `aide-pre-v${fromVersion}-${stamp}.db`)
+    // VACUUM INTO produces a consistent, WAL-safe copy in one synchronous step.
+    db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`)
+    pruneBackups(backupDir, 5)
+    console.log(`[Aide][db] Snapshotted database before migration → ${dest}`)
+  } catch (err) {
+    // A failed backup must not block startup; log and continue.
+    console.warn('[Aide][db] Pre-migration backup failed (continuing):', err)
   }
-  const relCols = db.prepare("PRAGMA table_info(relations)").all() as { name: string }[]
-  if (!relCols.some(c => c.name === 'source')) {
-    db.exec("ALTER TABLE relations ADD COLUMN source TEXT NOT NULL DEFAULT 'user'")
-  }
-  // Add source_connection_id to tasks
-  const taskCols = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[]
-  if (!taskCols.some(c => c.name === 'source_connection_id')) {
-    db.exec("ALTER TABLE tasks ADD COLUMN source_connection_id TEXT")
-  }
-  // Add last_activity_at to tasks (task progress timeline)
-  if (!taskCols.some(c => c.name === 'last_activity_at')) {
-    db.exec("ALTER TABLE tasks ADD COLUMN last_activity_at TEXT")
-  }
-  // Task activities timeline table (idempotent)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS task_activities (
-      id TEXT PRIMARY KEY,
-      task_id TEXT NOT NULL,
-      timestamp TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'progress',
-      summary TEXT NOT NULL,
-      status_from TEXT,
-      status_to TEXT,
-      source_ref TEXT,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_activity_task ON task_activities(task_id, timestamp);
-  `)
-  // Add last_polled_at to connections tracking
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS connection_state (
-      connection_id TEXT PRIMARY KEY,
-      last_polled_at TEXT,
-      poll_cursor TEXT
-    )
-  `)
-  // Migrate priority values: high→p0, medium→p1, low→p2
-  db.exec(`
-    UPDATE tasks SET priority = 'p0' WHERE priority = 'high';
-    UPDATE tasks SET priority = 'p1' WHERE priority = 'medium';
-    UPDATE tasks SET priority = 'p2' WHERE priority = 'low';
-  `)
+}
 
-  // Add delivery_targets to jobs (where to push a job's result after it runs).
-  // Only the morning briefing delivers by default (desktop chat + WeChat);
-  // all other built-in jobs stay silent. Runs once when the column is first added.
-  const jobCols = db.prepare("PRAGMA table_info(jobs)").all() as { name: string }[]
-  if (!jobCols.some(c => c.name === 'delivery_targets')) {
-    db.exec("ALTER TABLE jobs ADD COLUMN delivery_targets TEXT NOT NULL DEFAULT '[]'")
-    db.prepare("UPDATE jobs SET delivery_targets = ? WHERE id = 'morning-briefing'").run(JSON.stringify(['desktop', 'wechat']))
-  }
+/** Keep only the most recent `keep` backups; delete the rest. */
+function pruneBackups(backupDir: string, keep: number): void {
+  try {
+    const files = readdirSync(backupDir)
+      .filter(f => f.endsWith('.db'))
+      .map(f => ({ f, t: statSync(join(backupDir, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t)
+    for (const { f } of files.slice(keep)) {
+      try { unlinkSync(join(backupDir, f)) } catch { /* best effort */ }
+    }
+  } catch { /* best effort */ }
 }
 
 const DEFAULT_PERIODIC_POLL_INSTRUCTION = `Check for new email, Teams messages, and GitHub notifications since the last run (on first run, look back 24 hours). When using ask_work_iq, set the query range based on the time info above.
@@ -277,16 +360,6 @@ Projects: look at GitHub repos with recent commit/PR/issue activity. Make sure a
 
 Retire: contacts with no interaction for 3 months → inactive. Projects with no activity → archived.`
 
-function seedDefaultJobs(db: DatabaseInstance): void {
-  const insert = db.prepare(`
-    INSERT INTO jobs (id, name, cron, instruction, enabled, delivery_targets)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `)
-  for (const job of BUILTIN_JOBS) {
-    insert.run(job.id, job.name, job.cron, job.instruction, 1, JSON.stringify(job.deliveryTargets))
-  }
-}
-
 const BUILTIN_JOBS: { id: string; name: string; cron: string; instruction: string; deliveryTargets: string[] }[] = [
   { id: 'morning-briefing', name: 'Daily morning briefing', cron: '0 9 * * 1-5', deliveryTargets: ['desktop', 'wechat'], instruction: 'Check for new email, Teams messages, and GitHub notifications since the last run, plus today\'s calendar events. Create a Task for items that need the user to act (fill sourceType by the real source: github/teams/email/calendar, and attach sourceId and sourceUrl), and give a prioritized summary of suggestions for today.' },
   { id: 'periodic-poll', name: 'Periodic poll', cron: '*/30 * * * *', deliveryTargets: [], instruction: DEFAULT_PERIODIC_POLL_INSTRUCTION },
@@ -294,15 +367,42 @@ const BUILTIN_JOBS: { id: string; name: string; cron: string; instruction: strin
   { id: 'world-sync', name: 'Relationships & projects sync', cron: '0 10 * * 1', deliveryTargets: [], instruction: DEFAULT_WORLD_SYNC_INSTRUCTION },
 ]
 
+/** The set of built-in job IDs, used by the jobs layer to enforce ownership. */
+export const BUILTIN_JOB_IDS: ReadonlySet<string> = new Set(BUILTIN_JOBS.map(j => j.id))
+
+/**
+ * Reconcile the built-in jobs on every launch — the single source of truth for
+ * app-managed schedules.
+ *
+ * - Definition (name/cron/instruction) is owned by the app: synced so updates
+ *   ship improved schedules/prompts.
+ * - Runtime state (enabled, delivery_targets, last_run_*) is owned by the user:
+ *   preserved across updates.
+ * - Retired built-ins (shipped by an older version, now gone) are removed, so a
+ *   dropped job never keeps firing forever.
+ * - User/agent-created jobs (is_builtin = 0) are never touched.
+ */
 function syncBuiltinJobs(db: DatabaseInstance): void {
   const upsert = db.prepare(`
-    INSERT INTO jobs (id, name, cron, instruction, enabled, delivery_targets)
-    VALUES (?, ?, ?, ?, 1, ?)
-    ON CONFLICT(id) DO UPDATE SET name = excluded.name, cron = excluded.cron, instruction = excluded.instruction
+    INSERT INTO jobs (id, name, cron, instruction, enabled, delivery_targets, is_builtin)
+    VALUES (?, ?, ?, ?, 1, ?, 1)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      cron = excluded.cron,
+      instruction = excluded.instruction,
+      is_builtin = 1
   `)
-  for (const job of BUILTIN_JOBS) {
-    upsert.run(job.id, job.name, job.cron, job.instruction, JSON.stringify(job.deliveryTargets))
-  }
+  const ids = [...BUILTIN_JOB_IDS]
+  const placeholders = ids.map(() => '?').join(', ')
+
+  const reconcile = db.transaction(() => {
+    for (const job of BUILTIN_JOBS) {
+      upsert.run(job.id, job.name, job.cron, job.instruction, JSON.stringify(job.deliveryTargets))
+    }
+    // Remove built-ins that no longer ship (ghost jobs from older versions).
+    db.prepare(`DELETE FROM jobs WHERE is_builtin = 1 AND id NOT IN (${placeholders})`).run(...ids)
+  })
+  reconcile()
 }
 
 export function closeDb(): void {

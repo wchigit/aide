@@ -6,10 +6,11 @@ import { startAllJobs, stopAllJobs, catchUpMissedJobs, getJob } from './jobs'
 import { deliverJobResult } from './jobs/delivery'
 import { initAgent, generateMorningBriefing } from './agent'
 import { createClient } from './agent/client'
-import { initMcpServers, stopAllMcpServers } from './agent/mcp'
-import { initConnectionState } from './connections'
+import { stopAllMcpServers } from './agent/mcp'
+import { initConnectionState, verifyConnectionsViaMcp } from './connections'
 import { initWeChat } from './wechat'
 import { stopMonitor as stopWeChatMonitor } from './wechat/messaging'
+import { initUpdater, stopUpdater } from './updater'
 import { setSdkHealth } from './health'
 import { getPreferences } from './preferences'
 
@@ -123,8 +124,9 @@ app.whenReady().then(async () => {
     setSdkHealth('error', err instanceof Error ? err.message : String(err))
   }
 
-  // Start MCP servers for authenticated connections
-  initMcpServers().catch(err => console.warn('[Aide] MCP init:', err))
+  // Bring up the real MCP servers; their success/failure settles connection
+  // state (single source of truth) and flips WorkIQ from "checking" to final.
+  verifyConnectionsViaMcp().catch(err => console.warn('[Aide] MCP verify:', err))
 
   // Register IPC handlers
   registerIpcHandlers()
@@ -140,6 +142,9 @@ app.whenReady().then(async () => {
 
   // Create window
   createWindow()
+
+  // Start the auto-updater (inert in dev / unpackaged builds)
+  initUpdater(() => mainWindow)
 
   // Trigger morning briefing after window is ready (non-blocking)
   mainWindow?.once('ready-to-show', () => {
@@ -187,6 +192,7 @@ app.on('before-quit', () => {
   stopAllJobs()
   stopAllMcpServers()
   stopWeChatMonitor()
+  stopUpdater()
   closeDb()
 })
 

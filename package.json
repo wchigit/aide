@@ -1,6 +1,6 @@
 {
   "name": "aide",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A personal work agent that sees the full picture, learns as you work, and helps you get things done.",
   "main": "out/main/index.js",
   "scripts": {
@@ -21,6 +21,7 @@
     "@tailwindcss/typography": "^0.5.19",
     "better-sqlite3": "^11.0.0",
     "croner": "^8.0.0",
+    "electron-updater": "^6.8.3",
     "qrcode": "^1.5.4",
     "remark-gfm": "^4.0.1",
     "uuid": "^10.0.0"

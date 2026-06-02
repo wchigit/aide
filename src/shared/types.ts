@@ -123,6 +123,7 @@ export interface Job {
   instruction: string
   enabled: boolean
   deliveryTargets: DeliveryTarget[]
+  isBuiltin: boolean
   lastRunAt: string | null
   lastResult: 'success' | 'failed' | null
   lastSummary: string | null
@@ -142,6 +143,7 @@ export interface ConnectionStatus {
   type: 'workiq' | 'github'
   authenticated: boolean
   verified: boolean // true = actually tested a real API call successfully
+  checking: boolean // true = currently verifying via the real MCP server (transient)
   lastError: string | null
   lastPolledAt: string | null
   activeAccount: string | null // e.g. GitHub username
@@ -236,9 +238,36 @@ export interface AideAPI {
     setTargetUser(userId: string): Promise<void>
     setBaseUrl(url: string): Promise<void>
   }
+  updates: {
+    getState(): Promise<UpdateState>
+    check(): Promise<UpdateState>
+    download(): Promise<UpdateState>
+    install(): Promise<void>
+  }
   system: {
     health(): Promise<{ sdk: 'initializing' | 'ready' | 'error'; sdkError: string | null }>
   }
+}
+
+// === Auto-update ===
+
+export type UpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'not-available'
+  | 'error'
+
+export interface UpdateState {
+  status: UpdateStatus
+  supported: boolean
+  currentVersion: string
+  latestVersion: string | null
+  progressPercent: number | null
+  error: string | null
+  lastCheckedAt: string | null
 }
 
 // === Input Types ===
@@ -364,3 +393,4 @@ export type AideEvent =
   | { type: 'wechat:qrcode'; qrcode: string; imgContent: string }
   | { type: 'wechat:login-progress'; stage: 'scanned' | 'confirmed' | 'expired' | 'timeout' }
   | { type: 'wechat:status'; status: WeChatStatus }
+  | { type: 'update:state'; state: UpdateState }

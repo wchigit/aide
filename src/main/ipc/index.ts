@@ -9,6 +9,7 @@ import { listRelations, getRelation, createRelation, updateRelation, deleteRelat
 import { getPreferences, setPreferences } from '../preferences'
 import { getWeChatStatus, connectWeChat, disconnectWeChat, pushToWeChat, setTargetUser } from '../wechat'
 import { setBaseUrl as setWeChatBaseUrl } from '../wechat/connection'
+import { getUpdateState, checkForUpdates, downloadUpdate, quitAndInstall } from '../updater'
 import { sdkHealth, sdkError } from '../health'
 
 export function registerIpcHandlers(): void {
@@ -95,6 +96,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('wechat:push', (_, text) => pushToWeChat(text))
   ipcMain.handle('wechat:setTargetUser', (_, userId) => setTargetUser(userId))
   ipcMain.handle('wechat:setBaseUrl', (_, url) => setWeChatBaseUrl(url))
+
+  // === Updates ===
+  ipcMain.handle('updates:getState', () => getUpdateState())
+  ipcMain.handle('updates:check', () => checkForUpdates())
+  ipcMain.handle('updates:download', () => downloadUpdate())
+  ipcMain.handle('updates:install', () => quitAndInstall())
 
   // === System health ===
   ipcMain.handle('system:health', () => ({ sdk: sdkHealth, sdkError }))

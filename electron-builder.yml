@@ -72,4 +72,6 @@ appImage:
 
 publish:
   provider: github
+  owner: houk-ms
+  repo: aide
   releaseType: release

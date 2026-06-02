@@ -77,6 +77,12 @@ const api: AideAPI = {
     setTargetUser: (userId) => ipcRenderer.invoke('wechat:setTargetUser', userId),
     setBaseUrl: (url) => ipcRenderer.invoke('wechat:setBaseUrl', url)
   },
+  updates: {
+    getState: () => ipcRenderer.invoke('updates:getState'),
+    check: () => ipcRenderer.invoke('updates:check'),
+    download: () => ipcRenderer.invoke('updates:download'),
+    install: () => ipcRenderer.invoke('updates:install')
+  },
   system: {
     health: () => ipcRenderer.invoke('system:health')
   }

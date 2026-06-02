@@ -225,6 +225,7 @@ function mcpToolToSdkTool(mcpTool: { name: string; description?: string; inputSc
                 type: server.type,
                 authenticated: true,
                 verified: false,
+                checking: false,
                 lastError: `Insufficient permissions: ${mcpTool.name} call was denied. A Tenant Admin may need to grant the related Teams/M365 permissions.`
               }]
             })
@@ -234,22 +235,6 @@ function mcpToolToSdkTool(mcpTool: { name: string; description?: string; inputSc
         // Return non-auth errors as result so the model can see the message and self-correct
         console.error(`[MCP ${server.type}] Tool ${mcpTool.name} error:`, msg)
         return { error: true, message: msg }
-      }
-    }
-  }
-}
-
-// === Try starting servers for authenticated connections ===
-
-export async function initMcpServers(): Promise<void> {
-  const { getConnectionStatus } = await import('../connections')
-  const connections = getConnectionStatus()
-  for (const conn of connections) {
-    if (conn.authenticated) {
-      try {
-        await startMcpServer(conn.type as 'workiq' | 'github')
-      } catch (err) {
-        console.warn(`[MCP ${conn.type}] Failed to start:`, err)
       }
     }
   }

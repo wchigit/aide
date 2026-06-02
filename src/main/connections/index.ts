@@ -5,12 +5,19 @@ import type { ConnectionStatus } from '@shared/types'
 
 // Connection state
 const connections: Map<string, ConnectionStatus> = new Map([
-  ['workiq', { id: 'workiq', type: 'workiq', authenticated: false, verified: false, lastError: null, lastPolledAt: null, activeAccount: null }],
-  ['github', { id: 'github', type: 'github', authenticated: false, verified: false, lastError: null, lastPolledAt: null, activeAccount: null }]
+  ['workiq', { id: 'workiq', type: 'workiq', authenticated: false, verified: false, checking: false, lastError: null, lastPolledAt: null, activeAccount: null }],
+  ['github', { id: 'github', type: 'github', authenticated: false, verified: false, checking: false, lastError: null, lastPolledAt: null, activeAccount: null }]
 ])
 
 export function getConnectionStatus(): ConnectionStatus[] {
   return Array.from(connections.values())
+}
+
+/** Broadcast the current connection state to every renderer window. */
+function broadcastConnectionStatus(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('aide:event', { type: 'connection:status', connections: getConnectionStatus() })
+  }
 }
 
 // === Check CLI Availability ===
@@ -133,6 +140,7 @@ export async function switchGhAccount(account: string): Promise<void> {
   if (conn) {
     conn.authenticated = !!ghInfo
     conn.verified = !!ghInfo
+    conn.checking = false
     conn.activeAccount = ghInfo?.account || null
   }
   cachedGhToken = ghInfo?.token || null
@@ -158,73 +166,6 @@ async function acceptWorkiqEula(): Promise<void> {
     })
     proc.on('close', () => resolve())
     proc.on('error', () => resolve())
-  })
-}
-
-async function checkWorkiqAuth(): Promise<boolean> {
-  // workiq has no "auth status" command. Try starting mcp and sending a real tools/list request.
-  return new Promise(resolve => {
-    const proc = spawn('npx', ['-y', '@microsoft/workiq@preview', 'mcp'], {
-      shell: true, stdio: ['pipe', 'pipe', 'pipe']
-    })
-    let resolved = false
-    let buffer = ''
-
-    const finish = (result: boolean) => {
-      if (!resolved) { resolved = true; proc.kill(); resolve(result) }
-    }
-
-    // Send initialize + tools/list to verify the server actually works
-    const timer = setTimeout(() => {
-      // If alive after 1.5s, send initialize handshake
-      const initMsg = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'aide-check', version: '1.0.0' } } })
-      proc.stdin?.write(initMsg + '\n')
-      // Then ask for tools list as a real verification
-      setTimeout(() => {
-        const listMsg = JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })
-        proc.stdin?.write(listMsg + '\n')
-      }, 500)
-    }, 1500)
-
-    // Give total 8s for the whole check
-    const hardTimeout = setTimeout(() => finish(false), 8000)
-
-    proc.stdout?.on('data', (data: Buffer) => {
-      buffer += data.toString()
-      // Look for a successful tools/list response (id: 2)
-      if (buffer.includes('"id":2') || buffer.includes('"id": 2')) {
-        try {
-          const lines = buffer.split('\n')
-          for (const line of lines) {
-            if (!line.trim()) continue
-            const msg = JSON.parse(line)
-            if (msg.id === 2 && msg.result?.tools) {
-              clearTimeout(timer)
-              clearTimeout(hardTimeout)
-              finish(true)
-              return
-            }
-            if (msg.id === 2 && msg.error) {
-              clearTimeout(timer)
-              clearTimeout(hardTimeout)
-              finish(false)
-              return
-            }
-          }
-        } catch { /* keep buffering */ }
-      }
-    })
-
-    proc.on('close', () => {
-      clearTimeout(timer)
-      clearTimeout(hardTimeout)
-      finish(false)
-    })
-    proc.on('error', () => {
-      clearTimeout(timer)
-      clearTimeout(hardTimeout)
-      finish(false)
-    })
   })
 }
 
@@ -378,7 +319,7 @@ export function authenticateMicrosoft(): Promise<void> {
       const success = code === 0 || /logged in/i.test(output)
       if (success) {
         const conn = connections.get('workiq')
-        if (conn) { conn.authenticated = true; conn.lastError = null }
+        if (conn) { conn.authenticated = true; conn.checking = false; conn.lastError = null }
         // Auto-accept EULA (non-interactive, required before first use)
         await acceptWorkiqEula()
         // Start MCP and verify it actually works
@@ -389,16 +330,12 @@ export function authenticateMicrosoft(): Promise<void> {
           console.error('[Aide] MCP workiq start:', err)
           if (conn) { conn.verified = false; conn.lastError = 'Signed in, but the MCP server failed to start — you may be missing Teams/M365 permissions' }
         }
-        for (const win of BrowserWindow.getAllWindows()) {
-          win.webContents.send('aide:event', { type: 'connection:status', connections: getConnectionStatus() })
-        }
+        broadcastConnectionStatus()
         resolve()
       } else {
         const conn = connections.get('workiq')
-        if (conn) { conn.lastError = 'Authentication failed'; conn.authenticated = false }
-        for (const win of BrowserWindow.getAllWindows()) {
-          win.webContents.send('aide:event', { type: 'connection:status', connections: getConnectionStatus() })
-        }
+        if (conn) { conn.lastError = 'Authentication failed'; conn.authenticated = false; conn.checking = false }
+        broadcastConnectionStatus()
         reject(new Error('workiq auth login failed'))
       }
     })
@@ -445,11 +382,13 @@ export async function disconnect(type: 'workiq' | 'github'): Promise<void> {
       conn.verified = false
       conn.activeAccount = null
     }
+    conn.checking = false
     conn.lastError = null
   } else if (type === 'workiq') {
     spawn('npx', ['-y', '@microsoft/workiq@preview', 'auth', 'logout'], { shell: true, stdio: 'ignore' })
     conn.authenticated = false
     conn.verified = false
+    conn.checking = false
     conn.activeAccount = null
     conn.lastError = null
   }
@@ -460,6 +399,15 @@ export async function disconnect(type: 'workiq' | 'github'): Promise<void> {
 
 // === Init (check CLI auth on startup) ===
 
+/**
+ * Resolve the cheaply-known auth state on startup.
+ *
+ * GitHub has a reliable `gh auth status` command, so we settle its state here.
+ * WorkIQ has no cheap auth-status check — the only honest way to know whether
+ * it works is to start the real MCP server (which we do anyway). So we mark it
+ * `checking` and let verifyConnectionsViaMcp() settle it from the real server,
+ * the single source of truth. This removes the old fragile timing-based probe.
+ */
 export async function initConnectionState(): Promise<void> {
   const now = new Date().toISOString()
 
@@ -468,22 +416,54 @@ export async function initConnectionState(): Promise<void> {
   if (ghConn) {
     ghConn.authenticated = !!ghInfo
     ghConn.verified = !!ghInfo
+    ghConn.checking = false
     ghConn.activeAccount = ghInfo?.account || null
     ghConn.lastPolledAt = now
     if (ghInfo) cachedGhToken = ghInfo.token
   }
 
-  const wiqAuth = await checkWorkiqAuth()
   const wiqConn = connections.get('workiq')
   if (wiqConn) {
-    wiqConn.authenticated = wiqAuth
-    wiqConn.verified = wiqAuth // checkWorkiqAuth now does a real tools/list call
+    wiqConn.authenticated = false
+    wiqConn.verified = false
+    wiqConn.checking = true // settled by verifyConnectionsViaMcp via the real server
+    wiqConn.lastError = null
     wiqConn.lastPolledAt = now
-    if (wiqAuth) {
-      // Ensure EULA is accepted for returning users
-      await acceptWorkiqEula()
-    } else {
-      wiqConn.lastError = 'Work IQ authentication is invalid or lacks permissions. Please sign in again.'
+  }
+}
+
+/**
+ * Bring up the real MCP servers and let their success/failure be the single
+ * source of truth for connection state. Fire-and-forget from startup.
+ *
+ * - GitHub: already settled via `gh auth status`; just load its tools if authed.
+ * - WorkIQ: always attempt — a successful `tools/list` means connected+verified;
+ *   any failure means not connected (no scary error: the user simply signs in).
+ *   Broadcasts after each connection settles so the UI flips checking → final.
+ */
+export async function verifyConnectionsViaMcp(): Promise<void> {
+  const ghConn = connections.get('github')
+  if (ghConn?.authenticated) {
+    startMcpServer('github').catch(err => console.warn('[Aide] MCP github start:', err))
+  }
+
+  const wiqConn = connections.get('workiq')
+  if (wiqConn) {
+    try {
+      await startMcpServer('workiq')
+      wiqConn.authenticated = true
+      wiqConn.verified = true
+      wiqConn.lastError = null
+    } catch (err) {
+      // Not signed in, token expired, or missing permissions — all surface the
+      // same way: not connected, with a Connect button. No misleading error.
+      console.log('[Aide] workiq not connected at startup:', err instanceof Error ? err.message : String(err))
+      wiqConn.authenticated = false
+      wiqConn.verified = false
+    } finally {
+      wiqConn.checking = false
+      wiqConn.lastPolledAt = new Date().toISOString()
+      broadcastConnectionStatus()
     }
   }
 }
