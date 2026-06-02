@@ -25,14 +25,12 @@ mac:
       arch: [arm64, x64]
     - target: zip
       arch: [arm64, x64]
-  hardenedRuntime: true
-  gatekeeperAssess: false
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
-  # Signing & notarization are enabled automatically when the matching
-  # secrets/env vars are present (CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID,
-  # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID). Without them the build is
-  # produced unsigned.
+  # Produce an unsigned build by default. Signing/notarization can be enabled
+  # later by setting identity + the CSC_*/APPLE_* secrets and re-adding
+  # hardenedRuntime/entitlements below. `identity: null` is the canonical way to
+  # tell electron-builder to skip signing entirely (env vars alone aren't
+  # always enough and cause the osx-sign step to fail on CI).
+  identity: null
 
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
