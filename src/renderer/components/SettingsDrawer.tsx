@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, MessageCircle } from 'lucide-react'
+import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, MessageCircle, Send } from 'lucide-react'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus } from '@shared/types'
+import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, DeliveryTarget } from '@shared/types'
 
 function MicrosoftIcon() {
   return (
@@ -117,9 +117,10 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
   }
 
   return (
-    <div className="space-y-4">
-      <Desc>Connect services so Aide can pull in your email, calendar, and more.</Desc>
-
+    <div className="space-y-6">
+      <section className="space-y-3">
+        <SectionLabel title="Sources" desc="Where Aide reads your work from — email, calendar, issues, and more." />
+        <div className="space-y-4">
       {connections.map(conn => (
         <Card key={conn.id}>
           <div className="flex items-start justify-between gap-3">
@@ -205,9 +206,15 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
           </div>
         </Card>
       ))}
+        </div>
+      </section>
 
-      <WeChatConnectionCard />
-
+      <section className="space-y-3">
+        <SectionLabel title="Channels" desc="How Aide reaches you and takes commands on the go." />
+        <div className="space-y-4">
+          <WeChatConnectionCard />
+        </div>
+      </section>
     </div>
   )
 }
@@ -427,6 +434,13 @@ function JobsTab({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) {
           {/* Instruction preview */}
           <p className="text-[12px] text-text-tertiary mt-1.5 line-clamp-1">{job.instruction}</p>
 
+          {job.deliveryTargets.length > 0 && (
+            <div className="flex items-center gap-1.5 mt-2">
+              <Send size={11} className="text-text-tertiary shrink-0" />
+              <span className="text-[11px] text-text-tertiary">{job.deliveryTargets.map(t => DELIVERY_LABELS[t]).join(' · ')}</span>
+            </div>
+          )}
+
           {/* Last run info */}
           {job.lastRunAt && (
             <div className="mt-2.5 pt-2.5 border-t border-edge-subtle">
@@ -453,10 +467,14 @@ function JobsTab({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) {
 }
 
 function JobForm({ initial, onSave, onCancel, onDelete }: {
-  initial?: Partial<Job>; onSave: (data: { name: string; cron: string; instruction: string }) => Promise<void>; onCancel: () => void; onDelete?: () => Promise<void>
+  initial?: Partial<Job>; onSave: (data: { name: string; cron: string; instruction: string; deliveryTargets: DeliveryTarget[] }) => Promise<void>; onCancel: () => void; onDelete?: () => Promise<void>
 }) {
   const [name, setName] = useState(initial?.name || '')
   const [instruction, setInstruction] = useState(initial?.instruction || '')
+  const [deliveryTargets, setDeliveryTargets] = useState<DeliveryTarget[]>(initial?.deliveryTargets || [])
+
+  const toggleTarget = (t: DeliveryTarget) =>
+    setDeliveryTargets(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
 
   // Parse initial cron into structured schedule
   const parsed = parseCronToSchedule(initial?.cron || '*/15 * * * *')
@@ -541,9 +559,41 @@ function JobForm({ initial, onSave, onCancel, onDelete }: {
       </div>
 
       <Field label="Instruction" value={instruction} onChange={setInstruction} placeholder="Tell Aide what to do, e.g. Check my unread email and flag anything urgent" required multiline />
-      <FormActions onSave={() => onSave({ name, cron, instruction })} onCancel={onCancel} onDelete={onDelete} disabled={!name.trim() || !cron.trim() || !instruction.trim()} />
+
+      <div>
+        <label className="text-[11px] text-text-tertiary font-medium block mb-1.5">Deliver result to</label>
+        <div className="flex gap-1.5">
+          {DELIVERY_OPTIONS.map(opt => {
+            const active = deliveryTargets.includes(opt.value)
+            return (
+              <button
+                key={opt.value}
+                onClick={() => toggleTarget(opt.value)}
+                className={`px-2.5 py-1 rounded-md text-[12px] transition-colors ${
+                  active ? 'bg-accent text-white' : 'bg-surface-0 text-text-tertiary border border-edge hover:text-text-secondary'
+                }`}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+        <p className="text-[11px] text-text-tertiary/80 mt-1.5">Where to send this job's summary when it finishes. Leave empty for none.</p>
+      </div>
+
+      <FormActions onSave={() => onSave({ name, cron, instruction, deliveryTargets })} onCancel={onCancel} onDelete={onDelete} disabled={!name.trim() || !cron.trim() || !instruction.trim()} />
     </FormCard>
   )
+}
+
+const DELIVERY_OPTIONS: { value: DeliveryTarget; label: string }[] = [
+  { value: 'desktop', label: 'Aide chat' },
+  { value: 'wechat', label: 'WeChat' },
+]
+
+const DELIVERY_LABELS: Record<DeliveryTarget, string> = {
+  desktop: 'Aide chat',
+  wechat: 'WeChat',
 }
 
 function parseCronToSchedule(cron: string) {
@@ -646,14 +696,12 @@ function MemoryTab() {
   return (
     <div className="space-y-6">
       {/* L0 */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <p className="text-[13px] font-medium text-text-primary">Identity memory</p>
-            <p className="text-[11px] text-text-tertiary mt-0.5">A few core facts about who you are. Aide always keeps these in mind.</p>
-          </div>
-          <span className="text-[11px] text-text-tertiary tabular-nums">{l0.length}/1000</span>
-        </div>
+      <section className="space-y-3">
+        <SectionLabel
+          title="Identity"
+          desc="A few core facts about who you are. Aide always keeps these in mind."
+          meta={`${l0.length}/1000`}
+        />
         <textarea
           value={l0}
           onChange={e => setL0(e.target.value)}
@@ -666,17 +714,15 @@ function MemoryTab() {
             {l0Saved ? <><Check size={12} /> Saved</> : <><Save size={12} /> Save</>}
           </Btn>
         </div>
-      </div>
+      </section>
 
       {/* L1/L2 */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <p className="text-[13px] font-medium text-text-primary">Learned memory</p>
-            <p className="text-[11px] text-text-tertiary mt-0.5">What Aide has learned about you as you work together</p>
-          </div>
-          <span className="text-[11px] text-text-tertiary">{memories.length} items</span>
-        </div>
+      <section className="space-y-3">
+        <SectionLabel
+          title="Learned"
+          desc="What Aide has learned about you as you work together."
+          meta={`${memories.length} items`}
+        />
 
         {loading ? (
           <div className="text-[12px] text-text-tertiary text-center py-8">Loading…</div>
@@ -704,7 +750,7 @@ function MemoryTab() {
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   )
 }
@@ -802,16 +848,16 @@ function WeChatConnectionCard() {
             <MessageCircle size={18} />
           </div>
           <div>
-            <p className="text-[13px] font-medium text-text-primary">微信</p>
-            <p className="text-[12px] text-text-tertiary mt-0.5">日报推送 · 任务通知 · 远程对话</p>
+            <p className="text-[13px] font-medium text-text-primary">WeChat</p>
+            <p className="text-[12px] text-text-tertiary mt-0.5">Report delivery · Task notifications · Remote chat</p>
             <div className="flex items-center gap-1.5 mt-1.5">
               <div className={`w-[6px] h-[6px] rounded-full ${
                 isConnected ? 'bg-success' : 'bg-text-tertiary'
               }`} />
               <span className={`text-[11px] ${isConnected ? 'text-success' : 'text-text-tertiary'}`}>
                 {isConnected
-                  ? `已连接${status?.monitorActive ? ' · 监听中' : ''}`
-                  : connecting ? '等待扫码…' : '未连接'}
+                  ? `Connected${status?.monitorActive ? ' · listening' : ''}`
+                  : connecting ? 'Waiting for scan…' : 'Not connected'}
               </span>
             </div>
             {status?.lastError && <p className="text-[11px] text-danger mt-1">{status.lastError}</p>}
@@ -819,11 +865,11 @@ function WeChatConnectionCard() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isConnected && (
-            <Btn variant="danger" onClick={handleDisconnect}>断开</Btn>
+            <Btn variant="danger" onClick={handleDisconnect}>Disconnect</Btn>
           )}
           {!isConnected && (
             <Btn onClick={handleConnect}>
-              {connecting ? '扫码中…' : '连接'}
+              {connecting ? 'Scanning…' : 'Connect'}
             </Btn>
           )}
         </div>
@@ -837,15 +883,7 @@ function WeChatConnectionCard() {
             alt="WeChat QR Code"
             className="w-48 h-48 rounded-md"
           />
-          <p className="text-[11px] text-text-tertiary">用微信扫描二维码登录</p>
-        </div>
-      )}
-
-      {isConnected && (
-        <div className="mt-3 p-2.5 rounded-lg bg-surface-2/60 border border-edge-subtle">
-          <p className="text-[11px] text-text-tertiary">
-            连接后请从微信发一条消息给 Bot 以建立会话，之后即可双向通信。
-          </p>
+          <p className="text-[11px] text-text-tertiary">Scan the QR code with WeChat to sign in</p>
         </div>
       )}
     </Card>
@@ -870,6 +908,18 @@ function FormHint({ children }: { children: string }) {
 
 function Desc({ children }: { children: string }) {
   return <p className="text-[12px] text-text-tertiary leading-relaxed">{children}</p>
+}
+
+function SectionLabel({ title, desc, meta }: { title: string; desc: string; meta?: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <p className="text-[12px] font-semibold text-text-secondary">{title}</p>
+        <p className="text-[12px] text-text-tertiary leading-relaxed mt-0.5">{desc}</p>
+      </div>
+      {meta != null && <span className="text-[11px] text-text-tertiary tabular-nums shrink-0 mt-0.5">{meta}</span>}
+    </div>
+  )
 }
 
 function Empty({ children }: { children: string }) {

@@ -49,11 +49,23 @@ interface Job {
   cron: string;              // cron expression
   instruction: string;       // instruction for the Agent ("Check for new email, identify items I need to handle")
   enabled: boolean;
+  deliveryTargets: DeliveryTarget[]; // where to send this job's summary when it finishes
   lastRunAt: Date | null;
   lastResult: 'success' | 'failed' | null;
   lastSummary: string | null; // summary of the last execution
 }
+
+type DeliveryTarget = 'desktop' | 'wechat'; // 'desktop' = Aide chat; 'wechat' = WeChat channel
 ```
+
+## Result delivery (Channels)
+
+When a Job finishes successfully, its summary is pushed to each Channel listed in `deliveryTargets`:
+
+- `desktop` — posts the summary into the built-in Aide General chat (persisted, so it's there even if the user wasn't watching)
+- `wechat` — sends the summary to the connected WeChat bot
+
+Delivery is best-effort and per-target isolated: one channel failing (e.g. WeChat offline) never blocks the others and never fails the Job. An empty `deliveryTargets` means "don't push anywhere" (the result is still recorded as `lastSummary`). Of the built-in jobs, only the morning briefing ships with `['desktop','wechat']`; the rest default to `[]`. The delivery dispatcher lives in `src/main/jobs/delivery.ts` and is intentionally a small registry so new channels can be added without touching job logic.
 
 ## Implementation
 

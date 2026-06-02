@@ -120,8 +120,10 @@ Decisions flow through `confirmAction(id, 'confirm' | 'modify' | 'cancel')`; the
 
 Not a page — a right-side overlay (`620px`) titled **Manage**, opened from the sidebar. Tabs:
 
-- **Connections** — Microsoft (Work IQ via `npx`) and GitHub (`gh` CLI) auth status, account switching, connect/disconnect
-- **Jobs** — scheduled background jobs (toggles / frequency)
+- **Connections** — grouped into two stacked sections:
+  - **Sources** (where Aide reads work from): Microsoft (Work IQ via `npx`) and GitHub (`gh` CLI) auth status, account switching, connect/disconnect
+  - **Channels** (how Aide reaches you and takes commands): WeChat — QR sign-in, connection status, two-way chat
+- **Jobs** — scheduled background jobs (toggles / frequency / per-job result delivery)
 - **Projects** — project list and linked repos/docs
 - **Contacts** — relationship (people) configuration
 - **Memory** — browse/edit/delete the Agent's stored memories
@@ -151,7 +153,7 @@ Snoozed tasks are also re-fetched on a 60-second interval so they reappear when 
 
 | Trigger | What the Agent does |
 |---------|---------------------|
-| Background job finishes | Posts a summary into General chat and refreshes the task list |
+| Background job finishes | Delivers its summary to the job's chosen Channels — posts into General chat (`desktop`) and/or sends to WeChat (`wechat`) — and refreshes the task list |
 | New / updated task | Appears in **New tasks** (sidebar + Dashboard) with a `new` marker |
 | Task activity | Surfaces an activity dot and updates the Task activity panel |
 | Job failure | Posts a warning in General chat prompting a connection check |

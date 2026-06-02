@@ -595,6 +595,24 @@ function saveMessage(msg: ChatMessage): void {
   `).run(msg.id, msg.role, msg.content, msg.timestamp, msg.taskId, msg.pendingAction ? JSON.stringify(msg.pendingAction) : null)
 }
 
+/**
+ * Persist an agent message into the General chat (taskId = null) and notify the
+ * renderer. Used by job result delivery so background summaries land durably in
+ * the desktop chat instead of being injected only when the user happens to be
+ * viewing General chat.
+ */
+export function postAgentMessageToGeneral(content: string): void {
+  const msg: ChatMessage = {
+    id: uuid(),
+    role: 'agent',
+    content,
+    timestamp: new Date().toISOString(),
+    taskId: null
+  }
+  saveMessage(msg)
+  emitEvent({ type: 'chat:message', message: msg })
+}
+
 export function getChatHistory(taskId: string | null): ChatMessage[] {
   const db = getDb()
   const rows = taskId

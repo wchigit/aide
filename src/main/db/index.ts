@@ -35,6 +35,7 @@ export function getDb(): DatabaseInstance {
     db.pragma('foreign_keys = ON')
     initSchema(db)
     runMigrations(db)
+    seedJobs(db)
   }
   return db
 }
@@ -156,6 +157,7 @@ function initSchema(db: DatabaseInstance): void {
       cron TEXT NOT NULL,
       instruction TEXT NOT NULL,
       enabled INTEGER NOT NULL DEFAULT 1,
+      delivery_targets TEXT NOT NULL DEFAULT '[]',
       last_run_at TEXT,
       last_result TEXT,
       last_summary TEXT
@@ -182,6 +184,9 @@ function initSchema(db: DatabaseInstance): void {
     CREATE INDEX IF NOT EXISTS idx_chat_timestamp ON chat_messages(timestamp);
   `)
 
+}
+
+function seedJobs(db: DatabaseInstance): void {
   // Seed default jobs if empty
   const jobCount = db.prepare('SELECT COUNT(*) as count FROM jobs').get() as { count: number }
   if (jobCount.count === 0) {
@@ -242,6 +247,15 @@ function runMigrations(db: DatabaseInstance): void {
     UPDATE tasks SET priority = 'p1' WHERE priority = 'medium';
     UPDATE tasks SET priority = 'p2' WHERE priority = 'low';
   `)
+
+  // Add delivery_targets to jobs (where to push a job's result after it runs).
+  // Only the morning briefing delivers by default (desktop chat + WeChat);
+  // all other built-in jobs stay silent. Runs once when the column is first added.
+  const jobCols = db.prepare("PRAGMA table_info(jobs)").all() as { name: string }[]
+  if (!jobCols.some(c => c.name === 'delivery_targets')) {
+    db.exec("ALTER TABLE jobs ADD COLUMN delivery_targets TEXT NOT NULL DEFAULT '[]'")
+    db.prepare("UPDATE jobs SET delivery_targets = ? WHERE id = 'morning-briefing'").run(JSON.stringify(['desktop', 'wechat']))
+  }
 }
 
 const DEFAULT_PERIODIC_POLL_INSTRUCTION = `Check for new email, Teams messages, and GitHub notifications since the last run (on first run, look back 24 hours). When using ask_work_iq, set the query range based on the time info above.
@@ -265,29 +279,29 @@ Retire: contacts with no interaction for 3 months → inactive. Projects with no
 
 function seedDefaultJobs(db: DatabaseInstance): void {
   const insert = db.prepare(`
-    INSERT INTO jobs (id, name, cron, instruction, enabled)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO jobs (id, name, cron, instruction, enabled, delivery_targets)
+    VALUES (?, ?, ?, ?, ?, ?)
   `)
   for (const job of BUILTIN_JOBS) {
-    insert.run(job.id, job.name, job.cron, job.instruction, 1)
+    insert.run(job.id, job.name, job.cron, job.instruction, 1, JSON.stringify(job.deliveryTargets))
   }
 }
 
-const BUILTIN_JOBS: { id: string; name: string; cron: string; instruction: string }[] = [
-  { id: 'morning-briefing', name: 'Daily morning briefing', cron: '0 9 * * 1-5', instruction: 'Check for new email, Teams messages, and GitHub notifications since the last run, plus today\'s calendar events. Create a Task for items that need the user to act (fill sourceType by the real source: github/teams/email/calendar, and attach sourceId and sourceUrl), and give a prioritized summary of suggestions for today.' },
-  { id: 'periodic-poll', name: 'Periodic poll', cron: '*/30 * * * *', instruction: DEFAULT_PERIODIC_POLL_INSTRUCTION },
-  { id: 'daily-reconcile', name: 'End-of-day review', cron: '0 18 * * 1-5', instruction: 'Review today\'s task statuses. Mark tasks that are confirmed done but unmarked as completed. Suggest cleaning up P2 tasks untouched for over 7 days. Generate a short daily summary.' },
-  { id: 'world-sync', name: 'Relationships & projects sync', cron: '0 10 * * 1', instruction: DEFAULT_WORLD_SYNC_INSTRUCTION },
+const BUILTIN_JOBS: { id: string; name: string; cron: string; instruction: string; deliveryTargets: string[] }[] = [
+  { id: 'morning-briefing', name: 'Daily morning briefing', cron: '0 9 * * 1-5', deliveryTargets: ['desktop', 'wechat'], instruction: 'Check for new email, Teams messages, and GitHub notifications since the last run, plus today\'s calendar events. Create a Task for items that need the user to act (fill sourceType by the real source: github/teams/email/calendar, and attach sourceId and sourceUrl), and give a prioritized summary of suggestions for today.' },
+  { id: 'periodic-poll', name: 'Periodic poll', cron: '*/30 * * * *', deliveryTargets: [], instruction: DEFAULT_PERIODIC_POLL_INSTRUCTION },
+  { id: 'daily-reconcile', name: 'End-of-day review', cron: '0 18 * * 1-5', deliveryTargets: [], instruction: 'Review today\'s task statuses. Mark tasks that are confirmed done but unmarked as completed. Suggest cleaning up P2 tasks untouched for over 7 days. Generate a short daily summary.' },
+  { id: 'world-sync', name: 'Relationships & projects sync', cron: '0 10 * * 1', deliveryTargets: [], instruction: DEFAULT_WORLD_SYNC_INSTRUCTION },
 ]
 
 function syncBuiltinJobs(db: DatabaseInstance): void {
   const upsert = db.prepare(`
-    INSERT INTO jobs (id, name, cron, instruction, enabled)
-    VALUES (?, ?, ?, ?, 1)
+    INSERT INTO jobs (id, name, cron, instruction, enabled, delivery_targets)
+    VALUES (?, ?, ?, ?, 1, ?)
     ON CONFLICT(id) DO UPDATE SET name = excluded.name, cron = excluded.cron, instruction = excluded.instruction
   `)
   for (const job of BUILTIN_JOBS) {
-    upsert.run(job.id, job.name, job.cron, job.instruction)
+    upsert.run(job.id, job.name, job.cron, job.instruction, JSON.stringify(job.deliveryTargets))
   }
 }
 

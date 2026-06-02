@@ -19,10 +19,10 @@ const pendingConfirmations: Map<string, {
 const CONFIRMATION_TIMEOUT_MS = 5 * 60 * 1000
 
 const QUICK_COMMANDS: Record<string, (ctx: CommandContext) => Promise<string>> = {
-  '/任务': handleListTasks,
-  '/日报': handleDailyReport,
-  '/完成': handleCompleteCurrent,
-  '/帮助': handleHelp
+  '/tasks': handleListTasks,
+  '/report': handleDailyReport,
+  '/done': handleCompleteCurrent,
+  '/help': handleHelp
 }
 
 interface CommandContext {
@@ -58,10 +58,10 @@ export async function dispatch(msg: WeixinMessage): Promise<void> {
   }
 
   // 1. Check confirmation replies
-  if (trimmed === '确认' || trimmed === '取消') {
+  if (trimmed.toLowerCase() === 'confirm' || trimmed.toLowerCase() === 'cancel') {
     const pending = findPendingConfirmation(userId)
     if (pending) {
-      pending.resolve(trimmed === '确认' ? 'confirm' : 'cancel')
+      pending.resolve(trimmed.toLowerCase() === 'confirm' ? 'confirm' : 'cancel')
       return
     }
   }
@@ -80,11 +80,6 @@ export async function dispatch(msg: WeixinMessage): Promise<void> {
   }
 
   // 3. Route to agent
-  await sendTextMessage({
-    tokenData: commandContext.tokenData,
-    state: commandContext.state,
-    text: '收到，正在处理中…'
-  })
   await dispatchToAgent(trimmed, userId)
 }
 
@@ -137,7 +132,7 @@ async function dispatchToAgent(text: string, userId: string): Promise<void> {
     await sendTextMessage({
       tokenData: commandContext.tokenData,
       state: commandContext.state,
-      text: '处理出错，请稍后重试。'
+      text: 'Something went wrong, please try again later.'
     })
   }
 }
@@ -146,14 +141,14 @@ async function dispatchToAgent(text: string, userId: string): Promise<void> {
 
 async function handleListTasks(_ctx: CommandContext): Promise<string> {
   const tasks = await listTasks({ status: ['pending', 'in_progress'] })
-  if (tasks.length === 0) return '当前没有待办任务 ✓'
+  if (tasks.length === 0) return 'No pending tasks ✓'
 
   const lines = tasks.slice(0, 10).map((t, i) => {
     const status = t.status === 'in_progress' ? '🔄' : '⏳'
     return `${i + 1}. ${status} ${t.title}`
   })
 
-  return `待办任务 (${tasks.length}):\n\n${lines.join('\n')}`
+  return `Pending tasks (${tasks.length}):\n\n${lines.join('\n')}`
 }
 
 async function handleDailyReport(_ctx: CommandContext): Promise<string> {
@@ -164,15 +159,15 @@ async function handleDailyReport(_ctx: CommandContext): Promise<string> {
   const pending = tasks.filter(t => t.status === 'pending')
 
   const lines = [
-    `📊 日报 ${today}`,
+    `📊 Daily Report ${today}`,
     '',
-    `✅ 已完成: ${completed.length}`,
+    `✅ Completed: ${completed.length}`,
     ...completed.slice(0, 5).map(t => `  · ${t.title}`),
     '',
-    `🔄 进行中: ${inProgress.length}`,
+    `🔄 In progress: ${inProgress.length}`,
     ...inProgress.slice(0, 5).map(t => `  · ${t.title}`),
     '',
-    `⏳ 待处理: ${pending.length}`
+    `⏳ Pending: ${pending.length}`
   ]
 
   return lines.join('\n')
@@ -180,27 +175,27 @@ async function handleDailyReport(_ctx: CommandContext): Promise<string> {
 
 async function handleCompleteCurrent(_ctx: CommandContext): Promise<string> {
   const tasks = await listTasks({ status: ['in_progress'] })
-  if (tasks.length === 0) return '没有进行中的任务'
+  if (tasks.length === 0) return 'No tasks in progress'
   if (tasks.length === 1) {
     await updateTask(tasks[0].id, { status: 'completed' })
-    return `已完成: ${tasks[0].title} ✓`
+    return `Completed: ${tasks[0].title} ✓`
   }
   const lines = tasks.map((t, i) => `${i + 1}. ${t.title}`)
-  return `有 ${tasks.length} 个进行中的任务，请指定:\n${lines.join('\n')}\n\n回复数字选择`
+  return `You have ${tasks.length} tasks in progress, please specify:\n${lines.join('\n')}\n\nReply with a number to choose`
 }
 
 async function handleHelp(_ctx: CommandContext): Promise<string> {
   return [
-    '🤖 Aide 微信助手',
+    '🤖 Aide WeChat Assistant',
     '',
-    '快捷命令:',
-    '  /任务 - 查看待办任务列表',
-    '  /日报 - 查看今日工作总结',
-    '  /完成 - 标记当前任务完成',
-    '  /帮助 - 显示本帮助',
+    'Quick commands:',
+    '  /tasks - View your pending task list',
+    '  /report - View today\'s work summary',
+    '  /done - Mark the current task as completed',
+    '  /help - Show this help',
     '',
-    '直接发消息即可与 AI 助手对话。',
-    '需要确认操作时回复"确认"或"取消"。'
+    'Send any message to chat with the AI assistant.',
+    'When an action needs confirmation, reply "confirm" or "cancel".'
   ].join('\n')
 }
 

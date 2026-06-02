@@ -114,7 +114,7 @@ export function setTargetUser(userId: string): void {
       lastMessageAt: new Date().toISOString()
     }
     if (tokenData) {
-      setRouterContext({ tokenData, state: currentState })
+      setCommandContext({ tokenData, state: currentState })
     }
   } else {
     currentState.targetUserId = userId

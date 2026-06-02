@@ -84,7 +84,7 @@ User input (Renderer)
 | `memory_fts` | (FTS5 virtual table) | Full-text search over memory |
 | `projects` | id, name, repo_path, docs_path, description | Projects |
 | `relations` | id, name, role, org, preferences | Working relationships |
-| `jobs` | id, name, cron, instruction, enabled, last_run, last_result | Scheduled jobs |
+| `jobs` | id, name, cron, instruction, enabled, delivery_targets, last_run, last_result | Scheduled jobs (`delivery_targets` = JSON array of Channels to push the result to) |
 
 ### Filesystem
 
@@ -121,5 +121,6 @@ interface AideAPI {
   connections: { getStatus, authenticate, ... }
   projects: { list, get, update, ... }
   relations: { list, get, update, ... }
+  wechat: { getStatus, connect, disconnect, ... }   // WeChat channel
 }
 ```

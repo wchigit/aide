@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { splitText } from '../send'
+import { splitText } from '../messaging'
 
 describe('splitText', () => {
   it('returns single chunk for short text', () => {

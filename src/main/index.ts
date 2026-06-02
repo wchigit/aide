@@ -2,7 +2,8 @@ import { app, BrowserWindow, Menu, Notification, nativeImage, shell } from 'elec
 import { join } from 'path'
 import { registerIpcHandlers } from './ipc'
 import { getDb, closeDb } from './db'
-import { startAllJobs, stopAllJobs, catchUpMissedJobs } from './jobs'
+import { startAllJobs, stopAllJobs, catchUpMissedJobs, getJob } from './jobs'
+import { deliverJobResult } from './jobs/delivery'
 import { initAgent, generateMorningBriefing } from './agent'
 import { createClient } from './agent/client'
 import { initMcpServers, stopAllMcpServers } from './agent/mcp'
@@ -224,13 +225,7 @@ function triggerMorningBriefingIfNeeded(): void {
     // Run briefing asynchronously
     generateMorningBriefing().then(result => {
       if (result && mainWindow) {
-        // Save briefing as a General chat message so user can see it
         const db = getDb()
-        const msgId = `briefing-${today}-${Date.now()}`
-        db.prepare(`
-          INSERT INTO chat_messages (id, role, content, timestamp, task_id, pending_action)
-          VALUES (?, 'agent', ?, datetime('now'), NULL, NULL)
-        `).run(msgId, result)
 
         // Mark as done for today (only after success)
         db.prepare(`
@@ -242,10 +237,9 @@ function triggerMorningBriefingIfNeeded(): void {
         const now = new Date().toISOString()
         db.prepare(`UPDATE jobs SET last_run_at = ?, last_result = 'success', last_summary = ? WHERE id = 'morning-briefing'`).run(now, result)
 
-        mainWindow.webContents.send('aide:event', {
-          type: 'chat:message',
-          message: { id: msgId, role: 'agent', content: result, timestamp: new Date().toISOString(), taskId: null }
-        })
+        // Deliver to the job's configured targets (desktop chat, WeChat, …)
+        const job = getJob('morning-briefing')
+        if (job) void deliverJobResult(job, result)
       }
     }).catch(err => {
       console.error('[Aide] Morning briefing failed:', err)

@@ -91,10 +91,15 @@ The agent reviews all of today's information flow: some tasks the user already h
 - Sources: auto-collected from Connections, generated on schedule by Jobs, or created through user–agent conversation
 - Status: pending / in progress / completed / cancelled
 
-**Connection** — an external work system
+**Connection** — an external work system (a *Source*)
 - Types: Outlook, Teams, GitHub, ADO, SharePoint, Calendar, etc.
 - Capabilities: read information, and (once authorized) perform write actions
-- Both the source of Tasks and the channel through which Tasks are executed
+- Both the source of Tasks and the conduit through which Tasks are executed
+
+**Channel** — how Aide reaches you and takes commands outside the app
+- Types: WeChat (now); Telegram / Slack (later)
+- Purpose: deliver Job results and reports to you on the go, and receive remote instructions when the app isn't in front of you
+- Distinct from Connection: a Connection is a *Source* Aide reads work from; a Channel is a *delivery + command* surface between you and Aide. The built-in Aide chat is the always-on local channel; WeChat is the first remote one.
 
 **Project** — the user's work project
 - Contents: code repository, project docs, wiki
@@ -138,6 +143,12 @@ When the Agent handles a Task:
 Memory accumulation:
   Task-handling process --[distill]--> Memory
   Information observed by the Agent --[distill]--> Memory
+
+Result delivery (proactive, outbound):
+  Job / Task result --[deliver]--> Channel (Aide chat / WeChat) --> User
+
+Remote command (passive, inbound):
+  User message via Channel --[instruction]--> Agent --[handle]--> Task
 ```
 
 ## 6. Features
@@ -161,6 +172,12 @@ Every entity (Task, Connection, Project, Relation, Skill, Job, Memory) can be cr
 - Add / remove external system connections
 - Configure each Connection's permissions (read-only / read-write)
 
+### Channel
+
+- Connect / disconnect chat channels (WeChat now; Telegram / Slack later)
+- Two-way: receive the Agent's pushes and send it commands remotely
+- Per-Job choice of which channels receive that Job's result (Aide chat / WeChat / none)
+
 ### Project
 
 - Configure project context (point to the code repo, docs directory, etc.)
@@ -179,6 +196,7 @@ Every entity (Task, Connection, Project, Relation, Skill, Job, Memory) can be cr
 ### Job
 
 - Create / edit / delete scheduled jobs (including run-frequency configuration)
+- Choose where each Job delivers its result (Aide chat / WeChat / none)
 - View Job run history
 
 ### Memory
@@ -193,7 +211,7 @@ A standalone desktop app, conversation-first with a supporting Dashboard.
 The app contains:
 - **Dashboard** — shows the full task picture, status overview, and the agent's briefing; the entry point for "seeing"
 - **Chat window** — tell the agent things, give instructions, ask questions, confirm results; the entry point for "doing"
-- **Settings pages** — manage Connections, Projects, Relations, Skills, Jobs, Memory
+- **Settings pages** — manage Connections (Sources & Channels), Projects, Relations, Skills, Jobs, Memory
 
 Users can click a task from the Dashboard to enter the conversation, or simply describe it in chat and let the agent identify the matching task. All configuration can be done through the UI or by asking the agent.
 
@@ -216,7 +234,7 @@ The full scope defined in sections 1–8 is the MVP. Goal: be usable for my own 
 | Direction | Description |
 |------|------|
 | Permission control system | Configure autonomy level by action type/source: which actions the agent runs automatically, which need confirmation |
-| External channel integration | Receive instructions and reports via WeChat/Telegram/Slack, without opening the app |
+| External channel integration | Receive instructions and reports via WeChat/Telegram/Slack, without opening the app (WeChat channel done; Telegram/Slack next) |
 | Agent self-improvement | Learn from execution feedback; automatically create, install, and maintain skills |
 | Heartbeat proactive reporting | The agent periodically checks and pushes changes worth your attention |
 | Browser control | The agent drives the browser via Playwright/CDP: auto-fill forms, scrape web content, operate web apps (ADO, SharePoint, internal systems) |

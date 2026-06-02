@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Check, Copy, FileText, Mail, Github, MessageSquare, Calendar, User, X, Zap, Send } from 'lucide-react'
+import { Check, Copy, FileText, Mail, Github, MessageSquare, Calendar, User, X, Zap } from 'lucide-react'
 import { useTaskStore } from '../stores/taskStore'
 import type { Task, TaskSource } from '@shared/types'
 
@@ -432,27 +432,12 @@ function ReportCard({ title, completedTasks, ignoredTasks, onClose }: {
   onClose: () => void
 }) {
   const [copied, setCopied] = useState(false)
-  const [pushed, setPushed] = useState(false)
-  const [pushing, setPushing] = useState(false)
   const reportText = buildReportText(title, completedTasks, ignoredTasks)
 
   const copyReport = async () => {
     await navigator.clipboard.writeText(reportText)
     setCopied(true)
     setTimeout(() => setCopied(false), 1800)
-  }
-
-  const pushToWeChat = async () => {
-    setPushing(true)
-    try {
-      await window.aide.wechat.push(reportText)
-      setPushed(true)
-      setTimeout(() => setPushed(false), 1800)
-    } catch {
-      // Could show error toast here
-    } finally {
-      setPushing(false)
-    }
   }
 
   return (
@@ -464,10 +449,6 @@ function ReportCard({ title, completedTasks, ignoredTasks, onClose }: {
           <span className="text-[11px] text-text-tertiary shrink-0">{completedTasks.length} completed · {ignoredTasks.length} dismissed</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={pushToWeChat} disabled={pushing} className="h-6 px-2 rounded-md text-[11px] text-text-tertiary hover:text-accent hover:bg-accent/10 transition-colors inline-flex items-center gap-1 disabled:opacity-50">
-            {pushed ? <Check size={11} className="text-success" /> : <Send size={11} />}
-            {pushing ? '推送中' : pushed ? '已推送' : '推送到微信'}
-          </button>
           <button onClick={copyReport} className="h-6 px-2 rounded-md text-[11px] text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors inline-flex items-center gap-1">
             {copied ? <Check size={11} className="text-success" /> : <Copy size={11} />}
             {copied ? 'Copied' : 'Copy'}

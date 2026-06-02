@@ -158,9 +158,10 @@ The target user needs to first complete M365/GitHub connection, identity memory,
 | JOB-03 | End-of-day reconciliation | Backfill missed tasks, update completed status, suggest cleanup, generate the daily report. | [PARTIAL] | The job instruction exists; no confirmable cleanup UI, daily-report entry, or reconciliation result detail. |
 | JOB-04 | Job list | The user views built-in jobs, frequency, last result. | [PARTIAL] | Settings shows jobs and lastSummary. |
 | JOB-05 | Job toggle | The user can enable/disable. | [PARTIAL] | IPC has toggle; after clicking, the UI doesn't refresh the store, so the toggle visual state may not update. |
-| JOB-06 | Create/edit/delete Job | The user configures frequency and instructions. | [MISSING] | The docs require CRUD; currently only toggle. |
+| JOB-06 | Create/edit/delete Job | The user configures frequency and instructions. | [DONE] | JobForm supports create/edit/delete with name, cron, instruction, and delivery targets. |
 | JOB-07 | Job execution records | The user views historical run logs. | [PARTIAL] | Only last result/summary, no history list, duration, error stack, or which tasks were created. |
 | JOB-08 | Job failure notification | The user knows when SDK/connection/auth fails. | [MISSING] | catch writes last_summary, but there's no event notification and no dashboard health. |
+| JOB-09 | Per-job result delivery | When a job finishes, push its summary to the chosen Channels (Aide chat / WeChat / none). | [DONE] | `deliveryTargets` on the Job, `delivery.ts` dispatcher with per-target isolation; desktop delivery persists to General chat, WeChat sends to the bot. |
 
 ### 9. Memory Module
 
@@ -196,6 +197,18 @@ The target user needs to first complete M365/GitHub connection, identity memory,
 | PREF-03 | System notifications | High-priority urgent tasks trigger a system notification. | [PARTIAL] | Only triggered when the create_task tool creates a high-priority task; external Job/connection-status failures don't notify. |
 | PREF-04 | Active cap | The user configures the number of tasks shown in the sidebar. | [DONE] | UI + store use it. |
 | PREF-05 | Theme preference | The user configures the theme. | [MISSING] | PRODUCT mentions notification/theme preferences, the code has no theme option. |
+
+### 12. Channel / Remote access
+
+A Channel is how Aide reaches the user and takes commands outside the app — distinct from a Connection (a work Source). The built-in Aide chat is the always-on local channel; WeChat is the first remote one.
+
+| ID | Feature | Expected user experience | Implementation status | Audit notes |
+|---|---|---|---|---|
+| CHAN-01 | WeChat connection | The user scans a QR code to bind a WeChat bot and sees connection status. | [PARTIAL] | QR sign-in + status + polling exist; depends on the WeChat bot service runtime. |
+| CHAN-02 | Two-way remote chat | The user messages the bot and the Agent replies; the user can issue commands without opening the app. | [PARTIAL] | Inbound messages route to the Agent; quick commands + confirmation replies handled. |
+| CHAN-03 | Result delivery to Channels | Job results are pushed to the chosen Channels (Aide chat / WeChat). | [DONE] | `deliveryTargets` + `delivery.ts` registry; per-target isolation; desktop persists to General chat. |
+| CHAN-04 | Sources vs Channels in Settings | Connections are grouped into Sources (M365/GitHub) and Channels (WeChat). | [DONE] | SettingsDrawer Connections tab shows two stacked sections. |
+| CHAN-05 | Additional channels | Telegram / Slack as future remote channels. | [MISSING] | Roadmap; the delivery registry is structured to extend, but only desktop + WeChat exist. |
 
 ## User Journey Audit
 

@@ -114,12 +114,15 @@ export type RelationRole = 'manager' | 'peer' | 'report' | 'external' | 'stakeho
 
 // === Job ===
 
+export type DeliveryTarget = 'desktop' | 'wechat'
+
 export interface Job {
   id: string
   name: string
   cron: string
   instruction: string
   enabled: boolean
+  deliveryTargets: DeliveryTarget[]
   lastRunAt: string | null
   lastResult: 'success' | 'failed' | null
   lastSummary: string | null
@@ -194,8 +197,8 @@ export interface AideAPI {
     toggle(id: string, enabled: boolean): Promise<void>
     getLastSummary(id: string): Promise<string | null>
     run(id: string): Promise<void>
-    create(data: { name: string; cron: string; instruction: string; enabled?: boolean }): Promise<Job>
-    update(id: string, data: { name?: string; cron?: string; instruction?: string }): Promise<void>
+    create(data: { name: string; cron: string; instruction: string; enabled?: boolean; deliveryTargets?: DeliveryTarget[] }): Promise<Job>
+    update(id: string, data: { name?: string; cron?: string; instruction?: string; deliveryTargets?: DeliveryTarget[] }): Promise<void>
     delete(id: string): Promise<void>
   }
   connections: {

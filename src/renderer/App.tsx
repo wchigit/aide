@@ -70,17 +70,10 @@ export default function App() {
           }
           break
         case 'job:completed':
+          // Result delivery (desktop chat persistence, WeChat, …) is handled in
+          // the main process via configurable delivery targets, which emit their
+          // own chat:message events. Here we only refresh task state.
           fetchTasks()
-          // If user is on General chat, inject job summary as a message
-          if (!selectedTaskIdRef.current && event.summary) {
-            addMessage({
-              id: `job-${Date.now()}`,
-              role: 'agent',
-              content: `[Auto task completed] ${event.summary}`,
-              timestamp: new Date().toISOString(),
-              taskId: null
-            })
-          }
           break
         case 'job:failed':
           // Surface job failure as a warning in General chat

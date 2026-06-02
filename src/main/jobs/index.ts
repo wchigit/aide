@@ -2,9 +2,20 @@ import { Cron } from 'croner'
 import { getDb } from '../db'
 import { executeJobSession } from '../agent'
 import { BrowserWindow } from 'electron'
-import type { Job } from '@shared/types'
+import type { DeliveryTarget, Job } from '@shared/types'
+import { deliverJobResult } from './delivery'
 
 const activeJobs = new Map<string, Cron>()
+
+function parseDeliveryTargets(raw: unknown): DeliveryTarget[] {
+  if (typeof raw !== 'string' || !raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((t): t is DeliveryTarget => t === 'desktop' || t === 'wechat') : []
+  } catch {
+    return []
+  }
+}
 
 function rowToJob(row: Record<string, unknown>): Job {
   return {
@@ -13,6 +24,7 @@ function rowToJob(row: Record<string, unknown>): Job {
     cron: row.cron as string,
     instruction: row.instruction as string,
     enabled: (row.enabled as number) === 1,
+    deliveryTargets: parseDeliveryTargets(row.delivery_targets),
     lastRunAt: row.last_run_at as string | null,
     lastResult: row.last_result as 'success' | 'failed' | null,
     lastSummary: row.last_summary as string | null
@@ -130,6 +142,9 @@ export async function runJob(jobId: string): Promise<void> {
       UPDATE jobs SET last_run_at = ?, last_result = 'success', last_summary = ? WHERE id = ?
     `).run(now, summary, jobId)
 
+    // Deliver the result to any configured targets (desktop chat, WeChat, …).
+    await deliverJobResult(job, summary)
+
     // Notify renderer
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
@@ -163,6 +178,12 @@ export function listJobs(): Job[] {
   return rows.map(rowToJob)
 }
 
+export function getJob(id: string): Job | null {
+  const db = getDb()
+  const row = db.prepare('SELECT * FROM jobs WHERE id = ?').get(id) as Record<string, unknown> | undefined
+  return row ? rowToJob(row) : null
+}
+
 export function toggleJob(id: string, enabled: boolean): void {
   const db = getDb()
   db.prepare('UPDATE jobs SET enabled = ? WHERE id = ?').run(enabled ? 1 : 0, id)
@@ -185,18 +206,19 @@ export function getJobLastSummary(id: string): string | null {
   return row?.last_summary || null
 }
 
-export function createJob(data: { name: string; cron: string; instruction: string; enabled?: boolean }): Job {
+export function createJob(data: { name: string; cron: string; instruction: string; enabled?: boolean; deliveryTargets?: DeliveryTarget[] }): Job {
   const db = getDb()
   const id = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const enabled = data.enabled !== false
-  db.prepare('INSERT INTO jobs (id, name, cron, instruction, enabled) VALUES (?, ?, ?, ?, ?)').run(id, data.name, data.cron, data.instruction, enabled ? 1 : 0)
+  const deliveryTargets = data.deliveryTargets ?? []
+  db.prepare('INSERT INTO jobs (id, name, cron, instruction, enabled, delivery_targets) VALUES (?, ?, ?, ?, ?, ?)').run(id, data.name, data.cron, data.instruction, enabled ? 1 : 0, JSON.stringify(deliveryTargets))
 
-  const job: Job = { id, name: data.name, cron: data.cron, instruction: data.instruction, enabled, lastRunAt: null, lastResult: null, lastSummary: null }
+  const job: Job = { id, name: data.name, cron: data.cron, instruction: data.instruction, enabled, deliveryTargets, lastRunAt: null, lastResult: null, lastSummary: null }
   if (enabled) scheduleJob(job)
   return job
 }
 
-export function updateJob(id: string, data: { name?: string; cron?: string; instruction?: string }): void {
+export function updateJob(id: string, data: { name?: string; cron?: string; instruction?: string; deliveryTargets?: DeliveryTarget[] }): void {
   const db = getDb()
 
   // Read current row to check what actually changed
@@ -209,6 +231,7 @@ export function updateJob(id: string, data: { name?: string; cron?: string; inst
   if (data.name !== undefined && data.name !== current.name) { sets.push('name = ?'); vals.push(data.name) }
   if (data.cron !== undefined && data.cron !== current.cron) { sets.push('cron = ?'); vals.push(data.cron) }
   if (data.instruction !== undefined && data.instruction !== current.instruction) { sets.push('instruction = ?'); vals.push(data.instruction) }
+  if (data.deliveryTargets !== undefined) { sets.push('delivery_targets = ?'); vals.push(JSON.stringify(data.deliveryTargets)) }
 
   if (sets.length === 0) return
   vals.push(id)

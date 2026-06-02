@@ -24,9 +24,9 @@
 
 Your work is scattered across email, Teams, GitHub, meetings, and work items — and no single place shows you the whole picture. Most AI tools forget everything the moment a chat ends, so you spend five minutes setting up context to get two minutes of help. And at the end of the day, there's no record of what you actually did.
 
-Aide closes that gap. It **aggregates** your tasks from every system, **builds a lasting understanding** of your projects and people, and **helps you act** — drafting, replying, reviewing, and shipping — the way you would yourself.
+Aide closes that gap. It **aggregates** your tasks from every system, **builds a lasting understanding** of your projects and people, and **acts** on your behalf — drafting, replying, reviewing, and shipping — the way you would yourself. It runs proactively in the background and can reach you on WeChat, so the work keeps moving even when the app is closed.
 
-> One place to manage all your work. An agent that already knows your context. Just tell it what you need.
+> One place to manage all your work. An agent that already knows your context, works while you're away, and reaches you wherever you are.
 
 ---
 
@@ -39,8 +39,9 @@ Aide closes that gap. It **aggregates** your tasks from every system, **builds a
 | Runs proactively | ✗ | ✓ | ✗ | ✓ | **✓** |
 | Aggregates real work systems | ~ | ~ | ✗ | ✓ | **✓** |
 | Judgment, not just rules | ✓ | ✓ | ✗ | ✗ | **✓** |
+| Reaches you off the desktop | ✗ | ~ | ✗ | ~ | **✓** |
 
-Aide combines the **memory and judgment of an agent** with the **persistent task lifecycle of a task manager** and the **proactive execution of automation** — focused squarely on knowledge work.
+Aide combines the **memory and judgment of an agent** with the **persistent task lifecycle of a task manager** and the **proactive execution of automation** — focused squarely on knowledge work, and reachable wherever you are.
 
 ---
 
@@ -48,11 +49,12 @@ Aide combines the **memory and judgment of an agent** with the **persistent task
 
 | Time | What happens |
 |---|---|
-| **9:00 AM** | Open the app. Aide has already gathered overnight email, Teams messages, GitHub notifications, and calendar events into a prioritized task list. Thirty seconds to know what matters today. |
+| **8:30 AM** | Still on your commute. A morning briefing lands on WeChat: overnight email, Teams messages, GitHub notifications, and today's calendar, already triaged. You reply "snooze the vendor thread to Friday" — done, from your phone. |
+| **9:00 AM** | Open the app. The same prioritized task list is waiting. Thirty seconds to know what matters today. |
 | **10:00 AM** | A 30-minute Teams meeting ends. Aide pulls the action items from the notes, links them to the right project, and tags owners and deadlines — no manual capture. |
 | **2:00 PM** | Open a task ("fix the pagination bug"). Aide already knows the project, the code structure, and the related issue discussion. It locates the bug, proposes a fix and tests, and opens a PR. |
 | **3:00 PM** | "What did A conclude about that API change last week?" Aide answers straight from your email, Teams, and meeting history — no digging. |
-| **6:00 PM** | Aide reconciles the day: tasks you handled yourself, things resolved before a task even existed. It updates statuses and generates your daily report. |
+| **6:00 PM** | Aide reconciles the day: tasks you handled yourself, things resolved before a task even existed. It updates statuses, generates your daily report, and delivers it to wherever you asked — the app, WeChat, or both. |
 
 ---
 
@@ -61,16 +63,17 @@ Aide combines the **memory and judgment of an agent** with the **persistent task
 Aide is built around a small set of entities, all maintainable two ways: **by the agent** (from conversation or by discovering things in your information flow) and **by you** (directly in the UI).
 
 - **Task** — the central entity. Everything revolves around it. Sourced from connections, scheduled jobs, or conversation.
-- **Connection** — an external work system (Outlook, Teams, GitHub, Calendar, SharePoint…). Both a source of tasks and a channel to act through.
+- **Connection (Source)** — an external work system (Outlook, Teams, GitHub, Calendar, SharePoint…) that Aide reads work from and acts through.
+- **Channel** — how Aide reaches you outside the app: the built-in Aide chat and WeChat. Delivers briefings and reports, and takes commands remotely.
 - **Project** — a work project (repo, docs, wiki) that gives the agent background when handling tasks.
 - **Relation** — your network of people, with roles and communication preferences, so the agent can judge priority and pick the right channel.
 - **Skill** — an extensible capability unit, peer to MCP tools. Lets Aide's abilities be installed, published, and composed instead of hard-coded.
-- **Job** — scheduled automation (morning aggregation, periodic polling, end-of-day reconciliation).
+- **Job** — scheduled automation (morning aggregation, periodic polling, end-of-day reconciliation), with per-job control over which Channels receive its result.
 - **Memory** — the agent's growing understanding of you: preferences, decisions, project progress, and people. Viewable, correctable, and deletable.
 
 ```mermaid
 flowchart LR
-    J[Job scheduler] -->|polls| C[Connections]
+    J[Job scheduler] -->|polls| C[Connections / Sources]
     C -->|raw data| A[Agent]
     U[You] -->|chat| A
     A -->|creates / updates| T[Task]
@@ -79,6 +82,9 @@ flowchart LR
     A -. reads .-> M[Memory]
     A -. loads .-> S[Skill]
     A -->|acts via| C
+    A -->|delivers results| CH[Channels: Aide chat / WeChat]
+    CH -->|remote commands| A
+    CH --> U
     T -->|distills into| M
 ```
 
@@ -198,7 +204,7 @@ Authorize them from **Settings → Connections**. See [docs/connection.md](docs/
 The full scope defined in [PRODUCT.md](PRODUCT.md) is the MVP — the goal is to use Aide for real daily work. Beyond MVP:
 
 - **Permission system** — configurable autonomy by action type and source
-- **External channels** — receive instructions and reports via WeChat / Telegram / Slack
+- **More channels** — Telegram / Slack alongside the WeChat channel that ships today
 - **Self-improvement** — the agent learns from feedback and maintains its own skills
 - **Proactive heartbeat** — periodic check-ins that surface things worth your attention
 - **Browser & system control** — Playwright/CDP automation, file and Office operations
