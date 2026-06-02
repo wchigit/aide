@@ -7,6 +7,8 @@ import { initAgent, generateMorningBriefing } from './agent'
 import { createClient } from './agent/client'
 import { initMcpServers, stopAllMcpServers } from './agent/mcp'
 import { initConnectionState } from './connections'
+import { initWeChat } from './wechat'
+import { stopMonitor as stopWeChatMonitor } from './wechat/messaging'
 import { setSdkHealth } from './health'
 import { getPreferences } from './preferences'
 
@@ -131,6 +133,8 @@ app.whenReady().then(async () => {
     startAllJobs()
     // Replay any low-frequency jobs missed while the app was closed (non-blocking)
     catchUpMissedJobs().catch((err) => console.warn('[Aide] Job catch-up:', err))
+    // Auto-reconnect WeChat if previously authenticated
+    initWeChat(true).catch(err => console.warn('[Aide] WeChat init:', err))
   }
 
   // Create window
@@ -181,6 +185,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   stopAllJobs()
   stopAllMcpServers()
+  stopWeChatMonitor()
   closeDb()
 })
 

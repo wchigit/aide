@@ -7,6 +7,8 @@ import { getConnectionStatus, disconnect, authenticateGitHub, authenticateMicros
 import { listProjects, getProject, createProject, updateProject, deleteProject } from '../projects'
 import { listRelations, getRelation, createRelation, updateRelation, deleteRelation } from '../relations'
 import { getPreferences, setPreferences } from '../preferences'
+import { getWeChatStatus, connectWeChat, disconnectWeChat, pushToWeChat, setTargetUser } from '../wechat'
+import { setBaseUrl as setWeChatBaseUrl } from '../wechat/connection'
 import { sdkHealth, sdkError } from '../health'
 
 export function registerIpcHandlers(): void {
@@ -85,6 +87,14 @@ export function registerIpcHandlers(): void {
   // === Preferences ===
   ipcMain.handle('preferences:get', () => getPreferences())
   ipcMain.handle('preferences:set', (_, prefs) => setPreferences(prefs))
+
+  // === WeChat ===
+  ipcMain.handle('wechat:getStatus', () => getWeChatStatus())
+  ipcMain.handle('wechat:connect', () => connectWeChat())
+  ipcMain.handle('wechat:disconnect', () => disconnectWeChat())
+  ipcMain.handle('wechat:push', (_, text) => pushToWeChat(text))
+  ipcMain.handle('wechat:setTargetUser', (_, userId) => setTargetUser(userId))
+  ipcMain.handle('wechat:setBaseUrl', (_, url) => setWeChatBaseUrl(url))
 
   // === System health ===
   ipcMain.handle('system:health', () => ({ sdk: sdkHealth, sdkError }))
