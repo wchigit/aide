@@ -282,10 +282,12 @@ const BUILTIN_JOBS: { id: string; name: string; cron: string; instruction: strin
 
 function syncBuiltinJobs(db: DatabaseInstance): void {
   const upsert = db.prepare(`
-    UPDATE jobs SET name = ?, cron = ?, instruction = ? WHERE id = ?
+    INSERT INTO jobs (id, name, cron, instruction, enabled)
+    VALUES (?, ?, ?, ?, 1)
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, cron = excluded.cron, instruction = excluded.instruction
   `)
   for (const job of BUILTIN_JOBS) {
-    upsert.run(job.name, job.cron, job.instruction, job.id)
+    upsert.run(job.id, job.name, job.cron, job.instruction)
   }
 }
 
