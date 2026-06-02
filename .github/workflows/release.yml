@@ -36,6 +36,9 @@ jobs:
         run: npm run dist:${{ matrix.platform }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Skip macOS code-signing when no certificate is configured, so CI
+          # can still produce an (unsigned) build instead of failing.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
           # --- macOS signing & notarization (optional) -----------------
           # Add these repo secrets to enable signed + notarized builds:
           #   CSC_LINK                     base64 of the Developer ID .p12
