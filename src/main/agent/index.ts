@@ -344,6 +344,8 @@ Current time: ${now.toLocaleDateString(locale)} ${now.toLocaleTimeString(locale,
 
 ## Task management
 
+Use Aide's task tools (create_aide_task, update_aide_task, query_aide_tasks) for task management when needed by background jobs.
+
 **Bar (high)**: only create a Task for things that clearly need the user to act personally.
 - Create: the user is named/asked to do something, sent to them individually for action, they are the clear owner
 - Don't create: pure notifications, the user is only CC'd or in a broadcast, already-done items, automated subscriptions
@@ -683,7 +685,7 @@ function formatTaskContext(task: Task): string {
   if (task.description) lines.push(`- Description: ${task.description}`)
   if (task.dueDate) lines.push(`- Due: ${task.dueDate}`)
   if (task.source.externalUrl) lines.push(`- Source: ${task.source.externalUrl}`)
-  lines.push(`\n> The user is in this task's chat. You can operate on it directly with update_task(id: "${task.id}", ...).`)
+  lines.push(`\n> The user is in this task's chat. You can operate on it directly with update_aide_task(id: "${task.id}", ...).`)
   return lines.join('\n')
 }
 

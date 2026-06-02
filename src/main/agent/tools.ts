@@ -100,8 +100,8 @@ const memorySearchTool: Tool<any> = {
 }
 
 const createTaskTool: Tool<any> = {
-  name: 'create_task',
-  description: 'Create a new task. Always fill sourceType by the task\'s real source (from a GitHub PR/Issue use github, Teams message use teams, email use email, calendar event use calendar; for a task with no external source that originated from chatting with the user, use chat). Pass sourceId (email ID/notification ID, etc.) for exact de-dup. The system auto-detects similar tasks and skips duplicates.',
+  name: 'create_aide_task',
+  description: 'Create a task in Aide (the user\'s personal task tracker). Always fill sourceType by the task\'s real source (from a GitHub PR/Issue use github, Teams message use teams, email use email, calendar event use calendar; for a task with no external source that originated from chatting with the user, use chat). Pass sourceId (email ID/notification ID, etc.) for exact de-dup. The system auto-detects similar tasks and skips duplicates.',
   parameters: {
     type: 'object',
     properties: {
@@ -189,8 +189,8 @@ const createTaskTool: Tool<any> = {
 }
 
 const updateTaskTool: Tool<any> = {
-  name: 'update_task',
-  description: 'Update a task. Change status (complete/cancel), priority, title, etc.',
+  name: 'update_aide_task',
+  description: 'Update an Aide task (the user\'s personal task tracker). Change status (complete/cancel), priority, title, etc.',
   parameters: {
     type: 'object',
     properties: {
@@ -298,8 +298,8 @@ const getTaskActivitiesTool: Tool<any> = {
 }
 
 const queryTasksTool: Tool<any> = {
-  name: 'query_tasks',
-  description: 'Query the task list. Filter by status, priority, or project. Use to understand the current workload.',
+  name: 'query_aide_tasks',
+  description: 'Query Aide tasks (the user\'s personal task tracker). Filter by status, priority, or project.',
   parameters: {
     type: 'object',
     properties: {

@@ -246,10 +246,10 @@ function runMigrations(db: DatabaseInstance): void {
 
 const DEFAULT_PERIODIC_POLL_INSTRUCTION = `Check for new email, Teams messages, and GitHub notifications since the last run (on first run, look back 24 hours). When using ask_work_iq, set the query range based on the time info above.
 
-Before handling each new item, call query_tasks to see current active tasks, then make one of four decisions:
+Before handling each new item, call query_aide_tasks to see current active tasks, then make one of four decisions:
 
 1. Link to an existing task: if the item is a follow-up to an existing task. First use find_related_task (with sourceId/PR#/email ID, etc.) to confirm ownership; on a match, use add_task_activity to record progress, including sourceRef when possible.
-2. Update status: on objective complete/blocked signals (PR merged → completed, CI failing or changes requested → record a blocker, etc.) use update_task to change status (status changes are logged automatically).
+2. Update status: on objective complete/blocked signals (PR merged → completed, CI failing or changes requested → record a blocker, etc.) use update_aide_task to change status (status changes are logged automatically).
 3. Create a new task: only when no related task exists. Always fill sourceType by the real source (GitHub → github, Teams → teams, email → email, calendar → calendar) and attach sourceId and sourceUrl (external link).
 4. Ignore: if unrelated to existing tasks and not worth creating, skip it.
 
