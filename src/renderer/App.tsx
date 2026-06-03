@@ -4,6 +4,7 @@ import { ChatPanel } from './components/ChatPanel'
 import { DashboardView } from './components/DashboardView'
 import { SettingsDrawer } from './components/SettingsDrawer'
 import { OnboardingWizard } from './components/OnboardingWizard'
+import { UpdateBanner } from './components/UpdateBanner'
 import { useTaskStore } from './stores/taskStore'
 import { useChatStore } from './stores/chatStore'
 import { useSettingsStore } from './stores/settingsStore'
@@ -106,10 +107,13 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-screen select-none overflow-hidden bg-surface-0 text-text-primary">
-      <TaskPanel />
-      <MainArea />
-      <SettingsDrawer />
+    <div className="flex flex-col h-screen w-screen select-none overflow-hidden bg-surface-0 text-text-primary">
+      <UpdateBanner />
+      <div className="flex flex-1 min-h-0">
+        <TaskPanel />
+        <MainArea />
+        <SettingsDrawer />
+      </div>
     </div>
   )
 }
