@@ -12,6 +12,18 @@ import { BrowserWindow } from 'electron'
 import type { CopilotClient, CopilotSession } from '@github/copilot-sdk'
 import type { SessionConfig, PermissionRequest, PermissionRequestResult } from '@github/copilot-sdk'
 import { buildTools } from './tools'
+import { sdkError } from '../health'
+
+// Build the user-facing error when the SDK never came up. Prefer the real
+// startup failure (captured in health) over a generic message so packaging or
+// auth issues are diagnosable instead of opaque.
+function sdkUnavailableError(): Error {
+  return new Error(
+    sdkError
+      ? `Copilot SDK failed to start: ${sdkError}`
+      : 'Copilot SDK not initialized. Ensure SDK is configured.'
+  )
+}
 
 // ============================================================
 // Agent Engine — Adapter between Aide and Copilot SDK
@@ -410,7 +422,7 @@ export function setSelectedModel(modelId: string): void {
 // === Core API: send message ===
 
 async function getOrCreateSession(taskId: string | null): Promise<CopilotSession> {
-  if (!client) throw new Error('Copilot SDK not initialized. Ensure SDK is configured.')
+  if (!client) throw sdkUnavailableError()
 
   const sessionId = taskId ? getTaskSessionId(taskId) : 'general'
   const config: SessionConfig = {
@@ -535,7 +547,7 @@ const jobHooks = {
 import { setJobSession } from './state'
 
 export async function executeJobSession(instruction: string, jobId: string, lastRunAt?: string | null): Promise<string> {
-  if (!client) throw new Error('Copilot SDK not initialized')
+  if (!client) throw sdkUnavailableError()
 
   // Timeouts per job type (MCP calls like ask_work_iq take 60-90s each)
   const JOB_TIMEOUTS: Record<string, number> = {

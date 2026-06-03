@@ -32,6 +32,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The Copilot CLI ships as platform-specific binary packages gated by
+      # os/cpu, so `npm ci` only installs the one matching the build runner.
+      # macOS is packaged for BOTH arm64 and x64, but the runner is arm64 — so
+      # the x64 binary is skipped and the resulting x64 DMG/ZIP can't start the
+      # SDK. Force-install every CLI binary the target archs need.
+      - name: Ensure Copilot CLI binaries for all target archs
+        if: matrix.platform == 'mac'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver=$(node -p "JSON.parse(require('fs').readFileSync('node_modules/@github/copilot/package.json','utf8')).optionalDependencies['@github/copilot-darwin-x64']")
+          echo "Copilot CLI version: $ver"
+          npm install --no-save --force --os=darwin --cpu=x64   "@github/copilot-darwin-x64@${ver}"
+          npm install --no-save --force --os=darwin --cpu=arm64 "@github/copilot-darwin-arm64@${ver}"
+          test -f "node_modules/@github/copilot-darwin-x64/copilot"
+          test -f "node_modules/@github/copilot-darwin-arm64/copilot"
+
       - name: Build & package (${{ matrix.platform }})
         run: npm run dist:${{ matrix.platform }}
         env:
