@@ -31,9 +31,14 @@ interface CommandContext {
 }
 
 let commandContext: CommandContext | null = null
+let onContextTokenChanged: ((token: string) => void) | null = null
 
 export function setCommandContext(ctx: CommandContext): void {
   commandContext = ctx
+}
+
+export function setContextTokenCallback(cb: (token: string) => void): void {
+  onContextTokenChanged = cb
 }
 
 export function getCommandContext(): CommandContext | null {
@@ -52,15 +57,10 @@ export async function dispatch(msg: WeixinMessage): Promise<void> {
   const userId = msg.from_user_id || ''
   const trimmed = text.trim()
 
-  // Auto-capture target user from first inbound message for outbound delivery
-  if (userId && commandContext.state.targetUserId !== userId) {
-    console.log(`[WeChat] Setting target user from inbound: ${userId}`)
-    commandContext.state.targetUserId = userId
-  }
-
   // Capture context_token from incoming message (required for replies)
   if (msg.context_token) {
     commandContext.state.contextToken = msg.context_token
+    onContextTokenChanged?.(msg.context_token)
   }
 
   // 1. Check confirmation replies
