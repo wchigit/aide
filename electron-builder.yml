@@ -11,6 +11,15 @@ files:
   - out/**/*
   - package.json
 
+# The Copilot CLI is a standalone executable shipped in a platform-specific
+# package. Executables cannot be spawned from inside app.asar, so unpack the
+# binary packages to app.asar.unpacked (client.ts resolves them from there).
+asarUnpack:
+  - node_modules/@github/copilot-win32-x64/**
+  - node_modules/@github/copilot-darwin-arm64/**
+  - node_modules/@github/copilot-darwin-x64/**
+  - node_modules/@github/copilot-linux-x64/**
+
 # Rebuild native modules (better-sqlite3) for the target platform.
 npmRebuild: true
 
