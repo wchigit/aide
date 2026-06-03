@@ -9,6 +9,10 @@ import { listRelations, getRelation, createRelation, updateRelation, deleteRelat
 import { getPreferences, setPreferences } from '../preferences'
 import { getWeChatStatus, connectWeChat, disconnectWeChat, pushToWeChat, setTargetUser } from '../wechat'
 import { setBaseUrl as setWeChatBaseUrl } from '../wechat/connection'
+import { getTelegramStatus, connectTelegram, disconnectTelegram, pushToTelegram } from '../telegram'
+import { getSlackStatus, connectSlack, disconnectSlack, pushToSlack } from '../slack'
+import { getDiscordStatus, connectDiscord, disconnectDiscord, pushToDiscord } from '../discord'
+import { listChannels, deliverTo } from '../channels'
 import { getUpdateState, checkForUpdates, downloadUpdate, quitAndInstall } from '../updater'
 import { sdkHealth, sdkError } from '../health'
 
@@ -96,6 +100,28 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('wechat:push', (_, text) => pushToWeChat(text))
   ipcMain.handle('wechat:setTargetUser', (_, userId) => setTargetUser(userId))
   ipcMain.handle('wechat:setBaseUrl', (_, url) => setWeChatBaseUrl(url))
+
+  // === Telegram ===
+  ipcMain.handle('telegram:getStatus', () => getTelegramStatus())
+  ipcMain.handle('telegram:connect', (_, config) => connectTelegram(config))
+  ipcMain.handle('telegram:disconnect', (_, clearConfig) => disconnectTelegram(clearConfig))
+  ipcMain.handle('telegram:push', (_, text) => pushToTelegram(text))
+
+  // === Slack ===
+  ipcMain.handle('slack:getStatus', () => getSlackStatus())
+  ipcMain.handle('slack:connect', (_, config) => connectSlack(config))
+  ipcMain.handle('slack:disconnect', (_, clearConfig) => disconnectSlack(clearConfig))
+  ipcMain.handle('slack:push', (_, text) => pushToSlack(text))
+
+  // === Discord ===
+  ipcMain.handle('discord:getStatus', () => getDiscordStatus())
+  ipcMain.handle('discord:connect', (_, config) => connectDiscord(config))
+  ipcMain.handle('discord:disconnect', (_, clearConfig) => disconnectDiscord(clearConfig))
+  ipcMain.handle('discord:push', (_, text) => pushToDiscord(text))
+
+  // === Channels (unified) ===
+  ipcMain.handle('channels:list', () => listChannels())
+  ipcMain.handle('channels:deliver', (_, channelId, text) => deliverTo(channelId, text))
 
   // === Updates ===
   ipcMain.handle('updates:getState', () => getUpdateState())

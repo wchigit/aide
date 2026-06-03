@@ -77,6 +77,28 @@ const api: AideAPI = {
     setTargetUser: (userId) => ipcRenderer.invoke('wechat:setTargetUser', userId),
     setBaseUrl: (url) => ipcRenderer.invoke('wechat:setBaseUrl', url)
   },
+  telegram: {
+    getStatus: () => ipcRenderer.invoke('telegram:getStatus'),
+    connect: (config) => ipcRenderer.invoke('telegram:connect', config),
+    disconnect: (clearConfig) => ipcRenderer.invoke('telegram:disconnect', clearConfig),
+    push: (text) => ipcRenderer.invoke('telegram:push', text)
+  },
+  slack: {
+    getStatus: () => ipcRenderer.invoke('slack:getStatus'),
+    connect: (config) => ipcRenderer.invoke('slack:connect', config),
+    disconnect: (clearConfig) => ipcRenderer.invoke('slack:disconnect', clearConfig),
+    push: (text) => ipcRenderer.invoke('slack:push', text)
+  },
+  discord: {
+    getStatus: () => ipcRenderer.invoke('discord:getStatus'),
+    connect: (config) => ipcRenderer.invoke('discord:connect', config),
+    disconnect: (clearConfig) => ipcRenderer.invoke('discord:disconnect', clearConfig),
+    push: (text) => ipcRenderer.invoke('discord:push', text)
+  },
+  channels: {
+    list: () => ipcRenderer.invoke('channels:list'),
+    deliver: (channelId, text) => ipcRenderer.invoke('channels:deliver', channelId, text)
+  },
   updates: {
     getState: () => ipcRenderer.invoke('updates:getState'),
     check: () => ipcRenderer.invoke('updates:check'),

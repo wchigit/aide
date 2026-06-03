@@ -1,11 +1,13 @@
 import type { DeliveryTarget, Job } from '@shared/types'
 import { postAgentMessageToGeneral } from '../agent'
 import { pushToWeChat } from '../wechat'
+import { pushToTelegram } from '../telegram'
+import { pushToSlack } from '../slack'
+import { pushToDiscord } from '../discord'
 
 /**
  * A delivery channel knows how to push a job's result somewhere. New channels
- * (Slack, Telegram, email, …) only need to register here — the rest of the job
- * pipeline stays untouched.
+ * only need to register here — the rest of the job pipeline stays untouched.
  */
 interface DeliveryChannel {
   /** Send the job summary. Throw to signal failure; the dispatcher isolates it. */
@@ -21,6 +23,21 @@ const channels: Record<DeliveryTarget, DeliveryChannel> = {
   wechat: {
     async send(summary) {
       await pushToWeChat(summary)
+    }
+  },
+  telegram: {
+    async send(summary) {
+      await pushToTelegram(summary)
+    }
+  },
+  slack: {
+    async send(summary) {
+      await pushToSlack(summary)
+    }
+  },
+  discord: {
+    async send(summary) {
+      await pushToDiscord(summary)
     }
   }
 }
