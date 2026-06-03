@@ -1053,6 +1053,10 @@ function WeChatConnectionCard() {
         </div>
       </div>
 
+      {isConnected && (
+        <p className="mt-3 text-[11px] text-text-tertiary">Say hi to the bot in WeChat to let Aide reach you.</p>
+      )}
+
       {/* QR Code display */}
       {qrImg && (
         <div className="mt-4 flex flex-col items-center gap-2 p-4 rounded-lg bg-surface-2 border border-edge">
