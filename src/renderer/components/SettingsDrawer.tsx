@@ -854,7 +854,12 @@ function UpdatesSection() {
   const busy = state.status === 'checking' || state.status === 'downloading'
 
   const check = () => window.aide.updates.check().then(setState)
-  const install = () => window.aide.updates.install()
+  const install = () => {
+    // Optimistically reflect the restart immediately — quitAndInstall can take a
+    // moment to spin up, and without instant feedback the button feels frozen.
+    setState(s => (s ? { ...s, status: 'installing' } : s))
+    window.aide.updates.install()
+  }
   const retryDownload = () => window.aide.updates.download().then(setState)
 
   return (
@@ -911,18 +916,21 @@ function UpdateStatusLine({ state, onInstall, onRetry }: { state: UpdateState; o
     )
   }
 
-  if (state.status === 'downloaded') {
+  if (state.status === 'downloaded' || state.status === 'installing') {
+    const installing = state.status === 'installing'
     return (
       <div className="flex items-center justify-between mt-3">
         <div className="flex items-center gap-1.5 text-[11.5px] text-text-secondary">
           <Download size={13} className="text-accent" />
-          Version {state.latestVersion} is ready.
+          {installing ? 'Restarting to install…' : `Version ${state.latestVersion} is ready.`}
         </div>
         <button
           onClick={onInstall}
-          className="px-3 py-1.5 rounded-md text-[12px] font-medium text-white bg-accent hover:opacity-90 transition-opacity"
+          disabled={installing}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-white bg-accent hover:opacity-90 disabled:opacity-60 transition-opacity"
         >
-          Restart &amp; install
+          {installing && <RefreshCw size={12} className="animate-spin" />}
+          {installing ? 'Restarting…' : 'Restart & install'}
         </button>
       </div>
     )

@@ -20,7 +20,13 @@ import { join } from 'node:path'
 function resolveCliPath(): string {
   const platformDir = `copilot-${process.platform}-${process.arch}`
   const binName = process.platform === 'win32' ? 'copilot.exe' : 'copilot'
-  const segments = ['node_modules', '@github', platformDir, binName]
+
+  // npm may install the platform binary either hoisted at the top level or
+  // nested under the @github/copilot loader package. Try both layouts.
+  const layouts = [
+    ['node_modules', '@github', platformDir, binName],
+    ['node_modules', '@github', 'copilot', 'node_modules', '@github', platformDir, binName]
+  ]
 
   // Candidate base directories, in priority order.
   const baseDirs = app.isPackaged
@@ -32,9 +38,14 @@ function resolveCliPath(): string {
       ]
     : [join(__dirname, '..', '..')]
 
-  const tried = baseDirs.map((base) => join(base, ...segments))
-  const found = tried.find((p) => existsSync(p))
-  if (found) return found
+  const tried: string[] = []
+  for (const base of baseDirs) {
+    for (const segments of layouts) {
+      const candidate = join(base, ...segments)
+      tried.push(candidate)
+      if (existsSync(candidate)) return candidate
+    }
+  }
 
   throw new Error(
     `Copilot CLI binary not found for ${process.platform}-${process.arch}. ` +

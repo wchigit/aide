@@ -142,8 +142,15 @@ export async function downloadUpdate(): Promise<UpdateState> {
  */
 export function quitAndInstall(): void {
   if (!app.isPackaged || state.status !== 'downloaded') return
-  // isSilent=false (show installer progress), isForceRunAfter=true (relaunch)
-  autoUpdater.quitAndInstall(false, true)
+  // Surface an 'installing' state first so the UI can show immediate feedback
+  // (a spinner/"Restarting…") instead of appearing frozen while the installer
+  // spins up. Defer the actual quit a tick so the event paints in the renderer.
+  transition('installing')
+  setTimeout(() => {
+    // isSilent=true skips the slow NSIS installer UI (the app simply closes and
+    // relaunches updated); isForceRunAfter=true relaunches after install.
+    autoUpdater.quitAndInstall(true, true)
+  }, 250)
 }
 
 export function stopUpdater(): void {
