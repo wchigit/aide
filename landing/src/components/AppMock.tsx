@@ -67,7 +67,7 @@ const srcLabel: Record<Src, string> = {
 function Priority({ p }: { p: 'P0' | 'P1' | 'P2' }) {
   const styles: Record<string, string> = {
     P0: 'bg-[oklch(0.35_0.05_270)] text-white',
-    P1: 'bg-[oklch(0.93_0.03_160)] text-[oklch(0.38_0.05_160)]',
+    P1: 'bg-[oklch(0.93_0.03_255)] text-[oklch(0.42_0.08_255)]',
     P2: 'bg-[oklch(0.95_0_0)] text-[oklch(0.55_0_0)]',
   }
   return (
@@ -172,7 +172,7 @@ export function AppMock() {
                 desc="42 messages across the thread — pulling out the decisions and the open questions for you."
                 src="teams"
                 time="2h"
-                tint="bg-[oklch(0.98_0.005_160)] border-l-[oklch(0.60_0.06_160)]"
+                tint="bg-[oklch(0.98_0.008_255)] border-l-[oklch(0.58_0.09_255)]"
               />
               <TaskCard
                 p="P2"
@@ -241,7 +241,7 @@ function SidebarItem({
 }) {
   const tag: Record<string, string> = {
     P0: 'bg-[oklch(0.35_0.05_270)] text-white',
-    P1: 'bg-[oklch(0.93_0.03_160)] text-[oklch(0.38_0.05_160)]',
+    P1: 'bg-[oklch(0.93_0.03_255)] text-[oklch(0.42_0.08_255)]',
     P2: 'bg-[oklch(0.95_0_0)] text-[oklch(0.55_0_0)]',
   }
   return (
