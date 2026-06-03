@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Sparkles, Github, Shield, Check, ArrowRight, ArrowLeft, Copy, Loader2 } from 'lucide-react'
+import { Sparkles, Github, Shield, Check, ArrowRight, ArrowLeft, Copy, Loader2, Send } from 'lucide-react'
+import { CHANNELS, ChannelCard } from '../channels/registry'
+import { MicrosoftLogo } from '../brand/icons'
 import type { ConnectionStatus } from '@shared/types'
 
-type Step = 'welcome' | 'github' | 'microsoft' | 'done'
+type Step = 'welcome' | 'github' | 'microsoft' | 'channels' | 'done'
 
 interface Props {
   onComplete: () => void
@@ -40,7 +42,7 @@ export function OnboardingWizard({ onComplete }: Props) {
     onComplete()
   }, [onComplete])
 
-  const STEPS: Step[] = ['welcome', 'github', 'microsoft', 'done']
+  const STEPS: Step[] = ['welcome', 'github', 'microsoft', 'channels', 'done']
   const goBack = useCallback(() => {
     const idx = STEPS.indexOf(step)
     if (idx > 0) setStep(STEPS[idx - 1])
@@ -78,6 +80,12 @@ export function OnboardingWizard({ onComplete }: Props) {
             connected={isConnected('workiq')}
             verified={isVerified('workiq')}
             onRefresh={refreshConnections}
+            onNext={() => setStep('channels')}
+            onSkip={() => setStep('channels')}
+          />
+        )}
+        {step === 'channels' && (
+          <ChannelsStep
             onNext={() => setStep('done')}
             onSkip={() => setStep('done')}
           />
@@ -86,7 +94,7 @@ export function OnboardingWizard({ onComplete }: Props) {
 
         {/* Progress dots */}
         <div className="flex justify-center gap-2 mt-8">
-          {(['welcome', 'github', 'microsoft', 'done'] as Step[]).map(s => (
+          {(['welcome', 'github', 'microsoft', 'channels', 'done'] as Step[]).map(s => (
             <div
               key={s}
               className={`w-2 h-2 rounded-full transition-colors ${
@@ -360,7 +368,7 @@ function MicrosoftStep({ connected, verified, onRefresh, onNext, onSkip }: {
   return (
     <div className="text-center">
       <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center mx-auto mb-5">
-        <Shield size={28} className="text-blue-400" />
+        <MicrosoftLogo size={26} />
       </div>
       <h2 className="text-[18px] font-bold text-text-primary mb-2">Connect Microsoft 365</h2>
       <p className="text-[13px] text-text-secondary mb-6">
@@ -371,9 +379,9 @@ function MicrosoftStep({ connected, verified, onRefresh, onNext, onSkip }: {
         <div className="space-y-3">
           <button
             onClick={startAuth}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white text-[13px] font-medium rounded-xl hover:bg-blue-600 transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-zinc-800 border border-edge text-[13px] font-medium rounded-xl hover:bg-surface-1 transition-colors"
           >
-            <Shield size={16} /> Sign in with Microsoft
+            <MicrosoftLogo size={16} /> Sign in with Microsoft
           </button>
           <p className="text-[11px] text-text-tertiary">
             Your browser will open the Microsoft sign-in page
@@ -461,6 +469,36 @@ function MicrosoftStep({ connected, verified, onRefresh, onNext, onSkip }: {
           Skip for now
         </button>
       )}
+    </div>
+  )
+}
+
+// === Channels ===
+
+function ChannelsStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+  return (
+    <div className="text-center">
+      <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-5">
+        <Send size={26} className="text-accent" />
+      </div>
+      <h2 className="text-[18px] font-bold text-text-primary mb-2">Stay in the loop</h2>
+      <p className="text-[13px] text-text-secondary mb-6">
+        Connect a channel to get briefings and send commands on the go.
+      </p>
+
+      <div className="space-y-3 text-left">
+        {CHANNELS.map(channel => <ChannelCard key={channel.id} channel={channel} />)}
+      </div>
+
+      <button
+        onClick={onNext}
+        className="inline-flex items-center gap-2 px-6 py-2.5 mt-6 bg-accent text-white text-[13px] font-medium rounded-xl hover:bg-accent/90 transition-colors"
+      >
+        Continue <ArrowRight size={16} />
+      </button>
+      <button onClick={onSkip} className="block mx-auto mt-4 text-[12px] text-text-tertiary hover:text-text-secondary transition-colors">
+        Skip for now
+      </button>
     </div>
   )
 }

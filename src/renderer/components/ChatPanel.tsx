@@ -306,7 +306,7 @@ export function ChatPanel() {
               {isStreaming ? (
                 <button
                   onClick={stopStream}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-danger/12 text-danger hover:bg-danger/18 transition-all shrink-0"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-surface-2 text-text-secondary hover:bg-surface-3 hover:text-text-primary transition-all shrink-0"
                   title="Stop generating"
                 >
                   <Square size={14} fill="currentColor" />

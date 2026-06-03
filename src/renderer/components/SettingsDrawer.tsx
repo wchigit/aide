@@ -1,18 +1,9 @@
 import React, { useEffect, useState } from 'react'
-import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, MessageCircle, Send, RefreshCw, Download, CheckCircle2, AlertCircle } from 'lucide-react'
+import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, Send, RefreshCw, Download, CheckCircle2, AlertCircle } from 'lucide-react'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, DeliveryTarget, UpdateState } from '@shared/types'
-
-function MicrosoftIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 21 21" fill="none">
-      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
-      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
-      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
-      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
-    </svg>
-  )
-}
+import { CHANNELS, ChannelCard } from '../channels/registry'
+import { MicrosoftLogo } from '../brand/icons'
+import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, DeliveryTarget, UpdateState } from '@shared/types'
 
 export function SettingsDrawer() {
   const { isOpen, activeTab, close, setTab, projects, relations, jobs, connections,
@@ -128,7 +119,7 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                 conn.type === 'workiq' ? 'bg-blue-500/10 text-blue-400' : 'bg-zinc-500/10 text-text-secondary'
               }`}>
-                {conn.type === 'workiq' ? <MicrosoftIcon /> : <Github size={18} />}
+                {conn.type === 'workiq' ? <MicrosoftLogo /> : <Github size={18} />}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-medium text-text-primary">
@@ -214,7 +205,7 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
       <section className="space-y-3">
         <SectionLabel title="Channels" desc="How Aide reaches you and takes commands on the go." />
         <div className="space-y-4">
-          <WeChatConnectionCard />
+          {CHANNELS.map(channel => <ChannelCard key={channel.id} channel={channel} />)}
         </div>
       </section>
     </div>
@@ -951,112 +942,6 @@ function UpdateStatusLine({ state, onInstall, onRetry }: { state: UpdateState; o
   }
 
   return null
-}
-
-/* ═══════════════════════════════════════════
-   WeChat Connection Card
-   ═══════════════════════════════════════════ */
-
-function WeChatConnectionCard() {
-  const [status, setStatus] = useState<WeChatStatus | null>(null)
-  const [connecting, setConnecting] = useState(false)
-  const [qrImg, setQrImg] = useState<string | null>(null)
-
-  useEffect(() => {
-    window.aide.wechat.getStatus().then(setStatus)
-  }, [])
-
-  // Listen for QR code and login progress events
-  useEffect(() => {
-    const handler = (event: any) => {
-      if (event.type === 'wechat:qrcode') {
-        setQrImg(event.imgContent)
-      } else if (event.type === 'wechat:login-progress') {
-        if (event.stage === 'confirmed') {
-          setQrImg(null)
-          setConnecting(false)
-          window.aide.wechat.getStatus().then(setStatus)
-        } else if (event.stage === 'expired' || event.stage === 'timeout') {
-          setQrImg(null)
-          setConnecting(false)
-        }
-      }
-    }
-    const unsub = window.aideEvents.on(handler)
-    return unsub
-  }, [])
-
-  const handleConnect = async () => {
-    setConnecting(true)
-    try {
-      const result = await window.aide.wechat.connect()
-      setStatus(result)
-      if (result.connection !== 'connected' || result.lastError) {
-        setQrImg(null)
-        setConnecting(false)
-      }
-    } catch {
-      setConnecting(false)
-      window.aide.wechat.getStatus().then(setStatus)
-    }
-  }
-
-  const handleDisconnect = async () => {
-    const result = await window.aide.wechat.disconnect()
-    setStatus(result)
-    setQrImg(null)
-  }
-
-  const isConnected = status?.connection === 'connected'
-
-  return (
-    <Card>
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-green-500/10 text-green-600">
-            <MessageCircle size={18} />
-          </div>
-          <div>
-            <p className="text-[13px] font-medium text-text-primary">WeChat</p>
-            <p className="text-[12px] text-text-tertiary mt-0.5">Report delivery · Task notifications · Remote chat</p>
-            <div className="flex items-center gap-1.5 mt-1.5">
-              <div className={`w-[6px] h-[6px] rounded-full ${
-                isConnected ? 'bg-success' : 'bg-text-tertiary'
-              }`} />
-              <span className={`text-[11px] ${isConnected ? 'text-success' : 'text-text-tertiary'}`}>
-                {isConnected
-                  ? `Connected${status?.monitorActive ? ' · listening' : ''}`
-                  : connecting ? 'Waiting for scan…' : 'Not connected'}
-              </span>
-            </div>
-            {status?.lastError && <p className="text-[11px] text-danger mt-1">{status.lastError}</p>}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {isConnected && (
-            <Btn variant="danger" onClick={handleDisconnect}>Disconnect</Btn>
-          )}
-          {!isConnected && (
-            <Btn onClick={handleConnect}>
-              {connecting ? 'Scanning…' : 'Connect'}
-            </Btn>
-          )}
-        </div>
-      </div>
-
-      {/* QR Code display */}
-      {qrImg && (
-        <div className="mt-4 flex flex-col items-center gap-2 p-4 rounded-lg bg-surface-2 border border-edge">
-          <img
-            src={qrImg}
-            alt="WeChat QR Code"
-            className="w-48 h-48 rounded-md"
-          />
-          <p className="text-[11px] text-text-tertiary">Scan the QR code with WeChat to sign in</p>
-        </div>
-      )}
-    </Card>
-  )
 }
 
 /* ═══════════════════════════════════════════

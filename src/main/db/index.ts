@@ -363,7 +363,7 @@ Retire: contacts with no interaction for 3 months → inactive. Projects with no
 const BUILTIN_JOBS: { id: string; name: string; cron: string; instruction: string; deliveryTargets: string[] }[] = [
   { id: 'morning-briefing', name: 'Daily morning briefing', cron: '0 9 * * 1-5', deliveryTargets: ['desktop', 'wechat'], instruction: 'Check for new email, Teams messages, and GitHub notifications since the last run, plus today\'s calendar events. Create a Task for items that need the user to act (fill sourceType by the real source: github/teams/email/calendar, and attach sourceId and sourceUrl), and give a prioritized summary of suggestions for today.' },
   { id: 'periodic-poll', name: 'Periodic poll', cron: '*/30 * * * *', deliveryTargets: [], instruction: DEFAULT_PERIODIC_POLL_INSTRUCTION },
-  { id: 'daily-reconcile', name: 'End-of-day review', cron: '0 18 * * 1-5', deliveryTargets: [], instruction: 'Review today\'s task statuses. Mark tasks that are confirmed done but unmarked as completed. Suggest cleaning up P2 tasks untouched for over 7 days. Generate a short daily summary.' },
+  { id: 'daily-reconcile', name: 'End-of-day review', cron: '0 18 * * 1-5', deliveryTargets: ['desktop', 'wechat'], instruction: 'Review today\'s task statuses. Mark tasks that are confirmed done but unmarked as completed. Suggest cleaning up P2 tasks untouched for over 7 days. Generate a short daily summary.' },
   { id: 'world-sync', name: 'Relationships & projects sync', cron: '0 10 * * 1', deliveryTargets: [], instruction: DEFAULT_WORLD_SYNC_INSTRUCTION },
 ]
 
