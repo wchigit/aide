@@ -1140,22 +1140,23 @@ function TelegramConnectionCard() {
       </div>
       {showConfig && !isConnected && (
         <div className="mt-4 space-y-3 p-3 rounded-lg bg-surface-2 border border-edge">
+          <details className="text-[11px] text-text-tertiary">
+            <summary className="cursor-pointer hover:text-text-secondary">How do I get these values?</summary>
+            <ol className="mt-2 ml-4 space-y-1 list-decimal text-[11px] text-text-tertiary">
+              <li>Message <a href="https://t.me/BotFather" className="text-accent hover:underline" target="_blank" rel="noreferrer">@BotFather</a> → /newbot → copy the token</li>
+              <li>Start a chat with your new bot (send /start)</li>
+              <li>Message <a href="https://t.me/userinfobot" className="text-accent hover:underline" target="_blank" rel="noreferrer">@userinfobot</a> to get your Chat ID</li>
+            </ol>
+          </details>
           <div>
             <label className="text-[11px] font-medium text-text-secondary block mb-1">Bot Token</label>
             <input type="password" value={botToken} onChange={e => setBotToken(e.target.value)} placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v..." className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
-            <p className="text-[10px] text-text-tertiary mt-1">Get this from @BotFather on Telegram</p>
           </div>
           <div>
             <label className="text-[11px] font-medium text-text-secondary block mb-1">Chat ID</label>
             <input type="text" value={chatId} onChange={e => setChatId(e.target.value)} placeholder="123456789" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
-            <p className="text-[10px] text-text-tertiary mt-1">Send /start to your bot, then use @userinfobot to get your chat ID</p>
           </div>
           <button onClick={() => { setShowConfig(false); setBotToken(''); setChatId('') }} className="text-[11px] text-text-tertiary hover:text-text-secondary">Cancel</button>
-        </div>
-      )}
-      {isConnected && (
-        <div className="mt-3 p-2.5 rounded-lg bg-surface-2/60 border border-edge-subtle">
-          <p className="text-[11px] text-text-tertiary">Send /help to your bot on Telegram to see available commands.</p>
         </div>
       )}
     </Card>
@@ -1235,27 +1236,30 @@ function SlackConnectionCard() {
       </div>
       {showConfig && !isConnected && (
         <div className="mt-4 space-y-3 p-3 rounded-lg bg-surface-2 border border-edge">
+          <details className="text-[11px] text-text-tertiary">
+            <summary className="cursor-pointer hover:text-text-secondary">How do I get these values?</summary>
+            <ol className="mt-2 ml-4 space-y-1 list-decimal text-[11px] text-text-tertiary">
+              <li>Go to <a href="https://api.slack.com/apps" className="text-accent hover:underline" target="_blank" rel="noreferrer">Slack API</a> → Create New App → From scratch</li>
+              <li>OAuth & Permissions → Bot Token Scopes: <code className="bg-surface-3 px-0.5 rounded">chat:write</code>, <code className="bg-surface-3 px-0.5 rounded">channels:history</code>, <code className="bg-surface-3 px-0.5 rounded">channels:read</code></li>
+              <li>Socket Mode → enable → create App-Level Token with <code className="bg-surface-3 px-0.5 rounded">connections:write</code> scope</li>
+              <li>Event Subscriptions → enable → subscribe to <code className="bg-surface-3 px-0.5 rounded">message.channels</code></li>
+              <li>Install to workspace → copy Bot Token (xoxb-...)</li>
+              <li>In Slack, right-click channel → View channel details → copy Channel ID</li>
+            </ol>
+          </details>
           <div>
             <label className="text-[11px] font-medium text-text-secondary block mb-1">Bot Token</label>
             <input type="password" value={botToken} onChange={e => setBotToken(e.target.value)} placeholder="xoxb-..." className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
-            <p className="text-[10px] text-text-tertiary mt-1">OAuth Bot Token from your Slack app settings</p>
           </div>
           <div>
             <label className="text-[11px] font-medium text-text-secondary block mb-1">App-Level Token</label>
             <input type="password" value={appToken} onChange={e => setAppToken(e.target.value)} placeholder="xapp-..." className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
-            <p className="text-[10px] text-text-tertiary mt-1">App-Level Token with connections:write scope (for Socket Mode)</p>
           </div>
           <div>
             <label className="text-[11px] font-medium text-text-secondary block mb-1">Channel ID</label>
             <input type="text" value={channelId} onChange={e => setChannelId(e.target.value)} placeholder="C0123456789 or D0123456789" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
-            <p className="text-[10px] text-text-tertiary mt-1">Right-click channel → View channel details → Copy Channel ID</p>
           </div>
           <button onClick={() => { setShowConfig(false); setBotToken(''); setAppToken(''); setChannelId('') }} className="text-[11px] text-text-tertiary hover:text-text-secondary">Cancel</button>
-        </div>
-      )}
-      {isConnected && (
-        <div className="mt-3 p-2.5 rounded-lg bg-surface-2/60 border border-edge-subtle">
-          <p className="text-[11px] text-text-tertiary">Send /help in the DM channel with your bot to see available commands.</p>
         </div>
       )}
     </Card>
@@ -1334,22 +1338,25 @@ function DiscordConnectionCard() {
       </div>
       {showConfig && !isConnected && (
         <div className="mt-4 space-y-3 p-3 rounded-lg bg-surface-2 border border-edge">
+          <details className="text-[11px] text-text-tertiary">
+            <summary className="cursor-pointer hover:text-text-secondary">How do I get these values?</summary>
+            <ol className="mt-2 ml-4 space-y-1 list-decimal text-[11px] text-text-tertiary">
+              <li>Go to <a href="https://discord.com/developers/applications" className="text-accent hover:underline" target="_blank" rel="noreferrer">Discord Developer Portal</a> → New Application</li>
+              <li>Bot tab → Reset Token → copy it below</li>
+              <li>Enable <strong>Message Content Intent</strong> under Privileged Gateway Intents</li>
+              <li>OAuth2 → URL Generator → check <strong>bot</strong> → Bot Permissions: check <strong>Send Messages</strong> + <strong>Read Message History</strong> → use the URL to invite to your server</li>
+              <li>In Discord, enable Developer Mode (Settings → Advanced), right-click channel → Copy Channel ID</li>
+            </ol>
+          </details>
           <div>
             <label className="text-[11px] font-medium text-text-secondary block mb-1">Bot Token</label>
             <input type="password" value={botToken} onChange={e => setBotToken(e.target.value)} placeholder="MTIzNDU2Nzg5MDEy..." className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
-            <p className="text-[10px] text-text-tertiary mt-1">From Discord Developer Portal → Bot → Token</p>
           </div>
           <div>
             <label className="text-[11px] font-medium text-text-secondary block mb-1">Channel ID</label>
             <input type="text" value={channelId} onChange={e => setChannelId(e.target.value)} placeholder="1234567890123456789" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
-            <p className="text-[10px] text-text-tertiary mt-1">Right-click channel → Copy Channel ID (enable Developer Mode in settings)</p>
           </div>
           <button onClick={() => { setShowConfig(false); setBotToken(''); setChannelId('') }} className="text-[11px] text-text-tertiary hover:text-text-secondary">Cancel</button>
-        </div>
-      )}
-      {isConnected && (
-        <div className="mt-3 p-2.5 rounded-lg bg-surface-2/60 border border-edge-subtle">
-          <p className="text-[11px] text-text-tertiary">Type /help in the channel to see available commands.</p>
         </div>
       )}
     </Card>

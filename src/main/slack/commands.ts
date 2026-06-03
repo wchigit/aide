@@ -12,6 +12,7 @@ const QUICK_COMMANDS: Record<string, () => Promise<string>> = {
   '/tasks': handleListTasks,
   '/report': handleDailyReport,
   '/done': handleCompleteCurrent,
+  '/setup': handleSetup,
   '/help': handleHelp
 }
 
@@ -112,8 +113,31 @@ async function handleHelp(): Promise<string> {
     '  `/tasks` — View pending tasks',
     '  `/report` — Today\'s work summary',
     '  `/done` — Mark current task complete',
+    '  `/setup` — Channel setup guide',
     '  `/help` — Show this help',
     '',
     'Or just type freely — I\'ll route it to the AI agent.'
+  ].join('\n')
+}
+
+async function handleSetup(): Promise<string> {
+  return [
+    ':wrench: *Slack Channel Setup*',
+    '',
+    '*1. Create a Slack App*',
+    '• Go to https://api.slack.com/apps → Create New App → From scratch',
+    '• Name it (e.g. "Aide") and select your workspace',
+    '',
+    '*2. Configure Permissions*',
+    '• OAuth & Permissions → Bot Token Scopes: `chat:write`, `channels:history`, `channels:read`',
+    '• Socket Mode → enable → create App-Level Token with `connections:write` scope',
+    '• Event Subscriptions → enable → subscribe to `message.channels`',
+    '• Install the app to your workspace',
+    '',
+    '*3. Get Channel ID*',
+    '• Right-click channel → View channel details → copy the Channel ID at the bottom',
+    '',
+    '*4. Configure in Aide*',
+    '• Settings → Channels → Slack → paste Bot Token + App Token + Channel ID → Connect'
   ].join('\n')
 }

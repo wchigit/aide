@@ -13,6 +13,7 @@ const QUICK_COMMANDS: Record<string, () => Promise<string>> = {
   '/tasks': handleListTasks,
   '/report': handleDailyReport,
   '/done': handleCompleteCurrent,
+  '/setup': handleSetup,
   '/help': handleHelp,
   '/start': handleHelp
 }
@@ -114,8 +115,29 @@ async function handleHelp(): Promise<string> {
     '  /tasks — View pending tasks',
     '  /report — Today\'s work summary',
     '  /done — Mark current task complete',
+    '  /setup — Channel setup guide',
     '  /help — Show this help',
     '',
     'Or just type freely — I\'ll route it to the AI agent.'
+  ].join('\n')
+}
+
+async function handleSetup(): Promise<string> {
+  return [
+    '🛠️ Telegram Channel Setup',
+    '',
+    '1. Create a Bot',
+    '   • Message @BotFather in Telegram',
+    '   • Send /newbot and follow prompts',
+    '   • Copy the bot token',
+    '',
+    '2. Get Your Chat ID',
+    '   • Message your bot (send anything)',
+    '   • Open: https://api.telegram.org/bot<TOKEN>/getUpdates',
+    '   • Find "chat":{"id": YOUR_CHAT_ID}',
+    '',
+    '3. Configure in Aide',
+    '   • Settings → Channels → Telegram',
+    '   • Paste Bot Token + Chat ID → Connect'
   ].join('\n')
 }

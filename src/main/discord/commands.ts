@@ -12,6 +12,7 @@ const QUICK_COMMANDS: Record<string, () => Promise<string>> = {
   '/tasks': handleListTasks,
   '/report': handleDailyReport,
   '/done': handleCompleteCurrent,
+  '/setup': handleSetup,
   '/help': handleHelp
 }
 
@@ -107,8 +108,31 @@ async function handleHelp(): Promise<string> {
     '`/tasks` — List active tasks',
     '`/report` — Today\'s progress report',
     '`/done` — Complete current task',
+    '`/setup` — Channel setup guide',
     '`/help` — Show this help',
     '',
     'Or just type naturally to chat with the AI agent.'
+  ].join('\n')
+}
+
+async function handleSetup(): Promise<string> {
+  return [
+    '🛠️ **Discord Channel Setup**',
+    '',
+    '**1. Create a Bot**',
+    '• Go to https://discord.com/developers/applications',
+    '• New Application → Bot tab → Reset Token → copy it',
+    '• Enable **Message Content Intent** under Privileged Gateway Intents',
+    '',
+    '**2. Invite Bot to Server**',
+    '• OAuth2 → URL Generator → scope: `bot` → permissions: Send Messages, Read Message History',
+    '• Open the generated URL and select your server',
+    '',
+    '**3. Get Channel ID**',
+    '• User Settings → Advanced → enable Developer Mode',
+    '• Right-click channel → Copy Channel ID',
+    '',
+    '**4. Configure in Aide**',
+    '• Settings → Channels → Discord → paste Bot Token + Channel ID → Connect'
   ].join('\n')
 }
