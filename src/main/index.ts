@@ -60,7 +60,7 @@ function createWindow(): void {
     icon: nativeImage.createFromPath(join(__dirname, '../../resources/icon.png')),
     frame: false,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
-    titleBarOverlay: process.platform === 'win32' ? { color: '#fafafa', symbolColor: '#1a1a1a', height: 52 } : undefined,
+    titleBarOverlay: process.platform === 'win32' ? { color: '#00000000', symbolColor: '#1a1a1a', height: 52 } : undefined,
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 16 } } : {}),
     backgroundColor: '#fafafa',
     webPreferences: {

@@ -145,8 +145,8 @@ const createTaskTool: Tool<any> = {
       if (prefs.systemNotifications) {
         showSystemNotification('Urgent task', task.title)
       }
-      // Also push a chat message to General for visibility
-      emitToRenderer({
+      // Also push a chat message to General for visibility (skip for background jobs)
+      if (!isJobSession) emitToRenderer({
         type: 'chat:message',
         message: {
           id: `notify-${task.id}`,
@@ -160,7 +160,7 @@ const createTaskTool: Tool<any> = {
       if (prefs.systemNotifications) {
         showSystemNotification('New task', task.title)
       }
-      emitToRenderer({
+      if (!isJobSession) emitToRenderer({
         type: 'chat:message',
         message: {
           id: `notify-${task.id}`,
@@ -171,8 +171,8 @@ const createTaskTool: Tool<any> = {
         }
       })
     } else if (task.priority === 'p2') {
-      // P2: in-app notification only (no system notification)
-      emitToRenderer({
+      // P2: in-app notification only (no system notification); skip for background jobs
+      if (!isJobSession) emitToRenderer({
         type: 'chat:message',
         message: {
           id: `notify-${task.id}`,

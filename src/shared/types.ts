@@ -181,6 +181,16 @@ export interface SlackStatus {
   monitorActive: boolean
 }
 
+// === Discord ===
+
+export interface DiscordStatus {
+  connection: 'disconnected' | 'connecting' | 'connected' | 'error'
+  botUsername: string | null
+  channelId: string | null
+  lastError: string | null
+  monitorActive: boolean
+}
+
 // === Channels ===
 
 export type ChannelId = 'wechat' | 'telegram' | 'slack' | 'discord'

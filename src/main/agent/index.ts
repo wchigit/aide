@@ -227,6 +227,9 @@ const hooks: SessionConfig['hooks'] = {
     const resultPreview = resultStr.length > 120 ? resultStr.slice(0, 120) + '…' : resultStr
     console.log(`[Agent] tool_post: ${toolName} | session: ${invocation.sessionId} | ${durationMs}ms | result_size: ${resultStr.length}`)
 
+    // Background job sessions must never surface in any chat window.
+    if (invocation.sessionId.startsWith('job-')) return
+
     emitEvent({
       type: 'chat:tool-use',
       taskId,
