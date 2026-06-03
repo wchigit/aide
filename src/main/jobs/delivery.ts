@@ -50,12 +50,15 @@ const channels: Record<DeliveryTarget, DeliveryChannel> = {
 export async function deliverJobResult(job: Job, summary: string): Promise<void> {
   if (!summary || job.deliveryTargets.length === 0) return
 
+  console.log(`[Job delivery] ${job.id} → targets: [${job.deliveryTargets.join(', ')}]`)
+
   await Promise.all(
     job.deliveryTargets.map(async (target) => {
       const channel = channels[target]
       if (!channel) return
       try {
         await channel.send(summary, job)
+        console.log(`[Job delivery] ${job.id} → ${target} OK`)
       } catch (err) {
         console.error(`[Job delivery] ${job.id} → ${target} failed:`, err)
       }

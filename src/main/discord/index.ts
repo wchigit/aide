@@ -183,6 +183,11 @@ function handleGatewayMessage(payload: any): void {
 
   if (s) lastSequence = s
 
+  // Debug: log all non-heartbeat gateway events
+  if (op !== 11) {
+    console.log(`[Discord] GW op=${op} t=${t || '-'} s=${s || '-'}`)
+  }
+
   switch (op) {
     case 10: // Hello — start heartbeat and identify
       startHeartbeat(d.heartbeat_interval)
@@ -230,16 +235,19 @@ function handleDispatch(event: string, data: any): void {
       resumeGatewayUrl = data.resume_gateway_url
       running = true
       lastError = null
-      console.log(`[Discord] Ready as ${data.user.username}`)
+      botId = data.user.id
+      console.log(`[Discord] Ready as ${data.user.username} (id=${data.user.id})`)
       break
 
-    case 'MESSAGE_CREATE':
+    case 'MESSAGE_CREATE': {
+      console.log(`[Discord] MESSAGE_CREATE from=${data.author?.username} channel=${data.channel_id} (configured=${config?.channelId}) content="${data.content?.slice(0, 60)}"`)
       // Ignore bot's own messages
       if (data.author.id === botId) return
       // Only respond in configured channel
       if (data.channel_id !== config?.channelId) return
 
-      const text = data.content?.trim()
+      // Strip any mention prefix: <@USER_ID>, <@!USER_ID>, <@&ROLE_ID>
+      let text = (data.content || '').replace(/<@[!&]?\d+>\s*/g, '').trim()
       if (!text) return
 
       console.log(`[Discord] Received: ${text.slice(0, 50)}`)
@@ -247,6 +255,7 @@ function handleDispatch(event: string, data: any): void {
         messageHandler(text, data.author.id)
       }
       break
+    }
   }
 }
 
