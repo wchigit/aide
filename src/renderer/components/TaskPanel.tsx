@@ -146,7 +146,7 @@ function SidebarTaskItem({ task, selected, onSelect, isNew, hasActivity }: {
   const { completeTask, snooze } = useTaskStore()
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
 
-  const priorityStyles = { p0: 'bg-[oklch(0.35_0.05_270)] text-white', p1: 'bg-[oklch(0.93_0.03_160)] text-[oklch(0.38_0.05_160)]', p2: 'bg-[oklch(0.95_0_0)] text-[oklch(0.55_0_0)]' }[task.priority] || 'bg-[oklch(0.95_0_0)] text-[oklch(0.55_0_0)]'
+  const priorityStyles = { p0: 'bg-[oklch(0.35_0.05_270)] text-white', p1: 'bg-[oklch(0.93_0.03_255)] text-[oklch(0.42_0.08_255)]', p2: 'bg-[oklch(0.95_0_0)] text-[oklch(0.55_0_0)]' }[task.priority] || 'bg-[oklch(0.95_0_0)] text-[oklch(0.55_0_0)]'
 
   return (
     <>

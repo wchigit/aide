@@ -335,9 +335,9 @@ function TaskHeader({ task, onBack }: {
   onBack: () => void
 }) {
   const { completeTask, cancelTask } = useTaskStore()
-
   const sourceLabel: Record<string, string> = { email: 'Email', github: 'GitHub', teams: 'Teams', calendar: 'Calendar', user: 'Manual', agent: 'Agent' }
   const statusLabel: Record<string, string> = { pending: 'Pending', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled' }
+  const isOpen = task.status === 'pending' || task.status === 'in_progress'
 
   return (
     <header className="shrink-0">
@@ -346,14 +346,6 @@ function TaskHeader({ task, onBack }: {
           <ChevronLeft size={16} strokeWidth={2} />
         </button>
         <h2 className="text-[13px] font-medium text-text-primary truncate flex-1 no-drag">{task.title}</h2>
-        <div className="flex items-center gap-1 shrink-0 no-drag">
-          <button onClick={() => completeTask(task.id)} className="h-7 px-2.5 rounded-md text-[12px] text-text-tertiary hover:text-success hover:bg-success/8 transition-colors flex items-center gap-1">
-            <Check size={13} /> Done
-          </button>
-          <button onClick={() => cancelTask(task.id)} className="w-7 h-7 rounded-md flex items-center justify-center text-text-tertiary hover:text-danger hover:bg-danger/8 transition-colors">
-            <X size={14} />
-          </button>
-        </div>
       </div>
       <div className="px-5 pb-2 flex items-center gap-2 text-[12px] text-text-tertiary flex-wrap">
         <PriorityBadge priority={task.priority} />
@@ -371,6 +363,16 @@ function TaskHeader({ task, onBack }: {
               {getDueLabel(task.dueDate)}
             </span>
           </>
+        )}
+        {isOpen && (
+          <div className="ml-auto flex items-center gap-1">
+            <button onClick={() => cancelTask(task.id)} className="h-6 px-2 rounded-md text-[12px] text-text-tertiary hover:text-danger hover:bg-danger/8 transition-colors flex items-center gap-1">
+              <X size={12} /> Cancel
+            </button>
+            <button onClick={() => completeTask(task.id)} className="h-6 px-2 rounded-md text-[12px] font-medium text-success hover:bg-success/10 transition-colors flex items-center gap-1">
+              <Check size={12} /> Done
+            </button>
+          </div>
         )}
       </div>
       <div className="h-px bg-edge" />

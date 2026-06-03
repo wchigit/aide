@@ -446,6 +446,89 @@ async function getOrCreateSession(taskId: string | null): Promise<CopilotSession
   }
 }
 
+// === Turn runner ===
+//
+// A "turn" is one user prompt → assistant response cycle. Rather than blocking
+// on a fixed total-duration timeout (which kills long-but-healthy work, loses
+// streamed output, and leaves the agent running as a zombie), we drive the turn
+// off the SDK event stream:
+//
+//   - Every event is a heartbeat that resets an *idle* watchdog.
+//   - The turn finishes on `session.idle` (done), `session.error`, or `abort`.
+//   - The watchdog fires only after IDLE_TIMEOUT_MS of *complete silence*,
+//     which means the upstream is genuinely dead/hung — then we abort the
+//     session (killing any zombie work) and finalize with whatever we have.
+//
+// This is how long-running agents (Codex, Claude Code) stay alive for hours:
+// the limit is on inactivity, not on total elapsed time.
+const IDLE_TIMEOUT_MS = 180_000
+
+type TurnOutcome = {
+  content: string
+  kind: 'complete' | 'stalled' | 'error' | 'aborted'
+  error?: string
+}
+
+function runTurn(
+  session: CopilotSession,
+  prompt: string,
+  onStream: (delta: string) => void
+): Promise<TurnOutcome> {
+  return new Promise((resolve) => {
+    let streamed = ''        // everything streamed live (partial fallback)
+    let finalMessage = ''    // canonical reply = last completed assistant.message
+    let settled = false
+    let watchdog: ReturnType<typeof setTimeout> | null = null
+
+    const finish = (kind: TurnOutcome['kind'], error?: string) => {
+      if (settled) return
+      settled = true
+      if (watchdog) clearTimeout(watchdog)
+      unsubscribe()
+      resolve({ content: finalMessage || streamed, kind, error })
+    }
+
+    const armWatchdog = () => {
+      if (watchdog) clearTimeout(watchdog)
+      watchdog = setTimeout(() => {
+        // No activity for IDLE_TIMEOUT_MS — the turn is stalled. Abort to stop
+        // any zombie run, then finalize with whatever was produced.
+        session.abort().catch(() => {})
+        finish('stalled')
+      }, IDLE_TIMEOUT_MS)
+    }
+
+    const unsubscribe = session.on((event: any) => {
+      // Any event proves the turn is still alive — reset the death timer.
+      armWatchdog()
+      switch (event.type) {
+        case 'assistant.message_delta': {
+          const delta: string = event.data?.deltaContent || ''
+          if (delta) { onStream(delta); streamed += delta }
+          break
+        }
+        case 'assistant.message': {
+          const content: string = event.data?.content || ''
+          if (content) finalMessage = content
+          break
+        }
+        case 'session.idle':
+          finish('complete')
+          break
+        case 'session.error':
+          finish('error', event.data?.message || 'The assistant hit an error.')
+          break
+        case 'abort':
+          finish('aborted')
+          break
+      }
+    })
+
+    armWatchdog()
+    session.send({ prompt }).catch((err: any) => finish('error', err?.message || String(err)))
+  })
+}
+
 export async function sendMessage(
   userMessage: string,
   taskId: string | null,
@@ -477,33 +560,45 @@ export async function sendMessage(
     prompt = `${userMessage}\n\n${attachmentDescriptions}`
   }
 
-  // Subscribe to streaming events
-  let fullResponse = ''
-  const unsubscribe = session.on('assistant.message_delta', (event) => {
-    const delta = event.data.deltaContent || ''
-    onStream(delta)
-    fullResponse += delta
-  })
-
+  // Run the turn via the event stream (not a blocking total-duration timeout).
+  // The turn ends when the session goes idle, errors, or is aborted — and an
+  // idle watchdog only fires after a long stretch of *complete silence*, so a
+  // task that keeps making progress is never cut off, however long it runs.
+  let outcome: TurnOutcome
   try {
-    const result = await session.sendAndWait({ prompt }, 180_000)
-    if (result) {
-      fullResponse = result.data.content || fullResponse
-    }
+    outcome = await runTurn(session, prompt, onStream)
   } finally {
-    unsubscribe()
     activeSession = null
   }
 
-  // Save the agent reply
+  // Always persist *something* so a turn is never silently lost. Partial output
+  // from a stalled/errored/aborted turn is kept (annotated), and a turn that
+  // produced nothing gets a clear explanation instead of vanishing.
+  let content = outcome.content
+  if (content) {
+    if (outcome.kind === 'stalled') {
+      content += '\n\n⚠️ _Response interrupted — the assistant went silent. The text above may be incomplete._'
+    } else if (outcome.kind === 'error') {
+      content += `\n\n⚠️ _${outcome.error || 'The assistant hit an error.'}_`
+    }
+  } else {
+    if (outcome.kind === 'stalled') {
+      content = '⚠️ The assistant stopped responding (no activity for a while). It may still be working in the background — try again shortly.'
+    } else if (outcome.kind === 'error') {
+      content = `⚠️ ${outcome.error || 'The assistant hit an error.'}`
+    }
+    // A clean turn with no text, or a user abort with nothing generated yet,
+    // leaves nothing worth persisting.
+  }
+
   const agentMsg: ChatMessage = {
     id: uuid(),
     role: 'agent',
-    content: fullResponse,
+    content,
     timestamp: new Date().toISOString(),
     taskId
   }
-  saveMessage(agentMsg)
+  if (content) saveMessage(agentMsg)
   return agentMsg
 }
 
