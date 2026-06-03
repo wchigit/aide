@@ -30,7 +30,7 @@ export function Hero() {
         >
           Aide pulls every task from your inbox, chats, and repos into one place,
           learns how you work, and acts on your behalf. It keeps working in the
-          background and reaches you on WeChat — so nothing waits for you to sit down.
+          background and reaches you wherever you are — so nothing waits for you to sit down.
         </p>
 
         <div

@@ -15,7 +15,7 @@ const steps = [
   {
     n: '03',
     title: 'Work alongside it',
-    body: 'Aide drafts, summarizes, and prepares — you review and approve. And when you step away, it keeps running and pings you on WeChat the moment something needs a decision.',
+    body: 'Aide drafts, summarizes, and prepares — you review and approve. And when you step away, it keeps running and reaches you wherever you are the moment something needs a decision.',
   },
 ]
 

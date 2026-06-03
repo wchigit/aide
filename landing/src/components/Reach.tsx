@@ -9,7 +9,7 @@ const points = [
   },
   {
     title: 'Reaches you anywhere',
-    body: 'Your briefing and daily report arrive in the app or on WeChat. Pick where each job lands.',
+    body: 'Your briefing and daily report arrive in the app or on your phone. Pick where each job lands.',
   },
   {
     title: 'Takes commands remotely',
@@ -33,9 +33,9 @@ export function Reach() {
           ref={ref}
           className={`reveal ${shown ? 'in' : ''} mt-12 grid items-center gap-12 md:grid-cols-2`}
         >
-          {/* WeChat-style delivery mock — lead with the visual */}
+          {/* Phone messenger delivery mock — lead with the visual */}
           <div className="order-1">
-            <WeChatPane />
+            <MessengerPane />
           </div>
 
           {/* Narrative — accent-bordered, distinct from the checklist sections */}
@@ -58,7 +58,7 @@ export function Reach() {
   )
 }
 
-function WeChatPane() {
+function MessengerPane() {
   return (
     <div className="glass-panel relative mx-auto max-w-sm overflow-hidden rounded-[24px] p-1">
       <div className="rounded-[20px] bg-[#ededed] p-3.5">
