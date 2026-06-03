@@ -2,7 +2,7 @@
 // SDK Client Factory — @github/copilot-sdk
 // ============================================================
 
-import { CopilotClient } from '@github/copilot-sdk'
+import { CopilotClient, RuntimeConnection } from '@github/copilot-sdk'
 import { app } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -57,7 +57,10 @@ export async function createClient(): Promise<CopilotClient> {
   try {
     const cliPath = resolveCliPath()
     console.log(`[Aide] Resolved Copilot CLI: ${cliPath}`)
-    const client = new CopilotClient({ cliPath, useStdio: false })
+    // SDK 1.0 replaced `{ cliPath, useStdio }` with the RuntimeConnection API.
+    // forTcp preserves the previous behavior (useStdio: false = TCP transport),
+    // spawning the resolved CLI binary and connecting over a loopback socket.
+    const client = new CopilotClient({ connection: RuntimeConnection.forTcp({ path: cliPath }) })
     await client.start()
     console.log('[Aide] Copilot SDK client started.')
     return client
