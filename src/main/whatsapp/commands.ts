@@ -60,7 +60,7 @@ async function dispatchToAgent(text: string, userId: string): Promise<void> {
 // ─── Command Handlers ────────────────────────────────────────────────
 
 async function handleListTasks(): Promise<string> {
-  const tasks = await listTasks({ status: 'active' })
+  const tasks = await listTasks({ status: ['pending', 'in_progress'] })
   if (!tasks.length) return '✅ No active tasks!'
 
   const lines = tasks.map((t, i) => `${i + 1}. ${t.title} [${t.priority}]`)
@@ -69,14 +69,14 @@ async function handleListTasks(): Promise<string> {
 
 async function handleDailyReport(): Promise<string> {
   const tasks = await listTasks({})
-  const active = tasks.filter(t => t.status === 'active').length
+  const active = tasks.filter(t => t.status === 'pending' || t.status === 'in_progress').length
   const completed = tasks.filter(t => t.status === 'completed').length
 
   return `📊 *Daily Report*\n\n• Active: ${active}\n• Completed: ${completed}\n• Total: ${tasks.length}`
 }
 
 async function handleCompleteCurrent(): Promise<string> {
-  const tasks = await listTasks({ status: 'active' })
+  const tasks = await listTasks({ status: ['pending', 'in_progress'] })
   if (!tasks.length) return 'No active tasks to complete.'
 
   const task = tasks[0]

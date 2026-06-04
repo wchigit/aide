@@ -195,6 +195,7 @@ export interface WhatsAppStatus {
   connection: 'disconnected' | 'connecting' | 'connected' | 'error'
   phoneNumberId: string | null
   relayUrl: string | null
+  webhookUrl: string | null
   lastError: string | null
   monitorActive: boolean
 }

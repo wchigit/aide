@@ -4,6 +4,7 @@ import { pushToWeChat } from '../wechat'
 import { pushToTelegram } from '../telegram'
 import { pushToSlack } from '../slack'
 import { pushToDiscord } from '../discord'
+import { pushToWhatsApp } from '../whatsapp'
 
 /**
  * A delivery channel knows how to push a job's result somewhere. New channels
@@ -38,6 +39,11 @@ const channels: Record<DeliveryTarget, DeliveryChannel> = {
   discord: {
     async send(summary) {
       await pushToDiscord(summary)
+    }
+  },
+  whatsapp: {
+    async send(summary) {
+      await pushToWhatsApp(summary)
     }
   }
 }

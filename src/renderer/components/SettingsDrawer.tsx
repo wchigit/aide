@@ -1380,7 +1380,7 @@ function WhatsAppConnectionCard() {
   const [showConfig, setShowConfig] = useState(false)
   const [accessToken, setAccessToken] = useState('')
   const [phoneNumberId, setPhoneNumberId] = useState('')
-  const [relayUrl, setRelayUrl] = useState('')
+  const relayUrl = 'https://aide-relay-9883.azurewebsites.net/api'
 
   useEffect(() => {
     window.aide.whatsapp?.getStatus().then(setStatus)
@@ -1397,12 +1397,12 @@ function WhatsAppConnectionCard() {
   const handleConnect = async () => {
     if (!status?.phoneNumberId && !showConfig) { setShowConfig(true); return }
     if (showConfig) {
-      if (!accessToken.trim() || !phoneNumberId.trim() || !relayUrl.trim()) return
+      if (!accessToken.trim() || !phoneNumberId.trim()) return
       setConnecting(true)
       try {
-        const result = await window.aide.whatsapp.connect({ accessToken: accessToken.trim(), phoneNumberId: phoneNumberId.trim(), relayUrl: relayUrl.trim() })
+        const result = await window.aide.whatsapp.connect({ accessToken: accessToken.trim(), phoneNumberId: phoneNumberId.trim(), relayUrl })
         setStatus(result)
-        if (result.connection === 'connected') { setShowConfig(false); setAccessToken(''); setPhoneNumberId(''); setRelayUrl('') }
+        if (result.connection === 'connected') { setShowConfig(false); setAccessToken(''); setPhoneNumberId('') }
       } catch { window.aide.whatsapp?.getStatus().then(setStatus) }
       finally { setConnecting(false) }
     } else {
@@ -1438,6 +1438,19 @@ function WhatsAppConnectionCard() {
               </span>
             </div>
             {status?.lastError && <p className="text-[11px] text-danger mt-1">{status.lastError}</p>}
+            {isConnected && status?.webhookUrl && (
+              <div className="mt-2 p-2 rounded bg-surface-2 border border-edge space-y-1.5">
+                <div>
+                  <p className="text-[11px] text-text-secondary">Webhook URL:</p>
+                  <code className="text-[11px] text-accent break-all select-all">{status.webhookUrl}</code>
+                </div>
+                <div>
+                  <p className="text-[11px] text-text-secondary">Verify Token:</p>
+                  <code className="text-[11px] text-accent select-all">679b6aec-c7ff-4910-9d46-1e329fd4c16d</code>
+                </div>
+                <p className="text-[10px] text-text-tertiary">Paste both into Meta Portal → WhatsApp → Configuration</p>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -1447,14 +1460,16 @@ function WhatsAppConnectionCard() {
       </div>
       {showConfig && !isConnected && (
         <div className="mt-4 space-y-3 p-3 rounded-lg bg-surface-2 border border-edge">
-          <details className="text-[11px] text-text-tertiary">
-            <summary className="cursor-pointer hover:text-text-secondary">How do I get these values?</summary>
+          <details className="text-[11px] text-text-tertiary" open>
+            <summary className="cursor-pointer hover:text-text-secondary">Setup steps</summary>
             <ol className="mt-2 ml-4 space-y-1 list-decimal text-[11px] text-text-tertiary">
               <li>Go to <a href="https://developers.facebook.com/" className="text-accent hover:underline" target="_blank" rel="noreferrer">Meta Developer Portal</a> → Create App → Business type</li>
-              <li>Add WhatsApp product → API Setup</li>
-              <li>Copy your <strong>Temporary Access Token</strong> and <strong>Phone Number ID</strong></li>
-              <li>Deploy the relay (see relay/ folder) and paste its URL below</li>
-              <li>In Meta Portal → WhatsApp → Configuration → set Webhook URL to the one shown after connecting</li>
+              <li>Add <strong>WhatsApp</strong> product → API Setup</li>
+              <li>Copy your <strong>Temporary Access Token</strong> and <strong>Phone Number ID</strong> into the fields below</li>
+              <li>Click <strong>Save & Connect</strong> — your personal Webhook URL will appear above</li>
+              <li>In Meta Portal → WhatsApp → Configuration:<br/>
+                &nbsp;&nbsp;• <strong>Callback URL</strong>: paste the Webhook URL shown after connecting<br/>
+                &nbsp;&nbsp;• <strong>Verify Token</strong>: <code className="text-accent select-all">679b6aec-c7ff-4910-9d46-1e329fd4c16d</code></li>
               <li>Subscribe to the <strong>messages</strong> webhook field</li>
             </ol>
           </details>
@@ -1466,11 +1481,7 @@ function WhatsAppConnectionCard() {
             <label className="text-[11px] font-medium text-text-secondary block mb-1">Phone Number ID</label>
             <input type="text" value={phoneNumberId} onChange={e => setPhoneNumberId(e.target.value)} placeholder="123456789012345" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
           </div>
-          <div>
-            <label className="text-[11px] font-medium text-text-secondary block mb-1">Relay URL</label>
-            <input type="text" value={relayUrl} onChange={e => setRelayUrl(e.target.value)} placeholder="https://your-relay.azurewebsites.net/api" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
-          </div>
-          <button onClick={() => { setShowConfig(false); setAccessToken(''); setPhoneNumberId(''); setRelayUrl('') }} className="text-[11px] text-text-tertiary hover:text-text-secondary">Cancel</button>
+          <button onClick={() => { setShowConfig(false); setAccessToken(''); setPhoneNumberId('') }} className="text-[11px] text-text-tertiary hover:text-text-secondary">Cancel</button>
         </div>
       )}
     </Card>

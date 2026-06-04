@@ -95,6 +95,12 @@ const api: AideAPI = {
     disconnect: (clearConfig) => ipcRenderer.invoke('discord:disconnect', clearConfig),
     push: (text) => ipcRenderer.invoke('discord:push', text)
   },
+  whatsapp: {
+    getStatus: () => ipcRenderer.invoke('whatsapp:getStatus'),
+    connect: (config) => ipcRenderer.invoke('whatsapp:connect', config),
+    disconnect: (clearConfig) => ipcRenderer.invoke('whatsapp:disconnect', clearConfig),
+    push: (text) => ipcRenderer.invoke('whatsapp:push', text)
+  },
   channels: {
     list: () => ipcRenderer.invoke('channels:list'),
     deliver: (channelId, text) => ipcRenderer.invoke('channels:deliver', channelId, text)

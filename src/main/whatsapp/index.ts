@@ -109,6 +109,7 @@ export function getWhatsAppStatus(): WhatsAppStatus {
     connection: running ? 'connected' : cfg ? 'disconnected' : 'disconnected',
     phoneNumberId: cfg?.phoneNumberId || null,
     relayUrl: cfg?.relayUrl || null,
+    webhookUrl: cfg ? `${cfg.relayUrl}/webhook/${cfg.relayUserId}` : null,
     lastError,
     monitorActive: running
   }
