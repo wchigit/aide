@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased] — wc/whatsapp-baileys
+
+### Added
+- **WhatsApp channel**: Two-way messaging via Baileys (WhatsApp Web protocol, QR auth, no server needed)
+- **WhatsApp commands**: `/tasks`, `/report`, `/done`, `/help` + agent routing
+- **WhatsApp delivery**: Job results can fan out to WhatsApp
+- **WhatsApp UI**: QR code connection card in Settings drawer
+
 ## [Unreleased] — wc/more-channels
 
 ### Added

@@ -1,6 +1,7 @@
 import type { DeliveryTarget, Job } from '@shared/types'
 import { postAgentMessageToGeneral } from '../agent'
 import { pushToWeChat } from '../wechat'
+import { pushToWhatsApp } from '../whatsapp'
 import { pushToTelegram } from '../telegram'
 import { pushToDiscord } from '../discord'
 
@@ -22,6 +23,11 @@ const channels: Record<DeliveryTarget, DeliveryChannel> = {
   wechat: {
     async send(summary) {
       await pushToWeChat(summary)
+    }
+  },
+  whatsapp: {
+    async send(summary) {
+      await pushToWhatsApp(summary)
     }
   },
   telegram: {
