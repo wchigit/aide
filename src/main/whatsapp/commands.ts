@@ -29,7 +29,7 @@ export async function dispatch(msg: { from: string; text: string; pushName?: str
   if (cmdKey) {
     const handler = QUICK_COMMANDS[cmdKey]
     const reply = await handler()
-    await pushToWhatsApp(reply)
+    await pushToWhatsApp(`*Aide* 🤖 :\n${reply}`)
     return
   }
 
@@ -46,11 +46,11 @@ async function dispatchToAgent(text: string): Promise<void> {
     fullResponse = result.content || fullResponse
 
     if (fullResponse) {
-      await pushToWhatsApp(fullResponse)
+      await pushToWhatsApp(`*Aide* \u{1F916} :\n${fullResponse}`)
     }
   } catch (err) {
     console.error('[WhatsApp] Agent dispatch error:', err)
-    await pushToWhatsApp('Something went wrong, please try again later.')
+    await pushToWhatsApp('*Aide* \u{1F916} :\nSomething went wrong, please try again later.')
   }
 }
 
@@ -101,8 +101,6 @@ async function handleCompleteCurrent(): Promise<string> {
 
 async function handleHelp(): Promise<string> {
   return [
-    '🤖 Aide WhatsApp',
-    '',
     '/tasks - View pending tasks',
     '/report - Today\'s summary',
     '/done - Complete current task',

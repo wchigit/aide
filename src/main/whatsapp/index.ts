@@ -6,6 +6,7 @@
 import { app, BrowserWindow } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
+import QRCode from 'qrcode'
 import type { WhatsAppStatus } from '@shared/types'
 import { dispatch } from './commands'
 
@@ -32,6 +33,7 @@ let sock: ReturnType<typeof import('baileys').makeWASocket> | null = null
 let connectionState: 'disconnected' | 'connecting' | 'connected' | 'error' = 'disconnected'
 let lastError: string | null = null
 let currentQr: string | null = null
+let currentQrDataUrl: string | null = null
 let messageHandler: ((msg: { from: string; text: string; pushName?: string }) => Promise<void>) | null = null
 
 function loadConfig(): WhatsAppConfig {
@@ -66,7 +68,7 @@ export function getWhatsAppStatus(): WhatsAppStatus {
   return {
     connection: connectionState,
     phoneNumber: config.targetJid?.replace('@s.whatsapp.net', '') || null,
-    qrCode: currentQr,
+    qrCode: currentQrDataUrl,
     lastError,
     monitorActive: connectionState === 'connected'
   }
@@ -84,7 +86,7 @@ export async function connectWhatsApp(): Promise<WhatsAppStatus> {
   try {
     connectionState = 'connecting'
     lastError = null
-    currentQr = null
+    currentQr = null; currentQrDataUrl = null
     emitEvent({ type: 'whatsapp:status', status: getWhatsAppStatus() })
 
     await ensureBaileys()
@@ -92,12 +94,12 @@ export async function connectWhatsApp(): Promise<WhatsAppStatus> {
     fs.mkdirSync(AUTH_DIR, { recursive: true })
     const { state, saveCreds } = await useMultiFileAuthState!(AUTH_DIR)
 
+    console.log('[WhatsApp] Creating socket...')
     sock = makeWASocket!({
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore!(state.keys, undefined as any)
       },
-      printQRInTerminal: false,
       browser: ['Aide', 'Desktop', '1.0.0'],
       generateHighQualityLinkPreview: false
     })
@@ -107,12 +109,17 @@ export async function connectWhatsApp(): Promise<WhatsAppStatus> {
       const { connection, lastDisconnect, qr } = update
 
       if (qr) {
+        console.log('[WhatsApp] QR received, length:', qr.length)
         currentQr = qr
-        emitEvent({ type: 'whatsapp:qrcode', qrCode: qr })
+        // Convert raw QR text to data URL for renderer display
+        QRCode.toDataURL(qr, { width: 256, margin: 2 }).then((dataUrl) => {
+          currentQrDataUrl = dataUrl
+          emitEvent({ type: 'whatsapp:qrcode', qrCode: dataUrl })
+        }).catch(err => console.warn('[WhatsApp] QR render failed:', err))
       }
 
       if (connection === 'close') {
-        currentQr = null
+        currentQr = null; currentQrDataUrl = null
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode
         const shouldReconnect = statusCode !== DisconnectReason!.loggedOut
 
@@ -133,7 +140,7 @@ export async function connectWhatsApp(): Promise<WhatsAppStatus> {
       } else if (connection === 'open') {
         console.log('[WhatsApp] Connected')
         connectionState = 'connected'
-        currentQr = null
+        currentQr = null; currentQrDataUrl = null
         lastError = null
 
         // Auto-set target to self-chat if not configured
@@ -153,10 +160,13 @@ export async function connectWhatsApp(): Promise<WhatsAppStatus> {
 
     // Handle incoming messages
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
+      // Only process 'notify' (new incoming messages from phone).
+      // 'append' = our own outgoing messages echoed back — skip to avoid infinite loop.
       if (type !== 'notify') return
 
+      const config = loadConfig()
       for (const msg of messages) {
-        if (!msg.message || msg.key.fromMe) continue
+        if (!msg.message) continue
 
         const text = msg.message.conversation
           || msg.message.extendedTextMessage?.text
@@ -193,7 +203,7 @@ export function disconnectWhatsApp(clearSession = false): WhatsAppStatus {
     sock = null
   }
   connectionState = 'disconnected'
-  currentQr = null
+  currentQr = null; currentQrDataUrl = null
   lastError = null
 
   if (clearSession) {

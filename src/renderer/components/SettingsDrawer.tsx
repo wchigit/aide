@@ -1083,12 +1083,17 @@ function WhatsAppConnectionCard() {
   const [qrCode, setQrCode] = useState<string | null>(null)
 
   useEffect(() => {
-    window.aide.whatsapp.getStatus().then(setStatus)
+    console.log('[WhatsApp UI] whatsapp bridge available:', !!window.aide?.whatsapp)
+    window.aide.whatsapp?.getStatus().then(s => {
+      console.log('[WhatsApp UI] initial status:', s)
+      setStatus(s)
+    })
   }, [])
 
   // Listen for QR code and status events
   useEffect(() => {
     const handler = (event: any) => {
+      console.log('[WhatsApp UI] event received:', event.type, event.type === 'whatsapp:qrcode' ? 'qrCode length:' + event.qrCode?.length : '')
       if (event.type === 'whatsapp:qrcode') {
         setQrCode(event.qrCode)
       } else if (event.type === 'whatsapp:status') {
@@ -1108,16 +1113,16 @@ function WhatsAppConnectionCard() {
   const handleConnect = async () => {
     setConnecting(true)
     try {
-      await window.aide.whatsapp.connect()
+      await window.aide.whatsapp?.connect()
     } catch {
       setConnecting(false)
-      window.aide.whatsapp.getStatus().then(setStatus)
+      window.aide.whatsapp?.getStatus().then(setStatus)
     }
   }
 
   const handleDisconnect = async () => {
-    const result = await window.aide.whatsapp.disconnect(false)
-    setStatus(result)
+    const result = await window.aide.whatsapp?.disconnect(false)
+    setStatus(result ?? null)
     setQrCode(null)
   }
 
@@ -1167,7 +1172,7 @@ function WhatsAppConnectionCard() {
         <div className="mt-4 flex flex-col items-center gap-2 p-4 rounded-lg bg-surface-2 border border-edge">
           <div className="w-48 h-48 flex items-center justify-center bg-white rounded-md p-2">
             <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrCode)}`}
+              src={qrCode}
               alt="WhatsApp QR Code"
               className="w-full h-full"
             />
