@@ -1,0 +1,21 @@
+{
+  "name": "aide-relay",
+  "version": "1.0.0",
+  "description": "Lightweight Azure Function relay for Meta webhook → Aide message delivery",
+  "main": "dist/src/functions/*.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "start": "func start",
+    "dev": "tsc -w & func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.0",
+    "@azure/storage-queue": "^12.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0",
+    "azure-functions-core-tools": "^4.0.0"
+  }
+}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, MessageCircle, Send, Hash, RefreshCw, Download, CheckCircle2, AlertCircle } from 'lucide-react'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, TelegramStatus, SlackStatus, DiscordStatus, DeliveryTarget, UpdateState } from '@shared/types'
+import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, TelegramStatus, SlackStatus, DiscordStatus, WhatsAppStatus, DeliveryTarget, UpdateState } from '@shared/types'
 
 function MicrosoftIcon() {
   return (
@@ -218,6 +218,7 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
           <TelegramConnectionCard />
           <SlackConnectionCard />
           <DiscordConnectionCard />
+          <WhatsAppConnectionCard />
         </div>
       </section>
     </div>
@@ -643,6 +644,7 @@ const DELIVERY_OPTIONS: { value: DeliveryTarget; label: string }[] = [
   { value: 'telegram', label: 'Telegram' },
   { value: 'slack', label: 'Slack' },
   { value: 'discord', label: 'Discord' },
+  { value: 'whatsapp', label: 'WhatsApp' },
 ]
 
 const DELIVERY_LABELS: Record<DeliveryTarget, string> = {
@@ -651,6 +653,7 @@ const DELIVERY_LABELS: Record<DeliveryTarget, string> = {
   telegram: 'Telegram',
   slack: 'Slack',
   discord: 'Discord',
+  whatsapp: 'WhatsApp',
 }
 
 function parseCronToSchedule(cron: string) {
@@ -1361,6 +1364,113 @@ function DiscordConnectionCard() {
             <input type="text" value={channelId} onChange={e => setChannelId(e.target.value)} placeholder="1234567890123456789" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
           </div>
           <button onClick={() => { setShowConfig(false); setBotToken(''); setChannelId('') }} className="text-[11px] text-text-tertiary hover:text-text-secondary">Cancel</button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/* ═══════════════════════════════════════════
+   WhatsApp (Meta Cloud API + Relay)
+   ═══════════════════════════════════════════ */
+
+function WhatsAppConnectionCard() {
+  const [status, setStatus] = useState<WhatsAppStatus | null>(null)
+  const [connecting, setConnecting] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
+  const [accessToken, setAccessToken] = useState('')
+  const [phoneNumberId, setPhoneNumberId] = useState('')
+  const [relayUrl, setRelayUrl] = useState('')
+
+  useEffect(() => {
+    window.aide.whatsapp?.getStatus().then(setStatus)
+  }, [])
+
+  useEffect(() => {
+    const handler = (event: any) => {
+      if (event.type === 'whatsapp:status') setStatus(event.status)
+    }
+    const unsub = window.aideEvents.on(handler)
+    return unsub
+  }, [])
+
+  const handleConnect = async () => {
+    if (!status?.phoneNumberId && !showConfig) { setShowConfig(true); return }
+    if (showConfig) {
+      if (!accessToken.trim() || !phoneNumberId.trim() || !relayUrl.trim()) return
+      setConnecting(true)
+      try {
+        const result = await window.aide.whatsapp.connect({ accessToken: accessToken.trim(), phoneNumberId: phoneNumberId.trim(), relayUrl: relayUrl.trim() })
+        setStatus(result)
+        if (result.connection === 'connected') { setShowConfig(false); setAccessToken(''); setPhoneNumberId(''); setRelayUrl('') }
+      } catch { window.aide.whatsapp?.getStatus().then(setStatus) }
+      finally { setConnecting(false) }
+    } else {
+      setConnecting(true)
+      try { const result = await window.aide.whatsapp.connect(); setStatus(result) }
+      catch { window.aide.whatsapp?.getStatus().then(setStatus) }
+      finally { setConnecting(false) }
+    }
+  }
+
+  const handleDisconnect = async () => {
+    const result = await window.aide.whatsapp.disconnect(true)
+    setStatus(result)
+    setShowConfig(false)
+  }
+
+  const isConnected = status?.connection === 'connected'
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-green-500/10 text-green-500">
+            <MessageCircle size={18} />
+          </div>
+          <div>
+            <p className="text-[13px] font-medium text-text-primary">WhatsApp</p>
+            <p className="text-[12px] text-text-tertiary mt-0.5">Reports · Notifications · Remote chat</p>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <div className={`w-[6px] h-[6px] rounded-full ${isConnected ? 'bg-success' : 'bg-text-tertiary'}`} />
+              <span className={`text-[11px] ${isConnected ? 'text-success' : 'text-text-tertiary'}`}>
+                {isConnected ? 'Connected' : connecting ? 'Connecting…' : 'Not connected'}
+              </span>
+            </div>
+            {status?.lastError && <p className="text-[11px] text-danger mt-1">{status.lastError}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {isConnected && <Btn variant="danger" onClick={handleDisconnect}>Disconnect</Btn>}
+          {!isConnected && <Btn onClick={handleConnect} disabled={connecting}>{connecting ? 'Connecting…' : showConfig ? 'Save & Connect' : 'Connect'}</Btn>}
+        </div>
+      </div>
+      {showConfig && !isConnected && (
+        <div className="mt-4 space-y-3 p-3 rounded-lg bg-surface-2 border border-edge">
+          <details className="text-[11px] text-text-tertiary">
+            <summary className="cursor-pointer hover:text-text-secondary">How do I get these values?</summary>
+            <ol className="mt-2 ml-4 space-y-1 list-decimal text-[11px] text-text-tertiary">
+              <li>Go to <a href="https://developers.facebook.com/" className="text-accent hover:underline" target="_blank" rel="noreferrer">Meta Developer Portal</a> → Create App → Business type</li>
+              <li>Add WhatsApp product → API Setup</li>
+              <li>Copy your <strong>Temporary Access Token</strong> and <strong>Phone Number ID</strong></li>
+              <li>Deploy the relay (see relay/ folder) and paste its URL below</li>
+              <li>In Meta Portal → WhatsApp → Configuration → set Webhook URL to the one shown after connecting</li>
+              <li>Subscribe to the <strong>messages</strong> webhook field</li>
+            </ol>
+          </details>
+          <div>
+            <label className="text-[11px] font-medium text-text-secondary block mb-1">Access Token</label>
+            <input type="password" value={accessToken} onChange={e => setAccessToken(e.target.value)} placeholder="EAABsbCS..." className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[11px] font-medium text-text-secondary block mb-1">Phone Number ID</label>
+            <input type="text" value={phoneNumberId} onChange={e => setPhoneNumberId(e.target.value)} placeholder="123456789012345" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[11px] font-medium text-text-secondary block mb-1">Relay URL</label>
+            <input type="text" value={relayUrl} onChange={e => setRelayUrl(e.target.value)} placeholder="https://your-relay.azurewebsites.net/api" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
+          </div>
+          <button onClick={() => { setShowConfig(false); setAccessToken(''); setPhoneNumberId(''); setRelayUrl('') }} className="text-[11px] text-text-tertiary hover:text-text-secondary">Cancel</button>
         </div>
       )}
     </Card>

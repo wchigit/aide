@@ -3,7 +3,7 @@
  * Each channel can send/receive messages and be used as a delivery target for jobs.
  */
 
-export type ChannelId = 'wechat' | 'telegram' | 'slack' | 'discord'
+export type ChannelId = 'wechat' | 'telegram' | 'slack' | 'discord' | 'whatsapp'
 
 export type ChannelConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 

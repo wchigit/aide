@@ -114,7 +114,7 @@ export type RelationRole = 'manager' | 'peer' | 'report' | 'external' | 'stakeho
 
 // === Job ===
 
-export type DeliveryTarget = 'desktop' | 'wechat' | 'telegram' | 'slack' | 'discord'
+export type DeliveryTarget = 'desktop' | 'wechat' | 'telegram' | 'slack' | 'discord' | 'whatsapp'
 
 export interface Job {
   id: string
@@ -191,9 +191,17 @@ export interface DiscordStatus {
   monitorActive: boolean
 }
 
+export interface WhatsAppStatus {
+  connection: 'disconnected' | 'connecting' | 'connected' | 'error'
+  phoneNumberId: string | null
+  relayUrl: string | null
+  lastError: string | null
+  monitorActive: boolean
+}
+
 // === Channels ===
 
-export type ChannelId = 'wechat' | 'telegram' | 'slack' | 'discord'
+export type ChannelId = 'wechat' | 'telegram' | 'slack' | 'discord' | 'whatsapp'
 
 export interface ChannelStatusInfo {
   id: ChannelId
@@ -294,6 +302,12 @@ export interface AideAPI {
     getStatus(): Promise<DiscordStatus>
     connect(config?: { botToken: string; channelId: string }): Promise<DiscordStatus>
     disconnect(clearConfig?: boolean): Promise<DiscordStatus>
+    push(text: string): Promise<void>
+  }
+  whatsapp: {
+    getStatus(): Promise<WhatsAppStatus>
+    connect(config?: { accessToken: string; phoneNumberId: string; relayUrl: string }): Promise<WhatsAppStatus>
+    disconnect(clearConfig?: boolean): Promise<WhatsAppStatus>
     push(text: string): Promise<void>
   }
   channels: {
@@ -459,4 +473,5 @@ export type AideEvent =
   | { type: 'telegram:status'; status: TelegramStatus }
   | { type: 'slack:status'; status: SlackStatus }
   | { type: 'discord:status'; status: DiscordStatus }
+  | { type: 'whatsapp:status'; status: WhatsAppStatus }
   | { type: 'update:state'; state: UpdateState }

@@ -12,6 +12,7 @@ import { setBaseUrl as setWeChatBaseUrl } from '../wechat/connection'
 import { getTelegramStatus, connectTelegram, disconnectTelegram, pushToTelegram } from '../telegram'
 import { getSlackStatus, connectSlack, disconnectSlack, pushToSlack } from '../slack'
 import { getDiscordStatus, connectDiscord, disconnectDiscord, pushToDiscord } from '../discord'
+import { getWhatsAppStatus, connectWhatsApp, disconnectWhatsApp, pushToWhatsApp } from '../whatsapp'
 import { listChannels, deliverTo } from '../channels'
 import { getUpdateState, checkForUpdates, downloadUpdate, quitAndInstall } from '../updater'
 import { sdkHealth, sdkError } from '../health'
@@ -118,6 +119,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('discord:connect', (_, config) => connectDiscord(config))
   ipcMain.handle('discord:disconnect', (_, clearConfig) => disconnectDiscord(clearConfig))
   ipcMain.handle('discord:push', (_, text) => pushToDiscord(text))
+
+  // === WhatsApp ===
+  ipcMain.handle('whatsapp:getStatus', () => getWhatsAppStatus())
+  ipcMain.handle('whatsapp:connect', (_, config) => connectWhatsApp(config))
+  ipcMain.handle('whatsapp:disconnect', (_, clearConfig) => disconnectWhatsApp(clearConfig))
+  ipcMain.handle('whatsapp:push', (_, text) => pushToWhatsApp(text))
 
   // === Channels (unified) ===
   ipcMain.handle('channels:list', () => listChannels())

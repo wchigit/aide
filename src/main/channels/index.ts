@@ -8,6 +8,7 @@ import type { Channel, ChannelId, ChannelStatus } from './types'
 import { telegramChannel } from '../telegram'
 import { slackChannel } from '../slack'
 import { discordChannel } from '../discord'
+import { whatsappChannel } from '../whatsapp'
 import { wechatChannel } from './wechat-adapter'
 
 const channels = new Map<ChannelId, Channel>()
@@ -17,6 +18,7 @@ channels.set('wechat', wechatChannel)
 channels.set('telegram', telegramChannel)
 channels.set('slack', slackChannel)
 channels.set('discord', discordChannel)
+channels.set('whatsapp', whatsappChannel)
 
 /**
  * Get a channel by ID.
