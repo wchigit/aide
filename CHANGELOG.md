@@ -8,6 +8,9 @@
 - **WhatsApp delivery**: Job results can fan out to WhatsApp
 - **WhatsApp UI**: QR code connection card in Settings drawer
 
+### Fixed
+- CI install step: synced `package-lock.json` with `package.json` so `npm ci` no longer fails with missing `ws` / `eventemitter3`
+
 ## [Unreleased] — wc/more-channels
 
 ### Added
