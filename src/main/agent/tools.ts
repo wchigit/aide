@@ -832,7 +832,7 @@ const desktopShortcutTool: Tool<any> = {
 
 const desktopScreenshotTool: Tool<any> = {
   name: 'desktop_screenshot',
-  description: 'Take a screenshot of the entire screen. Returns screen dimensions and raw image data.',
+  description: 'Take a screenshot of the entire screen. Saves the image as a PNG file and returns the file path.',
   parameters: {
     type: 'object',
     properties: {}
@@ -844,14 +844,13 @@ const desktopScreenshotTool: Tool<any> = {
     }
     try {
       const size = await desktop.getScreenSize()
-      const buffer = await desktop.takeScreenshot()
-      const base64 = buffer.toString('base64')
+      const filePath = await desktop.takeScreenshot()
       return {
         success: true,
         width: size.width,
         height: size.height,
-        imageBase64: base64,
-        message: `Screenshot captured (${size.width}x${size.height})`
+        filePath,
+        message: `Screenshot saved to ${filePath} (${size.width}x${size.height})`
       }
     } catch (err: any) {
       return { success: false, error: err.message }
