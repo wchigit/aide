@@ -114,7 +114,7 @@ export type RelationRole = 'manager' | 'peer' | 'report' | 'external' | 'stakeho
 
 // === Job ===
 
-export type DeliveryTarget = 'desktop' | 'wechat'
+export type DeliveryTarget = 'desktop' | 'wechat' | 'telegram' | 'slack' | 'discord'
 
 export interface Job {
   id: string
@@ -159,6 +159,46 @@ export interface WeChatStatus {
   targetUser: string | null
   lastError: string | null
   monitorActive: boolean
+}
+
+// === Telegram ===
+
+export interface TelegramStatus {
+  connection: 'disconnected' | 'connecting' | 'connected' | 'error'
+  botUsername: string | null
+  chatId: string | null
+  lastError: string | null
+  monitorActive: boolean
+}
+
+// === Slack ===
+
+export interface SlackStatus {
+  connection: 'disconnected' | 'connecting' | 'connected' | 'error'
+  teamName: string | null
+  channelId: string | null
+  lastError: string | null
+  monitorActive: boolean
+}
+
+// === Discord ===
+
+export interface DiscordStatus {
+  connection: 'disconnected' | 'connecting' | 'connected' | 'error'
+  botUsername: string | null
+  channelId: string | null
+  lastError: string | null
+  monitorActive: boolean
+}
+
+// === Channels ===
+
+export type ChannelId = 'wechat' | 'telegram' | 'slack' | 'discord'
+
+export interface ChannelStatusInfo {
+  id: ChannelId
+  connection: 'disconnected' | 'connecting' | 'connected' | 'error'
+  lastError: string | null
 }
 
 // === IPC API ===
@@ -237,6 +277,28 @@ export interface AideAPI {
     push(text: string): Promise<void>
     setTargetUser(userId: string): Promise<void>
     setBaseUrl(url: string): Promise<void>
+  }
+  telegram: {
+    getStatus(): Promise<TelegramStatus>
+    connect(config?: { botToken: string; chatId: string }): Promise<TelegramStatus>
+    disconnect(clearConfig?: boolean): Promise<TelegramStatus>
+    push(text: string): Promise<void>
+  }
+  slack: {
+    getStatus(): Promise<SlackStatus>
+    connect(config?: { botToken: string; appToken: string; channelId: string }): Promise<SlackStatus>
+    disconnect(clearConfig?: boolean): Promise<SlackStatus>
+    push(text: string): Promise<void>
+  }
+  discord: {
+    getStatus(): Promise<DiscordStatus>
+    connect(config?: { botToken: string; channelId: string }): Promise<DiscordStatus>
+    disconnect(clearConfig?: boolean): Promise<DiscordStatus>
+    push(text: string): Promise<void>
+  }
+  channels: {
+    list(): Promise<ChannelStatusInfo[]>
+    deliver(channelId: ChannelId, text: string): Promise<void>
   }
   updates: {
     getState(): Promise<UpdateState>
@@ -394,4 +456,7 @@ export type AideEvent =
   | { type: 'wechat:qrcode'; qrcode: string; imgContent: string }
   | { type: 'wechat:login-progress'; stage: 'scanned' | 'confirmed' | 'expired' | 'timeout' }
   | { type: 'wechat:status'; status: WeChatStatus }
+  | { type: 'telegram:status'; status: TelegramStatus }
+  | { type: 'slack:status'; status: SlackStatus }
+  | { type: 'discord:status'; status: DiscordStatus }
   | { type: 'update:state'; state: UpdateState }
