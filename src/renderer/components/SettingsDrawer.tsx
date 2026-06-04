@@ -1359,9 +1359,11 @@ function WhatsAppConnectionCard() {
             <summary className="cursor-pointer hover:text-text-secondary">Setup steps</summary>
             <ol className="mt-2 ml-4 space-y-1 list-decimal text-[11px] text-text-tertiary">
               <li>Go to <a href="https://developers.facebook.com/" className="text-accent hover:underline" target="_blank" rel="noreferrer">Meta Developer Portal</a> → Create App → Business type</li>
-              <li>Add <strong>WhatsApp</strong> product → API Setup</li>
-              <li>Copy your <strong>Temporary Access Token</strong> and <strong>Phone Number ID</strong> into the fields below</li>
-              <li>Click <strong>Save & Connect</strong> — your personal Webhook URL will appear above</li>
+              <li>Add <strong>WhatsApp</strong> product</li>
+              <li>Go to <a href="https://business.facebook.com/settings/system-users" className="text-accent hover:underline" target="_blank" rel="noreferrer">Business Settings → System Users</a> → Create a System User (Admin)</li>
+              <li>Click <strong>Generate New Token</strong> → select your app → add <strong>whatsapp_business_messaging</strong> permission → copy the token (it never expires)</li>
+              <li>Go back to WhatsApp → API Setup → copy your <strong>Phone Number ID</strong></li>
+              <li>Paste both into the fields below → click <strong>Save & Connect</strong></li>
               <li>In Meta Portal → WhatsApp → Configuration:<br/>
                 &nbsp;&nbsp;• <strong>Callback URL</strong>: paste the Webhook URL shown after connecting<br/>
                 &nbsp;&nbsp;• <strong>Verify Token</strong>: <code className="text-accent select-all">679b6aec-c7ff-4910-9d46-1e329fd4c16d</code></li>
