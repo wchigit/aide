@@ -11,7 +11,7 @@ function parseDeliveryTargets(raw: unknown): DeliveryTarget[] {
   if (typeof raw !== 'string' || !raw) return []
   try {
     const parsed = JSON.parse(raw)
-    const valid: DeliveryTarget[] = ['desktop', 'wechat', 'telegram', 'slack', 'discord']
+    const valid: DeliveryTarget[] = ['desktop', 'wechat', 'telegram', 'discord']
     return Array.isArray(parsed) ? parsed.filter((t): t is DeliveryTarget => valid.includes(t)) : []
   } catch {
     return []
