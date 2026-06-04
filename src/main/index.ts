@@ -10,7 +10,6 @@ import { stopAllMcpServers } from './agent/mcp'
 import { initConnectionState, verifyConnectionsViaMcp } from './connections'
 import { initWeChat } from './wechat'
 import { initTelegram } from './telegram'
-import { initSlack } from './slack'
 import { initDiscord } from './discord'
 import { stopMonitor as stopWeChatMonitor } from './wechat/messaging'
 import { initUpdater, stopUpdater } from './updater'
@@ -143,8 +142,6 @@ app.whenReady().then(async () => {
     initWeChat(true).catch(err => console.warn('[Aide] WeChat init:', err))
     // Auto-reconnect Telegram if previously configured
     initTelegram(true).catch(err => console.warn('[Aide] Telegram init:', err))
-    // Auto-reconnect Slack if previously configured
-    initSlack(true).catch(err => console.warn('[Aide] Slack init:', err))
     // Auto-reconnect Discord if previously configured
     initDiscord().catch(err => console.warn('[Aide] Discord init:', err))
   }

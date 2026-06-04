@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, MessageCircle, Send, Hash, RefreshCw, Download, CheckCircle2, AlertCircle } from 'lucide-react'
+import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, Send, RefreshCw, Download, CheckCircle2, AlertCircle, MessageCircle } from 'lucide-react'
+import { WeChatLogo, TelegramLogo, DiscordLogo } from '../brand/icons'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, TelegramStatus, SlackStatus, DiscordStatus, WhatsAppStatus, DeliveryTarget, UpdateState } from '@shared/types'
+import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, TelegramStatus, DiscordStatus, WhatsAppStatus, DeliveryTarget, UpdateState } from '@shared/types'
 
 function MicrosoftIcon() {
   return (
@@ -216,7 +217,6 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
         <div className="space-y-4">
           <WeChatConnectionCard />
           <TelegramConnectionCard />
-          <SlackConnectionCard />
           <DiscordConnectionCard />
           <WhatsAppConnectionCard />
         </div>
@@ -642,7 +642,6 @@ const DELIVERY_OPTIONS: { value: DeliveryTarget; label: string }[] = [
   { value: 'desktop', label: 'Aide chat' },
   { value: 'wechat', label: 'WeChat' },
   { value: 'telegram', label: 'Telegram' },
-  { value: 'slack', label: 'Slack' },
   { value: 'discord', label: 'Discord' },
   { value: 'whatsapp', label: 'WhatsApp' },
 ]
@@ -651,7 +650,6 @@ const DELIVERY_LABELS: Record<DeliveryTarget, string> = {
   desktop: 'Aide chat',
   wechat: 'WeChat',
   telegram: 'Telegram',
-  slack: 'Slack',
   discord: 'Discord',
   whatsapp: 'WhatsApp',
 }
@@ -1025,8 +1023,8 @@ function WeChatConnectionCard() {
     <Card>
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-green-500/10 text-green-600">
-            <MessageCircle size={18} />
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-[#07C160] text-white">
+            <WeChatLogo size={18} />
           </div>
           <div>
             <p className="text-[13px] font-medium text-text-primary">WeChat</p>
@@ -1125,8 +1123,8 @@ function TelegramConnectionCard() {
     <Card>
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-blue-500/10 text-blue-500">
-            <Send size={18} />
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-[#26A5E4] text-white">
+            <TelegramLogo size={18} />
           </div>
           <div>
             <p className="text-[13px] font-medium text-text-primary">Telegram</p>
@@ -1164,109 +1162,6 @@ function TelegramConnectionCard() {
             <input type="text" value={chatId} onChange={e => setChatId(e.target.value)} placeholder="123456789" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
           </div>
           <button onClick={() => { setShowConfig(false); setBotToken(''); setChatId('') }} className="text-[11px] text-text-tertiary hover:text-text-secondary">Cancel</button>
-        </div>
-      )}
-    </Card>
-  )
-}
-
-function SlackConnectionCard() {
-  const [status, setStatus] = useState<SlackStatus | null>(null)
-  const [connecting, setConnecting] = useState(false)
-  const [showConfig, setShowConfig] = useState(false)
-  const [botToken, setBotToken] = useState('')
-  const [appToken, setAppToken] = useState('')
-  const [channelId, setChannelId] = useState('')
-
-  useEffect(() => {
-    window.aide.slack?.getStatus().then(setStatus)
-  }, [])
-
-  useEffect(() => {
-    const handler = (event: any) => {
-      if (event.type === 'slack:status') setStatus(event.status)
-    }
-    const unsub = window.aideEvents.on(handler)
-    return unsub
-  }, [])
-
-  const handleConnect = async () => {
-    if (!status?.channelId && !showConfig) { setShowConfig(true); return }
-    if (showConfig) {
-      if (!botToken.trim() || !appToken.trim() || !channelId.trim()) return
-      setConnecting(true)
-      try {
-        const result = await window.aide.slack.connect({ botToken: botToken.trim(), appToken: appToken.trim(), channelId: channelId.trim() })
-        setStatus(result)
-        if (result.connection === 'connected') { setShowConfig(false); setBotToken(''); setAppToken(''); setChannelId('') }
-      } catch { window.aide.slack?.getStatus().then(setStatus) }
-      finally { setConnecting(false) }
-    } else {
-      setConnecting(true)
-      try { const result = await window.aide.slack.connect(); setStatus(result) }
-      catch { window.aide.slack?.getStatus().then(setStatus) }
-      finally { setConnecting(false) }
-    }
-  }
-
-  const handleDisconnect = async () => {
-    const result = await window.aide.slack.disconnect(true)
-    setStatus(result)
-    setShowConfig(false)
-  }
-
-  const isConnected = status?.connection === 'connected'
-
-  return (
-    <Card>
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-purple-500/10 text-purple-500">
-            <Hash size={18} />
-          </div>
-          <div>
-            <p className="text-[13px] font-medium text-text-primary">Slack</p>
-            <p className="text-[12px] text-text-tertiary mt-0.5">Reports · Notifications · Remote chat</p>
-            <div className="flex items-center gap-1.5 mt-1.5">
-              <div className={`w-[6px] h-[6px] rounded-full ${isConnected ? 'bg-success' : 'bg-text-tertiary'}`} />
-              <span className={`text-[11px] ${isConnected ? 'text-success' : 'text-text-tertiary'}`}>
-                {isConnected ? `Connected${status?.teamName ? ` · ${status.teamName}` : ''}` : connecting ? 'Connecting…' : 'Not connected'}
-              </span>
-            </div>
-            {status?.lastError && <p className="text-[11px] text-danger mt-1">{status.lastError}</p>}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {isConnected && <Btn variant="danger" onClick={handleDisconnect}>Disconnect</Btn>}
-          {!isConnected && <Btn onClick={handleConnect} disabled={connecting}>{connecting ? 'Connecting…' : showConfig ? 'Save & Connect' : 'Connect'}</Btn>}
-        </div>
-      </div>
-      {showConfig && !isConnected && (
-        <div className="mt-4 space-y-3 p-3 rounded-lg bg-surface-2 border border-edge">
-          <details className="text-[11px] text-text-tertiary">
-            <summary className="cursor-pointer hover:text-text-secondary">How do I get these values?</summary>
-            <ol className="mt-2 ml-4 space-y-1 list-decimal text-[11px] text-text-tertiary">
-              <li>Go to <a href="https://api.slack.com/apps" className="text-accent hover:underline" target="_blank" rel="noreferrer">Slack API</a> → Create New App → From scratch</li>
-              <li>OAuth & Permissions → Bot Token Scopes: <code className="bg-surface-3 px-0.5 rounded">chat:write</code>, <code className="bg-surface-3 px-0.5 rounded">channels:history</code>, <code className="bg-surface-3 px-0.5 rounded">channels:read</code></li>
-              <li>Socket Mode → enable → create App-Level Token with <code className="bg-surface-3 px-0.5 rounded">connections:write</code> scope</li>
-              <li>Event Subscriptions → enable → subscribe to <code className="bg-surface-3 px-0.5 rounded">message.channels</code></li>
-              <li>Install to workspace → copy Bot Token (xoxb-...)</li>
-              <li>In Slack, right-click channel → View channel details → copy Channel ID</li>
-            </ol>
-          </details>
-          <div>
-            <label className="text-[11px] font-medium text-text-secondary block mb-1">Bot Token</label>
-            <input type="password" value={botToken} onChange={e => setBotToken(e.target.value)} placeholder="xoxb-..." className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-text-secondary block mb-1">App-Level Token</label>
-            <input type="password" value={appToken} onChange={e => setAppToken(e.target.value)} placeholder="xapp-..." className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-text-secondary block mb-1">Channel ID</label>
-            <input type="text" value={channelId} onChange={e => setChannelId(e.target.value)} placeholder="C0123456789 or D0123456789" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
-          </div>
-          <button onClick={() => { setShowConfig(false); setBotToken(''); setAppToken(''); setChannelId('') }} className="text-[11px] text-text-tertiary hover:text-text-secondary">Cancel</button>
         </div>
       )}
     </Card>
@@ -1323,8 +1218,8 @@ function DiscordConnectionCard() {
     <Card>
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-indigo-500/10 text-indigo-500">
-            <MessageCircle size={18} />
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-[#5865F2] text-white">
+            <DiscordLogo size={18} />
           </div>
           <div>
             <p className="text-[13px] font-medium text-text-primary">Discord</p>

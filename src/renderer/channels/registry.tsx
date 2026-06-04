@@ -1,7 +1,7 @@
 // Channel registry — the single source of truth for delivery channels.
 //
 // A "channel" is a way Aide reaches the user and takes commands on the go
-// (WeChat today; Slack / Telegram / Feishu in the future). Both the Settings
+// (WeChat / Telegram / Discord today). Both the Settings
 // drawer and the onboarding wizard render channels from this list, so adding a
 // new channel only requires appending one `ChannelDef` here.
 //

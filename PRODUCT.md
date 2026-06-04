@@ -91,15 +91,10 @@ The agent reviews all of today's information flow: some tasks the user already h
 - Sources: auto-collected from Connections, generated on schedule by Jobs, or created through user–agent conversation
 - Status: pending / in progress / completed / cancelled
 
-**Connection** — an external work system (a *Source*)
-- Types: Outlook, Teams, GitHub, ADO, SharePoint, Calendar, etc.
+**Connection** — an external system Aide is linked to; comes in two kinds, **Source** and **Channel** (see "Sources & Channels" below)
+- A **Source** is where Aide reads work from and writes actions back (Outlook, Teams, GitHub, ADO, SharePoint, Calendar, …) — it drives Task discovery
+- A **Channel** is how Aide reaches you and takes commands outside the app (Aide chat built-in; WeChat / Telegram / Slack / Discord remote) — it delivers Job results and receives remote instructions
 - Capabilities: read information, and (once authorized) perform write actions
-- Both the source of Tasks and the conduit through which Tasks are executed
-
-**Channel** — how Aide reaches you and takes commands outside the app
-- Types: WeChat (now); Telegram / Slack (later)
-- Purpose: deliver Job results and reports to you on the go, and receive remote instructions when the app isn't in front of you
-- Distinct from Connection: a Connection is a *Source* Aide reads work from; a Channel is a *delivery + command* surface between you and Aide. The built-in Aide chat is the always-on local channel; WeChat is the first remote one.
 
 **Project** — the user's work project
 - Contents: code repository, project docs, wiki
@@ -123,6 +118,27 @@ The agent reviews all of today's information flow: some tasks the user already h
 - Contents: user preferences, past decisions, project progress, interpersonal interaction patterns
 - Source: accumulated automatically from day-to-day Task handling
 - Can be viewed, corrected, and deleted by the user
+
+### Sources & Channels — the two kinds of Connection
+
+A Connection is either a **Source** or a **Channel**, split by the nature of the platform:
+
+- **Office software → Source**: work flows *in* (*others → agent*).
+- **Social / personal messaging → Channel**: you command and receive results *out* (*you → agent → you*).
+
+```
+   SOURCES (office · work flows in)          CHANNELS (social · command on the go)
+
+   M365 · Google Workspace                   WeChat · WhatsApp · Telegram
+   Slack · Jira · GitHub · Notion            Messenger · Discord
+                              │
+                              ▼
+                         ┌────────┐
+                         │  AIDE  │   decide / execute
+                         └────────┘
+```
+
+The two enterprise suites (M365, Google Workspace) plus standalone tools anchor the Source side; mainstream messengers anchor the Channel side. New integrations only fill a category — they never change the core.
 
 ### Entity relationships
 
@@ -174,9 +190,9 @@ Every entity (Task, Connection, Project, Relation, Skill, Job, Memory) can be cr
 
 ### Channel
 
-- Connect / disconnect chat channels (WeChat now; Telegram / Slack later)
-- Two-way: receive the Agent's pushes and send it commands remotely
-- Per-Job choice of which channels receive that Job's result (Aide chat / WeChat / none)
+- Connect / disconnect chat channels (WeChat / Telegram / Slack / Discord now; WhatsApp / Messenger later)
+- Two-way: receive the Agent's pushes and send it commands remotely (slash commands `/tasks`, `/report`, `/done`, `/setup`, `/help`)
+- Per-Job choice of which channels receive that Job's result (Aide chat / WeChat / Telegram / Slack / Discord / none)
 
 ### Project
 

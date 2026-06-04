@@ -10,7 +10,7 @@ import { getPreferences, setPreferences } from '../preferences'
 import { getWeChatStatus, connectWeChat, disconnectWeChat, pushToWeChat, setTargetUser } from '../wechat'
 import { setBaseUrl as setWeChatBaseUrl } from '../wechat/connection'
 import { getTelegramStatus, connectTelegram, disconnectTelegram, pushToTelegram } from '../telegram'
-import { getSlackStatus, connectSlack, disconnectSlack, pushToSlack } from '../slack'
+import { getTelegramStatus, connectTelegram, disconnectTelegram, pushToTelegram } from '../telegram'
 import { getDiscordStatus, connectDiscord, disconnectDiscord, pushToDiscord } from '../discord'
 import { getWhatsAppStatus, connectWhatsApp, disconnectWhatsApp, pushToWhatsApp } from '../whatsapp'
 import { listChannels, deliverTo } from '../channels'
@@ -107,12 +107,6 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('telegram:connect', (_, config) => connectTelegram(config))
   ipcMain.handle('telegram:disconnect', (_, clearConfig) => disconnectTelegram(clearConfig))
   ipcMain.handle('telegram:push', (_, text) => pushToTelegram(text))
-
-  // === Slack ===
-  ipcMain.handle('slack:getStatus', () => getSlackStatus())
-  ipcMain.handle('slack:connect', (_, config) => connectSlack(config))
-  ipcMain.handle('slack:disconnect', (_, clearConfig) => disconnectSlack(clearConfig))
-  ipcMain.handle('slack:push', (_, text) => pushToSlack(text))
 
   // === Discord ===
   ipcMain.handle('discord:getStatus', () => getDiscordStatus())

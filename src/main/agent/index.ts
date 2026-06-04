@@ -5,7 +5,7 @@ import { listRelations, getRelation } from '../relations'
 import { getAutonomyLevel } from '../preferences'
 import { getConnectionStatus } from '../connections'
 import { showSystemNotification } from '../index'
-import type { ChatMessage, Task, PendingAction } from '@shared/types'
+import type { ChatMessage, Task, PendingAction, TurnStep } from '@shared/types'
 import { v4 as uuid } from 'uuid'
 import { getDb } from '../db'
 import { BrowserWindow } from 'electron'
@@ -230,6 +230,18 @@ const hooks: SessionConfig['hooks'] = {
     // Background job sessions must never surface in any chat window.
     if (invocation.sessionId.startsWith('job-')) return
 
+    // Record into the active turn's process trail (chronological with narration).
+    if (activeTurnSteps) {
+      activeTurnSteps.push({
+        kind: 'tool',
+        toolName,
+        status: 'done',
+        durationMs,
+        inputPreview,
+        resultPreview
+      })
+    }
+
     emitEvent({
       type: 'chat:tool-use',
       taskId,
@@ -240,6 +252,11 @@ const hooks: SessionConfig['hooks'] = {
 
 // Tool call timing tracker
 const toolCallTimestamps = new Map<string, number>()
+// Active interactive turn's step sink (set by runTurn). Tool hooks push their
+// completed steps here so the turn's process trail stays in chronological order
+// alongside the assistant's narration. Null when no interactive turn is running
+// (e.g. background jobs), so those never collect a trail.
+let activeTurnSteps: TurnStep[] | null = null
 // Track sessions where task has been auto-promoted to in_progress
 const activatedTaskSessions = new Set<string>()
 // Track interaction count per session for periodic memory flush
@@ -465,6 +482,7 @@ const IDLE_TIMEOUT_MS = 180_000
 
 type TurnOutcome = {
   content: string
+  process?: TurnStep[]
   kind: 'complete' | 'stalled' | 'error' | 'aborted'
   error?: string
 }
@@ -480,12 +498,27 @@ function runTurn(
     let settled = false
     let watchdog: ReturnType<typeof setTimeout> | null = null
 
+    // Ordered process trail (narration + tool calls). Tool hooks push into this
+    // same array via `activeTurnSteps`, so steps stay in chronological order.
+    const steps: TurnStep[] = []
+    activeTurnSteps = steps
+
     const finish = (kind: TurnOutcome['kind'], error?: string) => {
       if (settled) return
       settled = true
       if (watchdog) clearTimeout(watchdog)
+      if (activeTurnSteps === steps) activeTurnSteps = null
       unsubscribe()
-      resolve({ content: finalMessage || streamed, kind, error })
+      const content = finalMessage || streamed
+      // The final answer is the last narration segment; everything before it is
+      // the foldable "work" trail. Drop that segment from the trail so it isn't
+      // shown twice.
+      const lastTextIdx = (() => {
+        for (let i = steps.length - 1; i >= 0; i--) if (steps[i].kind === 'text') return i
+        return -1
+      })()
+      const trail = lastTextIdx >= 0 ? steps.filter((_, i) => i !== lastTextIdx) : steps.slice()
+      resolve({ content, process: trail.length ? trail : undefined, kind, error })
     }
 
     const armWatchdog = () => {
@@ -509,7 +542,10 @@ function runTurn(
         }
         case 'assistant.message': {
           const content: string = event.data?.content || ''
-          if (content) finalMessage = content
+          if (content) {
+            finalMessage = content
+            steps.push({ kind: 'text', content })
+          }
           break
         }
         case 'session.idle':
@@ -596,7 +632,8 @@ export async function sendMessage(
     role: 'agent',
     content,
     timestamp: new Date().toISOString(),
-    taskId
+    taskId,
+    process: outcome.process
   }
   if (content) saveMessage(agentMsg)
   return agentMsg
@@ -700,9 +737,17 @@ export async function generateMorningBriefing(): Promise<string> {
 function saveMessage(msg: ChatMessage): void {
   const db = getDb()
   db.prepare(`
-    INSERT INTO chat_messages (id, role, content, timestamp, task_id, pending_action)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(msg.id, msg.role, msg.content, msg.timestamp, msg.taskId, msg.pendingAction ? JSON.stringify(msg.pendingAction) : null)
+    INSERT INTO chat_messages (id, role, content, timestamp, task_id, pending_action, process)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    msg.id,
+    msg.role,
+    msg.content,
+    msg.timestamp,
+    msg.taskId,
+    msg.pendingAction ? JSON.stringify(msg.pendingAction) : null,
+    msg.process && msg.process.length ? JSON.stringify(msg.process) : null
+  )
 }
 
 /**
@@ -735,7 +780,8 @@ export function getChatHistory(taskId: string | null): ChatMessage[] {
     content: row.content as string,
     timestamp: row.timestamp as string,
     taskId: row.task_id as string | null,
-    pendingAction: row.pending_action ? JSON.parse(row.pending_action as string) : undefined
+    pendingAction: row.pending_action ? JSON.parse(row.pending_action as string) : undefined,
+    process: row.process ? JSON.parse(row.process as string) : undefined
   }))
 }
 

@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowUp, ChevronLeft, Check, X, Pencil, ChevronDown, ChevronRight, Paperclip, Copy, CheckCheck, Square, Wrench, Loader2, Activity } from 'lucide-react'
+import { ArrowUp, ChevronLeft, Check, X, Pencil, ChevronDown, ChevronRight, Paperclip, Copy, CheckCheck, Square, Loader2, Activity } from 'lucide-react'
 import { useTaskStore } from '../stores/taskStore'
 import { useChatStore } from '../stores/chatStore'
-import type { ChatMessage, PendingAction, ModelInfo, ToolCallRecord, TaskActivity } from '@shared/types'
+import type { LiveStep } from '../stores/chatStore'
+import type { ChatMessage, PendingAction, ModelInfo, TaskActivity, TurnStep } from '@shared/types'
 
 interface Attachment {
   id: string
@@ -19,7 +20,7 @@ export function ChatPanel() {
   const tasks = useTaskStore(s => s.tasks)
   const selectTask = useTaskStore(s => s.selectTask)
   const goHome = useTaskStore(s => s.goHome)
-  const { messages, streamingContent, isStreaming, fetchHistory, sendMessage, stopStream, modifyDraft, setModifyDraft, toolCalls } = useChatStore()
+  const { messages, liveSteps, isStreaming, fetchHistory, sendMessage, stopStream, modifyDraft, setModifyDraft } = useChatStore()
   const [input, setInput] = useState('')
   const [models, setModels] = useState<ModelInfo[]>([])
   const [selectedModel, setSelectedModel] = useState('')
@@ -27,6 +28,7 @@ export function ChatPanel() {
   const [showOtherModels, setShowOtherModels] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const triggeredTasksRef = useRef<Set<string>>(new Set())
@@ -34,7 +36,26 @@ export function ChatPanel() {
   const selectedTask = selectedTaskId ? tasks.find(t => t.id === selectedTaskId) : null
 
   useEffect(() => { fetchHistory(selectedTaskId) }, [selectedTaskId])
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, streamingContent])
+  // When entering a task/conversation, force-jump to the latest message so the
+  // user lands at the tail (not the top of a long history).
+  const justSwitchedRef = useRef(true)
+  useEffect(() => { justSwitchedRef.current = true }, [selectedTaskId])
+  // Auto-follow the tail, but don't fight the user: only scroll when they're
+  // already near the bottom. During streaming use an instant jump (smooth
+  // scrolling can't keep up with bursty token deltas and feels laggy).
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    if (justSwitchedRef.current) {
+      justSwitchedRef.current = false
+      messagesEndRef.current?.scrollIntoView()
+      return
+    }
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160
+    if (nearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' })
+    }
+  }, [messages, liveSteps, isStreaming])
   useEffect(() => { inputRef.current?.focus() }, [selectedTaskId])
 
   useEffect(() => {
@@ -136,7 +157,7 @@ export function ChatPanel() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
         <div className="chat-content-width mx-auto px-6 py-6 space-y-5">
           {selectedTask && <TaskActivityPanel taskId={selectedTask.id} lastActivityAt={selectedTask.lastActivityAt} />}
 
@@ -144,19 +165,16 @@ export function ChatPanel() {
 
           {messages.map(msg => <MessageBubble key={msg.id} message={msg} />)}
 
-          {/* Agent's current turn: tool calls + streaming content together */}
-          {(toolCalls.length > 0 || isStreaming) && (
+          {/* Agent's current turn: live interleaved timeline (narration + tools) */}
+          {(liveSteps.length > 0 || isStreaming) && (
             <div className="flex gap-3 anim-fade-up">
               <AgentAvatar />
               <div className="flex-1 min-w-0 pt-0.5">
-                {toolCalls.length > 0 && <ToolCallsRow calls={toolCalls} />}
-                {isStreaming && streamingContent ? (
-                  <div className="text-[14px] leading-[1.7] text-text-secondary prose prose-sm max-w-none mt-1.5">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
-                  </div>
-                ) : isStreaming && !streamingContent && toolCalls.every(c => c.status !== 'running') ? (
+                {liveSteps.length > 0 ? (
+                  <Timeline steps={liveStepsToTimeline(liveSteps)} live={isStreaming} />
+                ) : (
                   <TypingIndicator />
-                ) : null}
+                )}
               </div>
             </div>
           )}
@@ -489,6 +507,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       {!isUser && <AgentAvatar />}
 
       <div className={`max-w-[85%] min-w-0 ${isUser ? 'ml-auto' : ''}`}>
+        {!isUser && message.process && message.process.length > 0 && (
+          <ProcessTrail steps={message.process} />
+        )}
         {message.content && (
           <div className={`relative text-[14px] leading-[1.7] ${
             isUser
@@ -710,57 +731,103 @@ function getToolLabel(name: string): string {
   return TOOL_NAME_MAP[name] || name.replace(/_/g, ' ')
 }
 
-function ToolCallsRow({ calls }: { calls: ToolCallRecord[] }) {
-  const [expanded, setExpanded] = useState(false)
-  const running = calls.filter(c => c.status === 'running')
-  const latest = running[running.length - 1] || calls[calls.length - 1]
-  const latestPreview = latest?.inputPreview
-  const label = running.length > 0
-    ? `${getToolLabel(latest.toolName)}${latestPreview ? ` · ${latestPreview}` : '…'}`
-    : `${calls.length} tool call${calls.length > 1 ? 's' : ''}${latestPreview ? ` · ${latestPreview}` : ''}`
+function formatDuration(ms: number): string {
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
+}
 
+/* === Unified turn timeline (shared by live view + folded process trail) === */
+
+// A normalized timeline step: narration text, or a tool call (running/done/error).
+type TimelineStep =
+  | { kind: 'text'; content: string }
+  | { kind: 'tool'; toolName: string; status: 'running' | 'done' | 'error'; durationMs?: number; inputPreview?: string; resultPreview?: string }
+
+// Convert the live store's steps into the shared timeline shape.
+function liveStepsToTimeline(steps: LiveStep[]): TimelineStep[] {
+  return steps.map(s =>
+    s.kind === 'text'
+      ? { kind: 'text', content: s.content }
+      : {
+          kind: 'tool',
+          toolName: s.record.toolName,
+          status: s.record.status,
+          durationMs: s.record.durationMs,
+          inputPreview: s.record.inputPreview,
+          resultPreview: s.record.resultPreview
+        }
+  )
+}
+
+function ToolStepRow({ step }: { step: Extract<TimelineStep, { kind: 'tool' }> }) {
+  const preview = step.inputPreview || step.resultPreview
   return (
-    <div className="my-0.5">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-1.5 text-[11px] text-text-tertiary hover:text-text-secondary transition-colors py-0.5"
-      >
-        {running.length > 0 ? (
-          <Loader2 size={11} className="animate-spin" />
+    <div className="text-[10.5px] text-text-tertiary/80">
+      <div className="flex items-center gap-1.5">
+        {step.status === 'running' ? (
+          <Loader2 size={9} className="animate-spin shrink-0 text-accent/70" />
+        ) : step.status === 'error' ? (
+          <X size={9} className="text-danger/70 shrink-0" />
         ) : (
-          <Wrench size={11} />
+          <Check size={9} className="text-text-tertiary/60 shrink-0" />
         )}
-        <span className="truncate text-left">{label}</span>
-        <ChevronRight size={10} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
-      </button>
-
-      {expanded && (
-        <div className="mt-1 ml-0.5 border-l border-edge-subtle pl-2.5 space-y-1.5">
-          {calls.map(c => (
-            <div key={c.id} className="text-[11px] text-text-tertiary">
-              <div className="flex items-center gap-2">
-                {c.status === 'running' ? (
-                  <Loader2 size={10} className="animate-spin shrink-0" />
-                ) : c.status === 'error' ? (
-                  <X size={10} className="text-danger shrink-0" />
-                ) : (
-                  <Check size={10} className="text-success shrink-0" />
-                )}
-                <span className="truncate text-text-secondary">{getToolLabel(c.toolName)}</span>
-                {c.durationMs != null && <span className="shrink-0 tabular-nums">{c.durationMs < 1000 ? `${c.durationMs}ms` : `${(c.durationMs / 1000).toFixed(1)}s`}</span>}
-              </div>
-              {(c.inputPreview || c.resultPreview) && (
-                <div className="ml-[18px] mt-0.5 truncate font-mono text-[10.5px] text-text-tertiary/80" title={c.inputPreview || c.resultPreview}>
-                  {c.inputPreview || c.resultPreview}
-                </div>
-              )}
-            </div>
-          ))}
+        <span className="truncate text-text-tertiary">{getToolLabel(step.toolName)}</span>
+        {step.durationMs != null && (
+          <span className="shrink-0 tabular-nums text-text-tertiary/50">{formatDuration(step.durationMs)}</span>
+        )}
+      </div>
+      {preview && (
+        <div className="ml-[15px] mt-0.5 truncate font-mono text-[10px] text-text-tertiary/55" title={preview}>
+          {preview}
         </div>
       )}
     </div>
   )
 }
+
+// The interleaved narration + tool timeline. Deliberately muted: this is the
+// "work" trail, kept visually secondary so the final answer stands out. `live`
+// adds a faint accent rail while the turn is still running.
+function Timeline({ steps, live }: { steps: TimelineStep[]; live?: boolean }) {
+  return (
+    <div className={`ml-0.5 border-l pl-2.5 space-y-1.5 ${live ? 'border-accent/20' : 'border-edge-subtle'}`}>
+      {steps.map((s, i) =>
+        s.kind === 'text' ? (
+          <div key={i} className="text-[12px] leading-[1.55] text-text-tertiary/85 prose prose-sm max-w-none [&_*]:!text-text-tertiary/85 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{s.content}</ReactMarkdown>
+          </div>
+        ) : (
+          <ToolStepRow key={i} step={s} />
+        )
+      )}
+    </div>
+  )
+}
+
+/* === Process Trail (folded "work" timeline on a finished reply) === */
+
+function ProcessTrail({ steps }: { steps: TurnStep[] }) {
+  const [open, setOpen] = useState(false)
+  const toolCount = steps.reduce((n, s) => (s.kind === 'tool' ? n + 1 : n), 0)
+  const summary = toolCount > 0
+    ? `Worked through ${toolCount} step${toolCount > 1 ? 's' : ''}`
+    : 'Thought it through'
+
+  return (
+    <div className="mb-1.5">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-[11px] text-text-tertiary hover:text-text-secondary transition-colors py-0.5"
+      >
+        <Activity size={11} />
+        <span>{summary}</span>
+        <ChevronRight size={10} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+
+      {open && <div className="mt-1"><Timeline steps={steps as TimelineStep[]} /></div>}
+    </div>
+  )
+}
+
 
 /* === Empty State === */
 

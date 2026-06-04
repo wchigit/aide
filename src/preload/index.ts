@@ -83,12 +83,6 @@ const api: AideAPI = {
     disconnect: (clearConfig) => ipcRenderer.invoke('telegram:disconnect', clearConfig),
     push: (text) => ipcRenderer.invoke('telegram:push', text)
   },
-  slack: {
-    getStatus: () => ipcRenderer.invoke('slack:getStatus'),
-    connect: (config) => ipcRenderer.invoke('slack:connect', config),
-    disconnect: (clearConfig) => ipcRenderer.invoke('slack:disconnect', clearConfig),
-    push: (text) => ipcRenderer.invoke('slack:push', text)
-  },
   discord: {
     getStatus: () => ipcRenderer.invoke('discord:getStatus'),
     connect: (config) => ipcRenderer.invoke('discord:connect', config),

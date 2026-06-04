@@ -1,13 +1,19 @@
 import { create } from 'zustand'
 import type { ChatMessage, PendingAction, ToolCallRecord } from '@shared/types'
 
+/** One step in the live (in-progress) turn: streamed narration or a tool call.
+ *  Kept in arrival order so the UI can interleave text and tools chronologically,
+ *  matching how the turn is later persisted as a foldable process trail. */
+export type LiveStep =
+  | { kind: 'text'; content: string }
+  | { kind: 'tool'; record: ToolCallRecord }
+
 interface ChatStore {
   messages: ChatMessage[]
-  streamingContent: string
+  liveSteps: LiveStep[]
   isStreaming: boolean
   loading: boolean
   modifyDraft: string | null // For the modify flow (#36)
-  toolCalls: ToolCallRecord[] // Active + recent tool calls for current turn
 
   fetchHistory: (taskId: string | null) => Promise<void>
   sendMessage: (message: string, taskId: string | null, attachments?: { name: string; type: string; dataUrl: string }[]) => Promise<void>
@@ -23,16 +29,19 @@ interface ChatStore {
 
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
-  streamingContent: '',
+  liveSteps: [],
   isStreaming: false,
   loading: false,
   modifyDraft: null,
-  toolCalls: [],
 
   fetchHistory: async (taskId) => {
-    set({ loading: true, isStreaming: false, streamingContent: '', toolCalls: [] })
+    set({ loading: true })
     const messages = await window.aide.chat.getHistory(taskId)
-    set({ messages, loading: false })
+    // Atomic swap: replace messages and clear the live timeline in the SAME
+    // commit. Clearing liveSteps *before* the async DB read returned would make
+    // the just-finished turn flash out of existence for a few frames ("还没看清
+    // 就没了"). Swapping together means the persisted reply takes over seamlessly.
+    set({ messages, loading: false, isStreaming: false, liveSteps: [] })
   },
 
   sendMessage: async (message, taskId, attachments) => {
@@ -47,8 +56,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set(state => ({
       messages: [...state.messages, userMsg],
       isStreaming: true,
-      streamingContent: '',
-      toolCalls: []
+      liveSteps: []
     }))
 
     try {
@@ -65,18 +73,27 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           taskId
         }],
         isStreaming: false,
-        streamingContent: ''
+        liveSteps: []
       }))
     }
   },
 
   stopStream: async () => {
     await window.aide.chat.stopStream()
-    set({ isStreaming: false, streamingContent: '' })
+    set({ isStreaming: false, liveSteps: [] })
   },
 
   appendStreamDelta: (delta) => {
-    set(state => ({ streamingContent: state.streamingContent + delta }))
+    set(state => {
+      const steps = state.liveSteps.slice()
+      const last = steps[steps.length - 1]
+      if (last && last.kind === 'text') {
+        steps[steps.length - 1] = { kind: 'text', content: last.content + delta }
+      } else {
+        steps.push({ kind: 'text', content: delta })
+      }
+      return { liveSteps: steps }
+    })
   },
 
   endStream: () => {
@@ -89,13 +106,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   updateToolCall: (record) => {
     set(state => {
-      const existing = state.toolCalls.findIndex(t => t.id === record.id)
-      if (existing >= 0) {
-        const updated = [...state.toolCalls]
-        updated[existing] = { ...updated[existing], ...record }
-        return { toolCalls: updated }
+      const steps = state.liveSteps.slice()
+      const idx = steps.findIndex(s => s.kind === 'tool' && s.record.id === record.id)
+      if (idx >= 0) {
+        const prev = steps[idx] as { kind: 'tool'; record: ToolCallRecord }
+        steps[idx] = { kind: 'tool', record: { ...prev.record, ...record } }
+      } else {
+        steps.push({ kind: 'tool', record })
       }
-      return { toolCalls: [...state.toolCalls, record] }
+      return { liveSteps: steps }
     })
   },
 
