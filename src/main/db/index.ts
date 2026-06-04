@@ -172,6 +172,7 @@ function initSchema(db: DatabaseInstance): void {
       timestamp TEXT NOT NULL,
       task_id TEXT,
       pending_action TEXT,
+      process TEXT,
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
     );
 
@@ -273,6 +274,16 @@ const MIGRATIONS: Migration[] = [
       const ids = BUILTIN_JOBS.map(j => j.id)
       const placeholders = ids.map(() => '?').join(', ')
       db.prepare(`UPDATE jobs SET is_builtin = 1 WHERE id IN (${placeholders})`).run(...ids)
+    },
+  },
+  {
+    version: 3,
+    name: 'chat message process trail',
+    up: (db) => {
+      const cols = (db.prepare('PRAGMA table_info(chat_messages)').all() as { name: string }[]).map(c => c.name)
+      if (!cols.includes('process')) {
+        db.exec('ALTER TABLE chat_messages ADD COLUMN process TEXT')
+      }
     },
   },
 ]

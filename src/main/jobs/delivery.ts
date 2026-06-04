@@ -2,7 +2,6 @@ import type { DeliveryTarget, Job } from '@shared/types'
 import { postAgentMessageToGeneral } from '../agent'
 import { pushToWeChat } from '../wechat'
 import { pushToTelegram } from '../telegram'
-import { pushToSlack } from '../slack'
 import { pushToDiscord } from '../discord'
 
 /**
@@ -28,11 +27,6 @@ const channels: Record<DeliveryTarget, DeliveryChannel> = {
   telegram: {
     async send(summary) {
       await pushToTelegram(summary)
-    }
-  },
-  slack: {
-    async send(summary) {
-      await pushToSlack(summary)
     }
   },
   discord: {

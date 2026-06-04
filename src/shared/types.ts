@@ -114,7 +114,7 @@ export type RelationRole = 'manager' | 'peer' | 'report' | 'external' | 'stakeho
 
 // === Job ===
 
-export type DeliveryTarget = 'desktop' | 'wechat' | 'telegram' | 'slack' | 'discord'
+export type DeliveryTarget = 'desktop' | 'wechat' | 'telegram' | 'discord'
 
 export interface Job {
   id: string
@@ -171,16 +171,6 @@ export interface TelegramStatus {
   monitorActive: boolean
 }
 
-// === Slack ===
-
-export interface SlackStatus {
-  connection: 'disconnected' | 'connecting' | 'connected' | 'error'
-  teamName: string | null
-  channelId: string | null
-  lastError: string | null
-  monitorActive: boolean
-}
-
 // === Discord ===
 
 export interface DiscordStatus {
@@ -193,7 +183,7 @@ export interface DiscordStatus {
 
 // === Channels ===
 
-export type ChannelId = 'wechat' | 'telegram' | 'slack' | 'discord'
+export type ChannelId = 'wechat' | 'telegram' | 'discord'
 
 export interface ChannelStatusInfo {
   id: ChannelId
@@ -282,12 +272,6 @@ export interface AideAPI {
     getStatus(): Promise<TelegramStatus>
     connect(config?: { botToken: string; chatId: string }): Promise<TelegramStatus>
     disconnect(clearConfig?: boolean): Promise<TelegramStatus>
-    push(text: string): Promise<void>
-  }
-  slack: {
-    getStatus(): Promise<SlackStatus>
-    connect(config?: { botToken: string; appToken: string; channelId: string }): Promise<SlackStatus>
-    disconnect(clearConfig?: boolean): Promise<SlackStatus>
     push(text: string): Promise<void>
   }
   discord: {
@@ -394,7 +378,23 @@ export interface ChatMessage {
   timestamp: string
   taskId: string | null
   pendingAction?: PendingAction
+  /** Ordered "work" steps (narration + tool calls) that led to this reply.
+   *  Kept as a foldable process trail so a long turn's intermediate output is
+   *  preserved instead of being discarded once the final answer lands. */
+  process?: TurnStep[]
 }
+
+/** One step in an agent turn's process trail. */
+export type TurnStep =
+  | { kind: 'text'; content: string }
+  | {
+      kind: 'tool'
+      toolName: string
+      status: 'done' | 'error'
+      durationMs?: number
+      inputPreview?: string
+      resultPreview?: string
+    }
 
 export interface PendingAction {
   id: string
@@ -457,6 +457,5 @@ export type AideEvent =
   | { type: 'wechat:login-progress'; stage: 'scanned' | 'confirmed' | 'expired' | 'timeout' }
   | { type: 'wechat:status'; status: WeChatStatus }
   | { type: 'telegram:status'; status: TelegramStatus }
-  | { type: 'slack:status'; status: SlackStatus }
   | { type: 'discord:status'; status: DiscordStatus }
   | { type: 'update:state'; state: UpdateState }

@@ -59,36 +59,6 @@ Send `/help` to your bot to verify.
 
 ---
 
-## Slack
-
-### 1. Create a Slack App
-
-1. Go to [Slack API](https://api.slack.com/apps) → **Create New App** → **From scratch**
-2. Name it (e.g. "Aide") and select your workspace
-
-### 2. Configure Bot Permissions
-
-1. Go to **OAuth & Permissions** → **Bot Token Scopes**, add:
-   - `chat:write`
-   - `channels:history`
-   - `channels:read`
-2. Go to **Socket Mode** → enable it → create an **App-Level Token** with `connections:write` scope
-3. Go to **Event Subscriptions** → enable → subscribe to `message.channels`
-4. Install the app to your workspace
-
-### 3. Get Your Channel ID
-
-1. In Slack, right-click the channel → **View channel details**
-2. Scroll to the bottom — the Channel ID is shown there (e.g. `C0123456789`)
-
-### 4. Configure in Aide
-
-1. Open Aide → Settings → Channels → Slack
-2. Paste the **Bot Token** (starts with `xoxb-`), **App Token** (starts with `xapp-`), and **Channel ID**
-3. Click Connect
-
----
-
 ## WeChat (微信)
 
 WeChat uses houk's built-in integration. No external bot setup is required.
@@ -110,4 +80,4 @@ Once channels are connected, you can assign them as delivery targets on any Job:
 2. Under **Delivery Targets**, select one or more channels
 3. When the job completes, results are pushed to all selected channels
 
-Available targets: `Desktop` (Aide chat), `WeChat`, `Telegram`, `Slack`, `Discord`
+Available targets: `Desktop` (Aide chat), `WeChat`, `Telegram`, `Discord`

@@ -4,14 +4,14 @@ The external-systems connection layer. Implemented via the MCP protocol.
 
 ## Sources vs Channels
 
-Connections come in two kinds, and the Settings UI groups them accordingly:
+Connections come in two kinds (the concept and rationale live in PRODUCT.md §Sources & Channels). The Settings UI groups them accordingly:
 
-| Kind | Examples | Role | Transport |
-|------|----------|------|-----------|
-| **Source** | Work IQ (M365), GitHub | Where Aide *reads* work from — email, calendar, issues, PRs — and writes back actions. Drives Task discovery. | MCP |
-| **Channel** | Aide chat (built-in), WeChat | How Aide *reaches* you and takes commands outside the app: delivers Job results / reports and receives remote instructions. | Built-in IPC (Aide chat) / WeChat bot API |
+| Kind | Examples | Transport |
+|------|----------|-----------|
+| **Source** | Work IQ (M365), GitHub | MCP |
+| **Channel** | Aide chat (built-in), WeChat / Telegram / Slack / Discord | Built-in IPC (Aide chat) / per-channel bot API |
 
-A Source answers "what work is there?"; a Channel answers "how do I reach you, and how do you reach me?". The rest of this doc covers Sources (the MCP layer). For the WeChat channel and Job result delivery, see docs/job.md and docs/ui.md.
+The rest of this doc covers Sources (the MCP layer). For channel setup see docs/channel-setup.md; for Job result delivery see docs/job.md and docs/ui.md.
 
 ## Key finding: Work IQ
 
