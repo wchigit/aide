@@ -1,6 +1,6 @@
 {
   "name": "aide",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "A personal work agent that sees the full picture, learns as you work, and helps you get things done.",
   "author": {
     "name": "Aide",
@@ -22,8 +22,6 @@
   },
   "dependencies": {
     "@github/copilot-sdk": "^1.0.0",
-    "@slack/socket-mode": "^2.0.7",
-    "@slack/web-api": "^7.16.0",
     "@tailwindcss/typography": "^0.5.19",
     "better-sqlite3": "^11.0.0",
     "bufferutil": "^4.1.0",
