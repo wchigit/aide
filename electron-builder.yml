@@ -11,8 +11,20 @@ files:
   - out/**/*
   - package.json
 
-# Rebuild native modules (better-sqlite3) for the target platform.
+# Rebuild native modules (better-sqlite3, nut.js) for the target platform.
 npmRebuild: true
+
+# Unpack native modules and Playwright from asar for proper execution
+asarUnpack:
+  - "**/node_modules/@nut-tree-fork/**"
+  - "**/node_modules/playwright-core/**"
+
+# Bundle Playwright browser per-platform (downloaded in CI)
+extraResources:
+  - from: "browsers"
+    to: "browsers"
+    filter:
+      - "**/*"
 
 # ---------------------------------------------------------------------------
 # macOS

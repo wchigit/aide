@@ -7,6 +7,7 @@ import { listJobs, createJob, updateJob, deleteJob, toggleJob } from '../jobs'
 import { showSystemNotification } from '../index'
 import { isJobSession, jobCreatedTaskIds } from './state'
 import { getActiveMcpTools } from './mcp'
+import { browser, desktop, isBrowserAvailable, isDesktopAvailable } from '../automation'
 import { BrowserWindow } from 'electron'
 import type { Tool } from '@github/copilot-sdk'
 
@@ -33,6 +34,17 @@ export function buildTools(): Tool<any>[] {
     manageJobTool,
     managePreferencesTool,
     generateReportTool,
+    // Browser automation tools
+    browserNavigateTool,
+    browserClickTool,
+    browserTypeTool,
+    browserReadTool,
+    browserScreenshotTool,
+    // Desktop automation tools
+    desktopClickTool,
+    desktopTypeTool,
+    desktopShortcutTool,
+    desktopScreenshotTool,
     ...mcpTools
   ]
 }
@@ -614,5 +626,235 @@ const generateReportTool: Tool<any> = {
 function emitToRenderer(event: { type: string; [key: string]: unknown }): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('aide:event', event)
+  }
+}
+
+// ============================================================
+// Browser Automation Tools — Playwright-based web automation
+// ============================================================
+
+const browserNavigateTool: Tool<any> = {
+  name: 'browser_navigate',
+  description: 'Navigate to a URL in the browser. Opens a new browser window if needed. Use this to visit websites, web apps, or any URL.',
+  parameters: {
+    type: 'object',
+    properties: {
+      url: { type: 'string', description: 'The URL to navigate to (e.g., "https://github.com")' }
+    },
+    required: ['url']
+  },
+  skipPermission: false,
+  handler: async (args: { url: string }) => {
+    if (!isBrowserAvailable()) {
+      return { success: false, error: 'Browser automation is not available. Chromium may not be installed.' }
+    }
+    try {
+      const page = await browser.navigateTo(args.url)
+      const title = await page.title()
+      return { success: true, url: args.url, title, message: `Navigated to ${args.url}` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserClickTool: Tool<any> = {
+  name: 'browser_click',
+  description: 'Click an element on the current web page. Use CSS selectors to identify the element.',
+  parameters: {
+    type: 'object',
+    properties: {
+      selector: { type: 'string', description: 'CSS selector for the element to click (e.g., "button.submit", "#login-btn", "a[href=\'/dashboard\']")' }
+    },
+    required: ['selector']
+  },
+  skipPermission: false,
+  handler: async (args: { selector: string }) => {
+    try {
+      await browser.clickElement(args.selector)
+      return { success: true, message: `Clicked element: ${args.selector}` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserTypeTool: Tool<any> = {
+  name: 'browser_type',
+  description: 'Type text into an input field on the current web page.',
+  parameters: {
+    type: 'object',
+    properties: {
+      selector: { type: 'string', description: 'CSS selector for the input element' },
+      text: { type: 'string', description: 'Text to type into the element' }
+    },
+    required: ['selector', 'text']
+  },
+  skipPermission: false,
+  handler: async (args: { selector: string; text: string }) => {
+    try {
+      await browser.typeIntoElement(args.selector, args.text)
+      return { success: true, message: `Typed text into: ${args.selector}` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserReadTool: Tool<any> = {
+  name: 'browser_read',
+  description: 'Read text content from an element on the current web page. Also returns current URL and page title.',
+  parameters: {
+    type: 'object',
+    properties: {
+      selector: { type: 'string', description: 'CSS selector for the element to read (optional, omit to get page info only)' }
+    }
+  },
+  skipPermission: true,
+  handler: async (args: { selector?: string }) => {
+    try {
+      const url = browser.getCurrentUrl()
+      const title = await browser.getPageTitle()
+      let text: string | undefined
+
+      if (args.selector) {
+        text = await browser.getElementText(args.selector)
+      }
+
+      return { success: true, url, title, text }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserScreenshotTool: Tool<any> = {
+  name: 'browser_screenshot',
+  description: 'Take a screenshot of the current web page. Returns a base64-encoded PNG image.',
+  parameters: {
+    type: 'object',
+    properties: {}
+  },
+  skipPermission: true,
+  handler: async () => {
+    try {
+      const buffer = await browser.takeScreenshot()
+      const base64 = buffer.toString('base64')
+      return { success: true, imageBase64: base64, mimeType: 'image/png' }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+// ============================================================
+// Desktop Automation Tools — nut.js-based desktop control
+// ============================================================
+
+const desktopClickTool: Tool<any> = {
+  name: 'desktop_click',
+  description: 'Click at a specific position on the screen. Use screen coordinates (pixels from top-left).',
+  parameters: {
+    type: 'object',
+    properties: {
+      x: { type: 'number', description: 'X coordinate (pixels from left edge)' },
+      y: { type: 'number', description: 'Y coordinate (pixels from top edge)' },
+      button: { type: 'string', enum: ['left', 'right'], description: 'Mouse button to click (default: left)' },
+      doubleClick: { type: 'boolean', description: 'Whether to double-click (default: false)' }
+    },
+    required: ['x', 'y']
+  },
+  skipPermission: false,
+  handler: async (args: { x: number; y: number; button?: 'left' | 'right'; doubleClick?: boolean }) => {
+    if (!isDesktopAvailable()) {
+      return { success: false, error: 'Desktop automation is not available.' }
+    }
+    try {
+      if (args.doubleClick) {
+        await desktop.doubleClick(args.x, args.y)
+      } else {
+        await desktop.click(args.x, args.y, args.button || 'left')
+      }
+      return { success: true, message: `Clicked at (${args.x}, ${args.y})` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const desktopTypeTool: Tool<any> = {
+  name: 'desktop_type',
+  description: 'Type text using the keyboard. Text is typed at the current cursor position.',
+  parameters: {
+    type: 'object',
+    properties: {
+      text: { type: 'string', description: 'Text to type' }
+    },
+    required: ['text']
+  },
+  skipPermission: false,
+  handler: async (args: { text: string }) => {
+    if (!isDesktopAvailable()) {
+      return { success: false, error: 'Desktop automation is not available.' }
+    }
+    try {
+      await desktop.typeText(args.text)
+      return { success: true, message: `Typed: "${args.text.substring(0, 50)}${args.text.length > 50 ? '...' : ''}"` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const desktopShortcutTool: Tool<any> = {
+  name: 'desktop_shortcut',
+  description: 'Press a keyboard shortcut (e.g., Ctrl+C, Cmd+V, Alt+Tab). Use "Cmd" for macOS Command key, "Ctrl" for Windows/Linux Control key.',
+  parameters: {
+    type: 'object',
+    properties: {
+      shortcut: { type: 'string', description: 'Keyboard shortcut to press (e.g., "Ctrl+C", "Cmd+V", "Alt+Tab", "Ctrl+Shift+S")' }
+    },
+    required: ['shortcut']
+  },
+  skipPermission: false,
+  handler: async (args: { shortcut: string }) => {
+    if (!isDesktopAvailable()) {
+      return { success: false, error: 'Desktop automation is not available.' }
+    }
+    try {
+      await desktop.pressShortcut(args.shortcut)
+      return { success: true, message: `Pressed: ${args.shortcut}` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const desktopScreenshotTool: Tool<any> = {
+  name: 'desktop_screenshot',
+  description: 'Take a screenshot of the entire screen. Returns screen dimensions and raw image data.',
+  parameters: {
+    type: 'object',
+    properties: {}
+  },
+  skipPermission: true,
+  handler: async () => {
+    if (!isDesktopAvailable()) {
+      return { success: false, error: 'Desktop automation is not available.' }
+    }
+    try {
+      const size = await desktop.getScreenSize()
+      const buffer = await desktop.takeScreenshot()
+      const base64 = buffer.toString('base64')
+      return {
+        success: true,
+        width: size.width,
+        height: size.height,
+        imageBase64: base64,
+        message: `Screenshot captured (${size.width}x${size.height})`
+      }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
   }
 }

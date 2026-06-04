@@ -32,6 +32,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Download Playwright browser
+        run: npx playwright install chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/browsers
+
       - name: Build & package (${{ matrix.platform }})
         run: npm run dist:${{ matrix.platform }}
         env:
