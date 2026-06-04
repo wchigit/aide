@@ -34,6 +34,7 @@ let connectionState: 'disconnected' | 'connecting' | 'connected' | 'error' = 'di
 let lastError: string | null = null
 let currentQr: string | null = null
 let currentQrDataUrl: string | null = null
+let intentionalDisconnect = false
 let messageHandler: ((msg: { from: string; text: string; pushName?: string }) => Promise<void>) | null = null
 
 function loadConfig(): WhatsAppConfig {
@@ -85,6 +86,7 @@ export async function connectWhatsApp(): Promise<WhatsAppStatus> {
 
   try {
     connectionState = 'connecting'
+    intentionalDisconnect = false
     lastError = null
     currentQr = null; currentQrDataUrl = null
     emitEvent({ type: 'whatsapp:status', status: getWhatsAppStatus() })
@@ -121,7 +123,7 @@ export async function connectWhatsApp(): Promise<WhatsAppStatus> {
       if (connection === 'close') {
         currentQr = null; currentQrDataUrl = null
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode
-        const shouldReconnect = statusCode !== DisconnectReason!.loggedOut
+        const shouldReconnect = statusCode !== DisconnectReason!.loggedOut && !intentionalDisconnect
 
         if (shouldReconnect) {
           console.log('[WhatsApp] Connection closed, reconnecting...')
@@ -197,9 +199,15 @@ export async function connectWhatsApp(): Promise<WhatsAppStatus> {
 /**
  * Disconnect WhatsApp and optionally clear session.
  */
-export function disconnectWhatsApp(clearSession = false): WhatsAppStatus {
+export async function disconnectWhatsApp(clearSession = false): Promise<WhatsAppStatus> {
+  intentionalDisconnect = true
   if (sock) {
-    sock.end(undefined)
+    if (clearSession) {
+      // Properly unlink from WhatsApp servers (removes from phone's linked devices)
+      await sock.logout().catch(() => {})
+    } else {
+      sock.end(undefined)
+    }
     sock = null
   }
   connectionState = 'disconnected'

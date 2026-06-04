@@ -1121,7 +1121,7 @@ function WhatsAppConnectionCard() {
   }
 
   const handleDisconnect = async () => {
-    const result = await window.aide.whatsapp?.disconnect(false)
+    const result = await window.aide.whatsapp?.disconnect(true)
     setStatus(result ?? null)
     setQrCode(null)
   }
