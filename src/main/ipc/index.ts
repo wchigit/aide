@@ -10,9 +10,9 @@ import { getPreferences, setPreferences } from '../preferences'
 import { getWeChatStatus, connectWeChat, disconnectWeChat, pushToWeChat, setTargetUser } from '../wechat'
 import { setBaseUrl as setWeChatBaseUrl } from '../wechat/connection'
 import { getTelegramStatus, connectTelegram, disconnectTelegram, pushToTelegram } from '../telegram'
-import { getTelegramStatus, connectTelegram, disconnectTelegram, pushToTelegram } from '../telegram'
 import { getDiscordStatus, connectDiscord, disconnectDiscord, pushToDiscord } from '../discord'
 import { listChannels, deliverTo } from '../channels'
+import { listSkills, getSkill, createSkillFromFile, searchGithubSkills, findSkillFilesInRepo, downloadSkillFromGithub, toggleSkill, deleteSkill } from '../skills'
 import { getUpdateState, checkForUpdates, downloadUpdate, quitAndInstall } from '../updater'
 import { sdkHealth, sdkError } from '../health'
 
@@ -92,6 +92,16 @@ export function registerIpcHandlers(): void {
   // === Preferences ===
   ipcMain.handle('preferences:get', () => getPreferences())
   ipcMain.handle('preferences:set', (_, prefs) => setPreferences(prefs))
+
+  // === Skills ===
+  ipcMain.handle('skills:list', () => listSkills())
+  ipcMain.handle('skills:get', (_, id) => getSkill(id))
+  ipcMain.handle('skills:createFromFile', (_, name, content) => createSkillFromFile(name, content))
+  ipcMain.handle('skills:searchGithub', (_, query) => searchGithubSkills(query))
+  ipcMain.handle('skills:findFilesInRepo', (_, repoFullName) => findSkillFilesInRepo(repoFullName))
+  ipcMain.handle('skills:downloadFromGithub', (_, repoFullName, filePath) => downloadSkillFromGithub(repoFullName, filePath))
+  ipcMain.handle('skills:toggle', (_, id, enabled) => toggleSkill(id, enabled))
+  ipcMain.handle('skills:delete', (_, id) => deleteSkill(id))
 
   // === WeChat ===
   ipcMain.handle('wechat:getStatus', () => getWeChatStatus())

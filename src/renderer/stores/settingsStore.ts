@@ -1,14 +1,15 @@
 import { create } from 'zustand'
-import type { Project, Relation, Job, ConnectionStatus, UserPreferences } from '@shared/types'
+import type { Project, Relation, Job, ConnectionStatus, UserPreferences, Skill } from '@shared/types'
 
 interface SettingsStore {
   isOpen: boolean
-  activeTab: 'connections' | 'projects' | 'relations' | 'jobs' | 'memory' | 'preferences'
+  activeTab: 'connections' | 'projects' | 'relations' | 'jobs' | 'memory' | 'skills' | 'preferences'
   projects: Project[]
   relations: Relation[]
   jobs: Job[]
   connections: ConnectionStatus[]
   preferences: UserPreferences | null
+  skills: Skill[]
 
   open: (tab?: SettingsStore['activeTab']) => void
   close: () => void
@@ -21,6 +22,7 @@ interface SettingsStore {
   fetchPreferences: () => Promise<void>
   setPreferences: (prefs: Partial<UserPreferences>) => Promise<void>
   disconnect: (type: 'workiq' | 'github') => Promise<void>
+  fetchSkills: () => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
@@ -31,6 +33,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   jobs: [],
   connections: [],
   preferences: null,
+  skills: [],
 
   open: (tab) => set({ isOpen: true, activeTab: tab || 'connections' }),
   close: () => set({ isOpen: false }),
@@ -71,5 +74,10 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     await window.aide.connections.disconnect(type)
     const connections = await window.aide.connections.getStatus()
     set({ connections })
+  },
+
+  fetchSkills: async () => {
+    const skills = await window.aide.skills.list()
+    set({ skills })
   }
 }))

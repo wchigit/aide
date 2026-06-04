@@ -69,6 +69,16 @@ const api: AideAPI = {
     get: () => ipcRenderer.invoke('preferences:get'),
     set: (prefs) => ipcRenderer.invoke('preferences:set', prefs)
   },
+  skills: {
+    list: () => ipcRenderer.invoke('skills:list'),
+    get: (id) => ipcRenderer.invoke('skills:get', id),
+    createFromFile: (name, content) => ipcRenderer.invoke('skills:createFromFile', name, content),
+    searchGithub: (query) => ipcRenderer.invoke('skills:searchGithub', query),
+    findFilesInRepo: (repoFullName) => ipcRenderer.invoke('skills:findFilesInRepo', repoFullName),
+    downloadFromGithub: (repoFullName, filePath) => ipcRenderer.invoke('skills:downloadFromGithub', repoFullName, filePath),
+    toggle: (id, enabled) => ipcRenderer.invoke('skills:toggle', id, enabled),
+    delete: (id) => ipcRenderer.invoke('skills:delete', id)
+  },
   wechat: {
     getStatus: () => ipcRenderer.invoke('wechat:getStatus'),
     connect: () => ipcRenderer.invoke('wechat:connect'),

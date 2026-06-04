@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, Send, RefreshCw, Download, CheckCircle2, AlertCircle } from 'lucide-react'
+import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, Send, RefreshCw, Download, CheckCircle2, AlertCircle, Sparkles, Upload, Star, ExternalLink } from 'lucide-react'
 import { WeChatLogo, TelegramLogo, DiscordLogo } from '../brand/icons'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, TelegramStatus, DiscordStatus, DeliveryTarget, UpdateState } from '@shared/types'
+import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, TelegramStatus, DiscordStatus, DeliveryTarget, UpdateState, Skill, GithubSkillSearchResult } from '@shared/types'
 
 function MicrosoftIcon() {
   return (
@@ -31,6 +31,7 @@ export function SettingsDrawer() {
     { id: 'projects', label: 'Projects', icon: <FolderOpen size={14} /> },
     { id: 'relations', label: 'Contacts', icon: <Users size={14} /> },
     { id: 'memory', label: 'Memory', icon: <Brain size={14} /> },
+    { id: 'skills', label: 'Skills', icon: <Sparkles size={14} /> },
     { id: 'preferences', label: 'Preferences', icon: <Sliders size={14} /> },
   ]
 
@@ -40,7 +41,7 @@ export function SettingsDrawer() {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={close} />
 
       {/* Panel */}
-      <div className="absolute right-0 top-0 bottom-0 w-[620px] max-w-[94vw] bg-surface-1 border-l border-edge shadow-2xl flex flex-col anim-slide-in">
+      <div className="absolute right-0 top-0 bottom-0 w-[720px] max-w-[94vw] bg-surface-1 border-l border-edge shadow-2xl flex flex-col anim-slide-in">
         {/* Header */}
         <div className="shrink-0 bg-surface-0">
           <div className="flex items-center justify-between pl-5 pr-5 h-[52px]">
@@ -77,6 +78,7 @@ export function SettingsDrawer() {
           {activeTab === 'relations' && <RelationsTab relations={relations} onRefresh={fetchRelations} />}
           {activeTab === 'jobs' && <JobsTab jobs={jobs} onRefresh={fetchJobs} />}
           {activeTab === 'memory' && <MemoryTab />}
+          {activeTab === 'skills' && <SkillsTab />}
           {activeTab === 'preferences' && <PreferencesTab />}
         </div>
       </div>
@@ -718,6 +720,340 @@ function formatRelativeTime(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`
   const days = Math.floor(hrs / 24)
   return `${days}d ago`
+}
+
+/* ═══════════════════════════════════════════
+   Skills Tab
+   ═══════════════════════════════════════════ */
+
+function SkillsTab() {
+  const [skills, setSkills] = useState<Skill[]>([])
+  const [loading, setLoading] = useState(false)
+  const [mode, setMode] = useState<'list' | 'upload' | 'search'>('list')
+
+  // Upload state
+  const [uploadName, setUploadName] = useState('')
+  const [uploadContent, setUploadContent] = useState('')
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<GithubSkillSearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [searchPerformed, setSearchPerformed] = useState(false)
+  const [downloading, setDownloading] = useState<string | null>(null)
+
+  // File selection state (for repos with multiple SKILL.md files)
+  const [selectingRepo, setSelectingRepo] = useState<GithubSkillSearchResult | null>(null)
+  const [availableFiles, setAvailableFiles] = useState<string[]>([])
+
+  useEffect(() => {
+    loadSkills()
+  }, [])
+
+  const loadSkills = async () => {
+    setLoading(true)
+    try {
+      const list = await window.aide.skills.list()
+      setSkills(list)
+    } catch (err) {
+      console.error('Failed to load skills:', err)
+    }
+    setLoading(false)
+  }
+
+  const handleFileSelect = async () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.md'
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      const content = await file.text()
+      setUploadName(file.name.replace(/\.md$/i, ''))
+      setUploadContent(content)
+      setMode('upload')
+    }
+    input.click()
+  }
+
+  const handleUpload = async () => {
+    if (!uploadName.trim() || !uploadContent.trim()) return
+    try {
+      await window.aide.skills.createFromFile(uploadName, uploadContent)
+      setUploadName('')
+      setUploadContent('')
+      setMode('list')
+      loadSkills()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to upload skill')
+    }
+  }
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return
+    setSearching(true)
+    setSearchPerformed(true)
+    try {
+      const results = await window.aide.skills.searchGithub(searchQuery)
+      setSearchResults(results)
+    } catch (err) {
+      console.error('Search failed:', err)
+      setSearchResults([])
+    }
+    setSearching(false)
+  }
+
+  const handleDownload = async (repo: GithubSkillSearchResult, filePath?: string) => {
+    if (downloading) return
+    setDownloading(repo.fullName)
+
+    try {
+      // If no specific file path, first check how many SKILL.md files exist
+      if (!filePath) {
+        const files = await window.aide.skills.findFilesInRepo(repo.fullName)
+
+        if (files.length === 0) {
+          alert(`No SKILL.md found in ${repo.fullName}`)
+          setDownloading(null)
+          return
+        }
+
+        if (files.length > 1) {
+          // Multiple files - show selection
+          setSelectingRepo(repo)
+          setAvailableFiles(files)
+          setDownloading(null)
+          return
+        }
+
+        // Single file - use it
+        filePath = files[0]
+      }
+
+      await window.aide.skills.downloadFromGithub(repo.fullName, filePath)
+      setMode('list')
+      setSearchQuery('')
+      setSearchResults([])
+      setSelectingRepo(null)
+      setAvailableFiles([])
+      loadSkills()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to download skill')
+    }
+    setDownloading(null)
+  }
+
+  const handleSelectFile = (filePath: string) => {
+    if (selectingRepo) {
+      handleDownload(selectingRepo, filePath)
+    }
+  }
+
+  const handleToggle = async (skill: Skill) => {
+    try {
+      await window.aide.skills.toggle(skill.id, !skill.enabled)
+      loadSkills()
+    } catch (err) {
+      console.error('Toggle failed:', err)
+    }
+  }
+
+  const handleDelete = async (skill: Skill) => {
+    if (!confirm(`Delete skill "${skill.name}"? This cannot be undone.`)) return
+    try {
+      await window.aide.skills.delete(skill.id)
+      loadSkills()
+    } catch (err) {
+      console.error('Delete failed:', err)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[12px] text-text-tertiary leading-relaxed">
+            Extend Aide's capabilities with custom skills.
+          </p>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2">
+        <Btn onClick={handleFileSelect}>
+          <Upload size={12} /> Upload Local Skill
+        </Btn>
+        <Btn onClick={() => setMode(mode === 'search' ? 'list' : 'search')}>
+          <Github size={12} /> Search GitHub
+        </Btn>
+      </div>
+
+      {/* Upload Form */}
+      {mode === 'upload' && (
+        <FormCard>
+          <div className="text-[11px] text-text-tertiary bg-surface-2 rounded-md px-3 py-2 mb-2">
+            Upload a <code className="text-accent">.md</code> file with YAML frontmatter (name, description) and skill instructions.
+          </div>
+          <Field label="Skill Name" value={uploadName} onChange={setUploadName} placeholder="my-skill" required />
+          <div>
+            <label className="text-[11px] text-text-tertiary font-medium block mb-1">Content Preview</label>
+            <div className="w-full bg-surface-0 border border-edge rounded-lg p-3 text-[12px] text-text-secondary max-h-32 overflow-y-auto">
+              <pre className="whitespace-pre-wrap">{uploadContent.slice(0, 500)}{uploadContent.length > 500 ? '...' : ''}</pre>
+            </div>
+          </div>
+          <FormActions
+            onSave={handleUpload}
+            onCancel={() => { setMode('list'); setUploadName(''); setUploadContent('') }}
+            disabled={!uploadName.trim() || !uploadContent.trim()}
+          />
+        </FormCard>
+      )}
+
+      {/* GitHub Search */}
+      {mode === 'search' && (
+        <FormCard>
+          <div className="flex gap-2 relative z-10">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              placeholder="Search for skills on GitHub..."
+              className="flex-1 bg-surface-0 border border-edge rounded-lg px-3 py-2 text-[13px] text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50 transition-colors"
+            />
+            <Btn onClick={handleSearch} disabled={searching || !searchQuery.trim()}>
+              {searching ? 'Searching...' : 'Search'}
+            </Btn>
+          </div>
+
+          {searchResults.length > 0 && (
+            <div className="space-y-2 max-h-64 overflow-y-auto mt-3">
+              {searchResults.map(repo => (
+                <div key={repo.fullName} className="p-3 rounded-lg bg-surface-0 border border-edge hover:border-accent/30 transition-colors">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Github size={14} className="text-text-tertiary shrink-0" />
+                        <a href={repo.url} target="_blank" rel="noopener" className="text-[13px] font-medium text-text-primary hover:text-accent transition-colors truncate">
+                          {repo.fullName}
+                        </a>
+                        <div className="flex items-center gap-1 text-[11px] text-text-tertiary shrink-0">
+                          <Star size={11} />
+                          <span>{repo.stars}</span>
+                        </div>
+                      </div>
+                      {repo.description && (
+                        <p className="text-[12px] text-text-tertiary mt-1 line-clamp-2">{repo.description}</p>
+                      )}
+                    </div>
+                    <Btn onClick={() => handleDownload(repo)} disabled={downloading === repo.fullName}>
+                      {downloading === repo.fullName ? 'Installing...' : <><Download size={12} /> Install</>}
+                    </Btn>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {searchResults.length === 0 && searchPerformed && !searching && (
+            <div className="mt-3"><Empty>No skills found. Try a different search term.</Empty></div>
+          )}
+
+          {/* File Selection for repos with multiple SKILL.md */}
+          {selectingRepo && availableFiles.length > 1 && (
+            <div className="mt-3 p-3 rounded-lg bg-accent/5 border border-accent/20">
+              <p className="text-[12px] text-text-primary font-medium mb-1">
+                Multiple SKILL.md files found in {selectingRepo.fullName}
+              </p>
+              <p className="text-[11px] text-text-tertiary mb-3">
+                Choose the one you want to install:
+              </p>
+              <div className="space-y-1.5">
+                {availableFiles.map(filePath => (
+                  <button
+                    key={filePath}
+                    onClick={() => handleSelectFile(filePath)}
+                    disabled={downloading === selectingRepo.fullName}
+                    className="w-full text-left px-3 py-2 rounded-md bg-surface-0 border border-edge hover:border-accent/50 text-[12px] text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
+                  >
+                    {filePath}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => { setSelectingRepo(null); setAvailableFiles([]) }}
+                className="mt-2 text-[11px] text-text-tertiary hover:text-text-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          <div className="flex justify-end mt-3">
+            <Btn onClick={() => { setMode('list'); setSearchQuery(''); setSearchResults([]); setSearchPerformed(false) }}>
+              Close
+            </Btn>
+          </div>
+        </FormCard>
+      )}
+
+      {/* Installed Skills */}
+      {mode === 'list' && (
+        <section className="space-y-3">
+          <SectionLabel
+            title="Installed Skills"
+            desc="Skills in .aide/skills/ directory"
+            meta={`${skills.length} installed`}
+          />
+
+          {loading ? (
+            <div className="text-[12px] text-text-tertiary text-center py-8">Loading…</div>
+          ) : skills.length === 0 ? (
+            <Empty>No skills installed. Upload a file or search GitHub to get started.</Empty>
+          ) : (
+            <div className="space-y-2">
+              {skills.map(skill => (
+                <div key={skill.id} className={`group p-3 rounded-lg bg-surface-0 border transition-colors ${skill.enabled ? 'border-edge' : 'border-edge opacity-60'}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Sparkles size={14} className={skill.enabled ? 'text-accent' : 'text-text-tertiary'} />
+                        <span className="text-[13px] font-medium text-text-primary">{skill.name}</span>
+                        {!skill.enabled && <Tag>Disabled</Tag>}
+                      </div>
+                      {skill.description && (
+                        <p className="text-[12px] text-text-tertiary mt-1">{skill.description}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-1.5 text-[11px] text-text-tertiary">
+                        <Tag>{skill.source}</Tag>
+                        {skill.sourceUrl && (
+                          <a href={skill.sourceUrl} target="_blank" rel="noopener" className="hover:text-accent transition-colors inline-flex items-center gap-0.5">
+                            <ExternalLink size={10} /> View source
+                          </a>
+                        )}
+                        <span>Added {new Date(skill.createdAt).toLocaleDateString('en-US')}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Toggle checked={skill.enabled} onChange={() => handleToggle(skill)} />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(skill) }}
+                        className="w-6 h-6 rounded-md flex items-center justify-center text-text-tertiary hover:text-danger hover:bg-danger/8 opacity-0 group-hover:opacity-100 transition-all"
+                        title="Delete"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  )
 }
 
 /* ═══════════════════════════════════════════

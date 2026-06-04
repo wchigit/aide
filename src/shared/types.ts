@@ -129,6 +129,27 @@ export interface Job {
   lastSummary: string | null
 }
 
+// === Skill ===
+
+export interface Skill {
+  id: string
+  name: string
+  description: string
+  source: 'local' | 'github'
+  sourceUrl: string | null
+  enabled: boolean
+  path: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface GithubSkillSearchResult {
+  fullName: string
+  description: string | null
+  stars: number
+  url: string
+}
+
 // === Models ===
 
 export interface ModelInfo {
@@ -259,6 +280,16 @@ export interface AideAPI {
   preferences: {
     get(): Promise<UserPreferences>
     set(prefs: Partial<UserPreferences>): Promise<void>
+  }
+  skills: {
+    list(): Promise<Skill[]>
+    get(id: string): Promise<Skill | null>
+    createFromFile(name: string, content: string): Promise<Skill>
+    searchGithub(query: string): Promise<GithubSkillSearchResult[]>
+    findFilesInRepo(repoFullName: string): Promise<string[]>
+    downloadFromGithub(repoFullName: string, filePath?: string): Promise<Skill>
+    toggle(id: string, enabled: boolean): Promise<Skill>
+    delete(id: string): Promise<void>
   }
   wechat: {
     getStatus(): Promise<WeChatStatus>
