@@ -7,7 +7,7 @@ import { listJobs, createJob, updateJob, deleteJob, toggleJob } from '../jobs'
 import { showSystemNotification } from '../index'
 import { isJobSession, jobCreatedTaskIds } from './state'
 import { getActiveMcpTools } from './mcp'
-import { browser, desktop, isBrowserAvailable, isDesktopAvailable } from '../automation'
+import { browser, isBrowserAvailable } from '../automation'
 import { BrowserWindow } from 'electron'
 import type { Tool } from '@github/copilot-sdk'
 
