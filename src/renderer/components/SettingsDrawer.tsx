@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, Send, RefreshCw, Download, CheckCircle2, AlertCircle } from 'lucide-react'
 import { WeChatLogo, TelegramLogo, DiscordLogo } from '../brand/icons'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, TelegramStatus, DiscordStatus, DeliveryTarget, UpdateState } from '@shared/types'
+import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, WhatsAppStatus, TelegramStatus, DiscordStatus, DeliveryTarget, UpdateState } from '@shared/types'
 
 function MicrosoftIcon() {
   return (
@@ -216,6 +216,7 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
         <SectionLabel title="Channels" desc="How Aide reaches you and takes commands on the go." />
         <div className="space-y-4">
           <WeChatConnectionCard />
+          <WhatsAppConnectionCard />
           <TelegramConnectionCard />
           <DiscordConnectionCard />
         </div>
@@ -640,6 +641,7 @@ function JobForm({ initial, managed, onSave, onCancel, onDelete }: {
 const DELIVERY_OPTIONS: { value: DeliveryTarget; label: string }[] = [
   { value: 'desktop', label: 'Aide chat' },
   { value: 'wechat', label: 'WeChat' },
+  { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'telegram', label: 'Telegram' },
   { value: 'discord', label: 'Discord' },
 ]
@@ -647,6 +649,7 @@ const DELIVERY_OPTIONS: { value: DeliveryTarget; label: string }[] = [
 const DELIVERY_LABELS: Record<DeliveryTarget, string> = {
   desktop: 'Aide chat',
   wechat: 'WeChat',
+  whatsapp: 'WhatsApp',
   telegram: 'Telegram',
   discord: 'Discord',
 }
@@ -1064,6 +1067,117 @@ function WeChatConnectionCard() {
             className="w-48 h-48 rounded-md"
           />
           <p className="text-[11px] text-text-tertiary">Scan the QR code with WeChat to sign in</p>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/* ═══════════════════════════════════════════
+   WhatsApp Connection Card (Baileys QR)
+   ═══════════════════════════════════════════ */
+
+function WhatsAppConnectionCard() {
+  const [status, setStatus] = useState<WhatsAppStatus | null>(null)
+  const [connecting, setConnecting] = useState(false)
+  const [qrCode, setQrCode] = useState<string | null>(null)
+
+  useEffect(() => {
+    console.log('[WhatsApp UI] whatsapp bridge available:', !!window.aide?.whatsapp)
+    window.aide.whatsapp?.getStatus().then(s => {
+      console.log('[WhatsApp UI] initial status:', s)
+      setStatus(s)
+    })
+  }, [])
+
+  // Listen for QR code and status events
+  useEffect(() => {
+    const handler = (event: any) => {
+      console.log('[WhatsApp UI] event received:', event.type, event.type === 'whatsapp:qrcode' ? 'qrCode length:' + event.qrCode?.length : '')
+      if (event.type === 'whatsapp:qrcode') {
+        setQrCode(event.qrCode)
+      } else if (event.type === 'whatsapp:status') {
+        setStatus(event.status)
+        if (event.status.connection === 'connected') {
+          setQrCode(null)
+          setConnecting(false)
+        } else if (event.status.connection === 'disconnected' || event.status.connection === 'error') {
+          setConnecting(false)
+        }
+      }
+    }
+    const unsub = window.aideEvents.on(handler)
+    return unsub
+  }, [])
+
+  const handleConnect = async () => {
+    setConnecting(true)
+    try {
+      await window.aide.whatsapp?.connect()
+    } catch {
+      setConnecting(false)
+      window.aide.whatsapp?.getStatus().then(setStatus)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    const result = await window.aide.whatsapp?.disconnect(true)
+    setStatus(result ?? null)
+    setQrCode(null)
+  }
+
+  const isConnected = status?.connection === 'connected'
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-[#25D366] text-white">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          </div>
+          <div>
+            <p className="text-[13px] font-medium text-text-primary">WhatsApp</p>
+            <p className="text-[12px] text-text-tertiary mt-0.5">QR scan · Powered by Baileys · Remote chat</p>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <div className={`w-[6px] h-[6px] rounded-full ${
+                isConnected ? 'bg-success' : 'bg-text-tertiary'
+              }`} />
+              <span className={`text-[11px] ${isConnected ? 'text-success' : 'text-text-tertiary'}`}>
+                {isConnected
+                  ? `Connected${status?.phoneNumber ? ` · ${status.phoneNumber}` : ''}`
+                  : connecting ? 'Waiting for scan…' : 'Not connected'}
+              </span>
+            </div>
+            {status?.lastError && <p className="text-[11px] text-danger mt-1">{status.lastError}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {isConnected && (
+            <Btn variant="danger" onClick={handleDisconnect}>Disconnect</Btn>
+          )}
+          {!isConnected && (
+            <Btn onClick={handleConnect}>
+              {connecting ? 'Scanning…' : 'Connect'}
+            </Btn>
+          )}
+        </div>
+      </div>
+
+      {isConnected && (
+        <p className="mt-3 text-[11px] text-text-tertiary">Messages you send to yourself in WhatsApp will be processed by Aide.</p>
+      )}
+
+      {/* QR Code display */}
+      {qrCode && !isConnected && (
+        <div className="mt-4 flex flex-col items-center gap-2 p-4 rounded-lg bg-surface-2 border border-edge">
+          <div className="w-48 h-48 flex items-center justify-center bg-white rounded-md p-2">
+            <img
+              src={qrCode}
+              alt="WhatsApp QR Code"
+              className="w-full h-full"
+            />
+          </div>
+          <p className="text-[11px] text-text-tertiary">Open WhatsApp → Linked Devices → Scan this code</p>
         </div>
       )}
     </Card>

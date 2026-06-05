@@ -9,6 +9,7 @@ import { listRelations, getRelation, createRelation, updateRelation, deleteRelat
 import { getPreferences, setPreferences } from '../preferences'
 import { getWeChatStatus, connectWeChat, disconnectWeChat, pushToWeChat, setTargetUser } from '../wechat'
 import { setBaseUrl as setWeChatBaseUrl } from '../wechat/connection'
+import { getWhatsAppStatus, connectWhatsApp, disconnectWhatsApp, pushToWhatsApp } from '../whatsapp'
 import { getTelegramStatus, connectTelegram, disconnectTelegram, pushToTelegram } from '../telegram'
 import { getDiscordStatus, connectDiscord, disconnectDiscord, pushToDiscord } from '../discord'
 import { listChannels, deliverTo } from '../channels'
@@ -32,9 +33,13 @@ export function registerIpcHandlers(): void {
     const onStream = (delta: string) => {
       win?.webContents.send('aide:event', { type: 'chat:stream', taskId, delta })
     }
-    const result = await sendMessage(message, taskId, onStream, attachments)
-    win?.webContents.send('aide:event', { type: 'chat:stream-end', taskId })
-    return result
+    try {
+      const result = await sendMessage(message, taskId, onStream, attachments)
+      return result
+    } finally {
+      // Always send stream-end, even on error/timeout, to reset UI streaming state
+      win?.webContents.send('aide:event', { type: 'chat:stream-end', taskId })
+    }
   })
   ipcMain.handle('chat:stopStream', () => stopStream())
   ipcMain.handle('chat:resetSession', (_, taskId) => resetSession(taskId))
@@ -100,6 +105,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('wechat:push', (_, text) => pushToWeChat(text))
   ipcMain.handle('wechat:setTargetUser', (_, userId) => setTargetUser(userId))
   ipcMain.handle('wechat:setBaseUrl', (_, url) => setWeChatBaseUrl(url))
+
+  // === WhatsApp ===
+  ipcMain.handle('whatsapp:getStatus', () => getWhatsAppStatus())
+  ipcMain.handle('whatsapp:connect', () => connectWhatsApp())
+  ipcMain.handle('whatsapp:disconnect', (_, clearSession) => disconnectWhatsApp(clearSession))
+  ipcMain.handle('whatsapp:push', (_, text) => pushToWhatsApp(text))
 
   // === Telegram ===
   ipcMain.handle('telegram:getStatus', () => getTelegramStatus())

@@ -114,7 +114,7 @@ export type RelationRole = 'manager' | 'peer' | 'report' | 'external' | 'stakeho
 
 // === Job ===
 
-export type DeliveryTarget = 'desktop' | 'wechat' | 'telegram' | 'discord'
+export type DeliveryTarget = 'desktop' | 'wechat' | 'whatsapp' | 'telegram' | 'discord'
 
 export interface Job {
   id: string
@@ -161,6 +161,16 @@ export interface WeChatStatus {
   monitorActive: boolean
 }
 
+// === WhatsApp ===
+
+export interface WhatsAppStatus {
+  connection: 'disconnected' | 'connecting' | 'connected' | 'error'
+  phoneNumber: string | null
+  qrCode: string | null
+  lastError: string | null
+  monitorActive: boolean
+}
+
 // === Telegram ===
 
 export interface TelegramStatus {
@@ -183,7 +193,7 @@ export interface DiscordStatus {
 
 // === Channels ===
 
-export type ChannelId = 'wechat' | 'telegram' | 'discord'
+export type ChannelId = 'wechat' | 'whatsapp' | 'telegram' | 'discord'
 
 export interface ChannelStatusInfo {
   id: ChannelId
@@ -267,6 +277,12 @@ export interface AideAPI {
     push(text: string): Promise<void>
     setTargetUser(userId: string): Promise<void>
     setBaseUrl(url: string): Promise<void>
+  }
+  whatsapp: {
+    getStatus(): Promise<WhatsAppStatus>
+    connect(): Promise<WhatsAppStatus>
+    disconnect(clearSession?: boolean): Promise<WhatsAppStatus>
+    push(text: string): Promise<void>
   }
   telegram: {
     getStatus(): Promise<TelegramStatus>
@@ -451,6 +467,7 @@ export type AideEvent =
   | { type: 'chat:message'; message: ChatMessage }
   | { type: 'chat:stream'; taskId: string | null; delta: string }
   | { type: 'chat:stream-end'; taskId: string | null }
+  | { type: 'chat:error'; taskId: string | null; error: string }
   | { type: 'chat:pending-action'; action: PendingAction }
   | { type: 'chat:tool-use'; taskId: string | null; record: ToolCallRecord }
   | { type: 'chat:action-expired'; actionId: string }
@@ -461,6 +478,8 @@ export type AideEvent =
   | { type: 'wechat:qrcode'; qrcode: string; imgContent: string }
   | { type: 'wechat:login-progress'; stage: 'scanned' | 'confirmed' | 'expired' | 'timeout' }
   | { type: 'wechat:status'; status: WeChatStatus }
+  | { type: 'whatsapp:qrcode'; qrCode: string }
+  | { type: 'whatsapp:status'; status: WhatsAppStatus }
   | { type: 'telegram:status'; status: TelegramStatus }
   | { type: 'discord:status'; status: DiscordStatus }
   | { type: 'update:state'; state: UpdateState }

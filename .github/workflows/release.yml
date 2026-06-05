@@ -32,6 +32,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Download Playwright browser
+        run: npx playwright install chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/browsers
+          
       # The Copilot CLI ships as platform-specific binary packages gated by
       # os/cpu, so `npm ci` only installs the one matching the build runner.
       # macOS is packaged for BOTH arm64 and x64, but the runner is arm64 — so

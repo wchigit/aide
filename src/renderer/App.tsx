@@ -65,6 +65,19 @@ export default function App() {
             clearLive(event.taskId)
           }
           break
+        case 'chat:error':
+          // Show agent errors as messages in the chat
+          if (event.taskId === selectedTaskIdRef.current) {
+            endStream()
+            addMessage({
+              id: `agent-err-${Date.now()}`,
+              role: 'agent',
+              content: `⚠️ Agent error: ${event.error}`,
+              timestamp: new Date().toISOString(),
+              taskId: event.taskId
+            })
+          }
+          break
         case 'chat:pending-action':
           addPendingAction(event.action)
           break
