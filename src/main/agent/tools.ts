@@ -7,6 +7,7 @@ import { listJobs, createJob, updateJob, deleteJob, toggleJob } from '../jobs'
 import { showSystemNotification } from '../index'
 import { isJobSession, jobCreatedTaskIds } from './state'
 import { getActiveMcpTools } from './mcp'
+import { browser, isBrowserAvailable } from '../automation'
 import { BrowserWindow } from 'electron'
 import type { Tool } from '@github/copilot-sdk'
 
@@ -33,6 +34,12 @@ export function buildTools(): Tool<any>[] {
     manageJobTool,
     managePreferencesTool,
     generateReportTool,
+    // Browser automation tools
+    browserNavigateTool,
+    browserClickTool,
+    browserTypeTool,
+    browserReadTool,
+    browserScreenshotTool,
     ...mcpTools
   ]
 }
@@ -614,5 +621,123 @@ const generateReportTool: Tool<any> = {
 function emitToRenderer(event: { type: string; [key: string]: unknown }): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('aide:event', event)
+  }
+}
+
+// ============================================================
+// Browser Automation Tools — Playwright-based web automation
+// ============================================================
+
+const browserNavigateTool: Tool<any> = {
+  name: 'browser_navigate',
+  description: 'Navigate to a URL in the browser. Opens a new browser window if needed. Use this to visit websites, web apps, or any URL.',
+  parameters: {
+    type: 'object',
+    properties: {
+      url: { type: 'string', description: 'The URL to navigate to (e.g., "https://github.com")' }
+    },
+    required: ['url']
+  },
+  skipPermission: false,
+  handler: async (args: { url: string }) => {
+    if (!isBrowserAvailable()) {
+      return { success: false, error: 'Browser automation is not available. Chromium may not be installed.' }
+    }
+    try {
+      const page = await browser.navigateTo(args.url)
+      const title = await page.title()
+      return { success: true, url: args.url, title, message: `Navigated to ${args.url}` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserClickTool: Tool<any> = {
+  name: 'browser_click',
+  description: 'Click an element on the current web page. Use CSS selectors to identify the element.',
+  parameters: {
+    type: 'object',
+    properties: {
+      selector: { type: 'string', description: 'CSS selector for the element to click (e.g., "button.submit", "#login-btn", "a[href=\'/dashboard\']")' }
+    },
+    required: ['selector']
+  },
+  skipPermission: false,
+  handler: async (args: { selector: string }) => {
+    try {
+      await browser.clickElement(args.selector)
+      return { success: true, message: `Clicked element: ${args.selector}` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserTypeTool: Tool<any> = {
+  name: 'browser_type',
+  description: 'Type text into an input field on the current web page.',
+  parameters: {
+    type: 'object',
+    properties: {
+      selector: { type: 'string', description: 'CSS selector for the input element' },
+      text: { type: 'string', description: 'Text to type into the element' }
+    },
+    required: ['selector', 'text']
+  },
+  skipPermission: false,
+  handler: async (args: { selector: string; text: string }) => {
+    try {
+      await browser.typeIntoElement(args.selector, args.text)
+      return { success: true, message: `Typed text into: ${args.selector}` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserReadTool: Tool<any> = {
+  name: 'browser_read',
+  description: 'Read text content from an element on the current web page. Also returns current URL and page title.',
+  parameters: {
+    type: 'object',
+    properties: {
+      selector: { type: 'string', description: 'CSS selector for the element to read (optional, omit to get page info only)' }
+    }
+  },
+  skipPermission: true,
+  handler: async (args: { selector?: string }) => {
+    try {
+      const url = browser.getCurrentUrl()
+      const title = await browser.getPageTitle()
+      let text: string | undefined
+
+      if (args.selector) {
+        text = await browser.getElementText(args.selector)
+      }
+
+      return { success: true, url, title, text }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserScreenshotTool: Tool<any> = {
+  name: 'browser_screenshot',
+  description: 'Take a screenshot of the current web page. Returns a base64-encoded PNG image.',
+  parameters: {
+    type: 'object',
+    properties: {}
+  },
+  skipPermission: true,
+  handler: async () => {
+    try {
+      const buffer = await browser.takeScreenshot()
+      const base64 = buffer.toString('base64')
+      return { success: true, imageBase64: base64, mimeType: 'image/png' }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
   }
 }

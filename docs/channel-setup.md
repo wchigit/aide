@@ -72,6 +72,19 @@ WeChat uses houk's built-in integration. No external bot setup is required.
 
 ---
 
+## WhatsApp
+
+WhatsApp is powered by Baileys and connects through WhatsApp Web over a WebSocket session from your desktop app.
+
+### Configure in Aide
+
+1. Open Aide → Settings → Channels → WhatsApp
+2. Click **Connect** — a QR code will appear
+3. In WhatsApp mobile app, go to **Linked Devices** and scan the QR code
+4. Send a message to yourself (or to the linked chat) to confirm Aide can receive messages
+
+---
+
 ## Delivery Targets
 
 Once channels are connected, you can assign them as delivery targets on any Job:
@@ -80,4 +93,4 @@ Once channels are connected, you can assign them as delivery targets on any Job:
 2. Under **Delivery Targets**, select one or more channels
 3. When the job completes, results are pushed to all selected channels
 
-Available targets: `Desktop` (Aide chat), `WeChat`, `Telegram`, `Discord`
+Available targets: `Desktop` (Aide chat), `WeChat`, `WhatsApp`, `Telegram`, `Discord`

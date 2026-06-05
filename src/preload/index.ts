@@ -97,6 +97,12 @@ const api: AideAPI = {
     setTargetUser: (userId) => ipcRenderer.invoke('wechat:setTargetUser', userId),
     setBaseUrl: (url) => ipcRenderer.invoke('wechat:setBaseUrl', url)
   },
+  whatsapp: {
+    getStatus: () => ipcRenderer.invoke('whatsapp:getStatus'),
+    connect: () => ipcRenderer.invoke('whatsapp:connect'),
+    disconnect: (clearSession) => ipcRenderer.invoke('whatsapp:disconnect', clearSession),
+    push: (text) => ipcRenderer.invoke('whatsapp:push', text)
+  },
   telegram: {
     getStatus: () => ipcRenderer.invoke('telegram:getStatus'),
     connect: (config) => ipcRenderer.invoke('telegram:connect', config),
@@ -118,6 +124,11 @@ const api: AideAPI = {
     check: () => ipcRenderer.invoke('updates:check'),
     download: () => ipcRenderer.invoke('updates:download'),
     install: () => ipcRenderer.invoke('updates:install')
+  },
+  files: {
+    open: (taskId, ref) => ipcRenderer.invoke('files:open', taskId, ref),
+    reveal: (taskId, ref) => ipcRenderer.invoke('files:reveal', taskId, ref),
+    exists: (taskId, ref) => ipcRenderer.invoke('files:exists', taskId, ref)
   },
   system: {
     health: () => ipcRenderer.invoke('system:health')

@@ -9,6 +9,7 @@ import { createClient } from './agent/client'
 import { stopAllMcpServers } from './agent/mcp'
 import { initConnectionState, verifyConnectionsViaMcp } from './connections'
 import { initWeChat } from './wechat'
+import { initWhatsApp } from './whatsapp'
 import { initTelegram } from './telegram'
 import { initDiscord } from './discord'
 import { stopMonitor as stopWeChatMonitor } from './wechat/messaging'
@@ -140,6 +141,8 @@ app.whenReady().then(async () => {
     catchUpMissedJobs().catch((err) => console.warn('[Aide] Job catch-up:', err))
     // Auto-reconnect WeChat if previously authenticated
     initWeChat(true).catch(err => console.warn('[Aide] WeChat init:', err))
+    // Auto-reconnect WhatsApp if previously linked
+    initWhatsApp(true).catch(err => console.warn('[Aide] WhatsApp init:', err))
     // Auto-reconnect Telegram if previously configured
     initTelegram(true).catch(err => console.warn('[Aide] Telegram init:', err))
     // Auto-reconnect Discord if previously configured
