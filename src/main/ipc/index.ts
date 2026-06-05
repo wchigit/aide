@@ -9,6 +9,7 @@ import { listRelations, getRelation, createRelation, updateRelation, deleteRelat
 import { getPreferences, setPreferences } from '../preferences'
 import { getWeChatStatus, connectWeChat, disconnectWeChat, pushToWeChat, setTargetUser } from '../wechat'
 import { setBaseUrl as setWeChatBaseUrl } from '../wechat/connection'
+import { getWhatsAppStatus, connectWhatsApp, disconnectWhatsApp, pushToWhatsApp } from '../whatsapp'
 import { getTelegramStatus, connectTelegram, disconnectTelegram, pushToTelegram } from '../telegram'
 import { getDiscordStatus, connectDiscord, disconnectDiscord, pushToDiscord } from '../discord'
 import { listChannels, deliverTo } from '../channels'
@@ -103,6 +104,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('wechat:push', (_, text) => pushToWeChat(text))
   ipcMain.handle('wechat:setTargetUser', (_, userId) => setTargetUser(userId))
   ipcMain.handle('wechat:setBaseUrl', (_, url) => setWeChatBaseUrl(url))
+
+  // === WhatsApp ===
+  ipcMain.handle('whatsapp:getStatus', () => getWhatsAppStatus())
+  ipcMain.handle('whatsapp:connect', () => connectWhatsApp())
+  ipcMain.handle('whatsapp:disconnect', (_, clearSession) => disconnectWhatsApp(clearSession))
+  ipcMain.handle('whatsapp:push', (_, text) => pushToWhatsApp(text))
 
   // === Telegram ===
   ipcMain.handle('telegram:getStatus', () => getTelegramStatus())
