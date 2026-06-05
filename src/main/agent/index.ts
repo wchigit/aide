@@ -247,6 +247,19 @@ const hooks: SessionConfig['hooks'] = {
       taskId,
       record: { id: toolCallId, toolName, status: 'done', timestamp: new Date().toISOString(), durationMs, inputPreview, resultPreview }
     })
+  },
+
+  // On error — log and emit event for UI awareness
+  onErrorOccurred: async (input: any, invocation: { sessionId: string }) => {
+    const taskId = extractTaskIdFromSession(invocation.sessionId)
+    console.error(`[Agent] error in session ${invocation.sessionId}:`, input.error)
+
+    // Emit an error event so the UI can display the failure
+    emitEvent({
+      type: 'chat:error',
+      taskId,
+      error: input.error || 'An error occurred during the agent session'
+    })
   }
 }
 

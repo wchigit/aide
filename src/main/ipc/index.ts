@@ -32,9 +32,13 @@ export function registerIpcHandlers(): void {
     const onStream = (delta: string) => {
       win?.webContents.send('aide:event', { type: 'chat:stream', taskId, delta })
     }
-    const result = await sendMessage(message, taskId, onStream, attachments)
-    win?.webContents.send('aide:event', { type: 'chat:stream-end', taskId })
-    return result
+    try {
+      const result = await sendMessage(message, taskId, onStream, attachments)
+      return result
+    } finally {
+      // Always send stream-end, even on error/timeout, to reset UI streaming state
+      win?.webContents.send('aide:event', { type: 'chat:stream-end', taskId })
+    }
   })
   ipcMain.handle('chat:stopStream', () => stopStream())
   ipcMain.handle('chat:resetSession', (_, taskId) => resetSession(taskId))

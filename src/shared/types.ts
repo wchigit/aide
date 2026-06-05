@@ -462,6 +462,7 @@ export type AideEvent =
   | { type: 'chat:message'; message: ChatMessage }
   | { type: 'chat:stream'; taskId: string | null; delta: string }
   | { type: 'chat:stream-end'; taskId: string | null }
+  | { type: 'chat:error'; taskId: string | null; error: string }
   | { type: 'chat:pending-action'; action: PendingAction }
   | { type: 'chat:tool-use'; taskId: string | null; record: ToolCallRecord }
   | { type: 'chat:action-expired'; actionId: string }

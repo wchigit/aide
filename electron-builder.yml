@@ -24,9 +24,17 @@ asarUnpack:
   - "**/node_modules/@github/copilot-darwin-x64/**"
   - "**/node_modules/@github/copilot-linux-x64/**"
   - "**/node_modules/@github/copilot-linux-arm64/**"
+  - "**/node_modules/playwright-core/**"
 
 # Rebuild native modules (better-sqlite3) for the target platform.
 npmRebuild: true
+
+# Bundle Playwright browser per-platform (downloaded in CI)
+extraResources:
+  - from: "browsers"
+    to: "browsers"
+    filter:
+      - "**/*"
 
 # ---------------------------------------------------------------------------
 # macOS
