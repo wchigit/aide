@@ -68,7 +68,7 @@ export default function App() {
         case 'chat:error':
           // Show agent errors as messages in the chat
           if (event.taskId === selectedTaskIdRef.current) {
-            endStream()
+            endStream(event.taskId)
             addMessage({
               id: `agent-err-${Date.now()}`,
               role: 'agent',
