@@ -1137,7 +1137,7 @@ function WhatsAppConnectionCard() {
           </div>
           <div>
             <p className="text-[13px] font-medium text-text-primary">WhatsApp</p>
-            <p className="text-[12px] text-text-tertiary mt-0.5">QR scan · Instant messaging · Remote chat</p>
+            <p className="text-[12px] text-text-tertiary mt-0.5">QR scan · Powered by Baileys · Remote chat</p>
             <div className="flex items-center gap-1.5 mt-1.5">
               <div className={`w-[6px] h-[6px] rounded-full ${
                 isConnected ? 'bg-success' : 'bg-text-tertiary'
