@@ -8,11 +8,13 @@ import type { Channel, ChannelId, ChannelStatus } from './types'
 import { telegramChannel } from '../telegram'
 import { discordChannel } from '../discord'
 import { wechatChannel } from './wechat-adapter'
+import { whatsappChannel } from './whatsapp-adapter'
 
 const channels = new Map<ChannelId, Channel>()
 
 // Register built-in channels
 channels.set('wechat', wechatChannel)
+channels.set('whatsapp', whatsappChannel)
 channels.set('telegram', telegramChannel)
 channels.set('discord', discordChannel)
 
