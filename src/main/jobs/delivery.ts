@@ -1,11 +1,12 @@
 import type { DeliveryTarget, Job } from '@shared/types'
 import { postAgentMessageToGeneral } from '../agent'
 import { pushToWeChat } from '../wechat'
+import { pushToTelegram } from '../telegram'
+import { pushToDiscord } from '../discord'
 
 /**
  * A delivery channel knows how to push a job's result somewhere. New channels
- * (Slack, Telegram, email, …) only need to register here — the rest of the job
- * pipeline stays untouched.
+ * only need to register here — the rest of the job pipeline stays untouched.
  */
 interface DeliveryChannel {
   /** Send the job summary. Throw to signal failure; the dispatcher isolates it. */
@@ -22,6 +23,16 @@ const channels: Record<DeliveryTarget, DeliveryChannel> = {
     async send(summary) {
       await pushToWeChat(summary)
     }
+  },
+  telegram: {
+    async send(summary) {
+      await pushToTelegram(summary)
+    }
+  },
+  discord: {
+    async send(summary) {
+      await pushToDiscord(summary)
+    }
   }
 }
 
@@ -33,12 +44,15 @@ const channels: Record<DeliveryTarget, DeliveryChannel> = {
 export async function deliverJobResult(job: Job, summary: string): Promise<void> {
   if (!summary || job.deliveryTargets.length === 0) return
 
+  console.log(`[Job delivery] ${job.id} → targets: [${job.deliveryTargets.join(', ')}]`)
+
   await Promise.all(
     job.deliveryTargets.map(async (target) => {
       const channel = channels[target]
       if (!channel) return
       try {
         await channel.send(summary, job)
+        console.log(`[Job delivery] ${job.id} → ${target} OK`)
       } catch (err) {
         console.error(`[Job delivery] ${job.id} → ${target} failed:`, err)
       }

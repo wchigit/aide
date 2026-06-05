@@ -67,7 +67,7 @@ const srcLabel: Record<Src, string> = {
 function Priority({ p }: { p: 'P0' | 'P1' | 'P2' }) {
   const styles: Record<string, string> = {
     P0: 'bg-[oklch(0.35_0.05_270)] text-white',
-    P1: 'bg-[oklch(0.93_0.03_160)] text-[oklch(0.38_0.05_160)]',
+    P1: 'bg-[oklch(0.93_0.03_255)] text-[oklch(0.42_0.08_255)]',
     P2: 'bg-[oklch(0.95_0_0)] text-[oklch(0.55_0_0)]',
   }
   return (
@@ -117,7 +117,7 @@ export function AppMock() {
             <span className="text-[10.5px] font-medium uppercase tracking-[0.04em] text-[oklch(58%_0.01_270)]">In progress</span>
             <span className="text-[10px] text-[oklch(58%_0.01_270)]">2</span>
           </div>
-          <SidebarItem p="P1" title="Summarize design sync" working />
+          <SidebarItem p="P1" title="Summarize design sync" />
           <SidebarItem p="P2" title="Prep notes for 1:1" />
         </div>
 
@@ -127,7 +127,7 @@ export function AppMock() {
             <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="oklch(55% 0.18 260)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" />
             </svg>
-            <span className="text-[11.5px] font-medium text-[oklch(40%_0.01_270)]">Ask Aide anything</span>
+            <span className="text-[11.5px] font-medium text-[oklch(40%_0.01_270)]">Tell Aide what you need</span>
           </div>
         </div>
       </aside>
@@ -143,11 +143,11 @@ export function AppMock() {
           {/* New tasks section */}
           <section>
             <SectionBar title="New tasks" count={2} bar="bg-[oklch(55%_0.18_260)]" countCls="bg-[oklch(55%_0.18_260_/_0.1)] text-[oklch(55%_0.18_260)]" />
-            <div className="mt-2.5 grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+            <div className="mt-2.5 grid max-w-[640px] grid-cols-1 gap-2.5 lg:grid-cols-2">
               <TaskCard
                 p="P0"
                 title="Reply to Q3 budget thread"
-                desc="Priya needs the revised figures before the board sync."
+                desc="Priya needs the revised figures before the board sync — the draft reply is ready for your review."
                 src="email"
                 due="Due today"
                 time="8m"
@@ -155,7 +155,7 @@ export function AppMock() {
               <TaskCard
                 p="P1"
                 title="Review PR #482 — auth refactor"
-                desc="4 files changed, touches the session layer."
+                desc="4 files changed across the session layer; I’ve summarized the risky bits to look at first."
                 src="github"
                 time="1h"
               />
@@ -165,19 +165,19 @@ export function AppMock() {
           {/* In progress section */}
           <section>
             <SectionBar title="In progress" count={2} bar="bg-[oklch(62%_0.16_80)]" countCls="bg-[oklch(93%_0.004_270)] text-[oklch(40%_0.01_270)]" />
-            <div className="mt-2.5 grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+            <div className="mt-2.5 grid max-w-[640px] grid-cols-1 gap-2.5 lg:grid-cols-2">
               <TaskCard
                 p="P1"
                 title="Summarize design sync"
-                desc="42 messages across the thread."
+                desc="42 messages across the thread — pulling out the decisions and the open questions for you."
                 src="teams"
                 time="2h"
-                tint="bg-[oklch(0.98_0.005_160)] border-l-[oklch(0.60_0.06_160)]"
+                tint="bg-[oklch(0.98_0.008_255)] border-l-[oklch(0.58_0.09_255)]"
               />
               <TaskCard
                 p="P2"
                 title="Prep notes for 1:1"
-                desc="Pull last week’s threads and open items."
+                desc="Pulling last week’s threads and open items so you walk in with everything in one place."
                 src="calendar"
                 due="in 45m"
                 time="3h"
@@ -234,27 +234,19 @@ function SidebarItem({
   p,
   title,
   isNew,
-  working,
 }: {
   p: 'P0' | 'P1' | 'P2'
   title: string
   isNew?: boolean
-  working?: boolean
 }) {
   const tag: Record<string, string> = {
     P0: 'bg-[oklch(0.35_0.05_270)] text-white',
-    P1: 'bg-[oklch(0.93_0.03_160)] text-[oklch(0.38_0.05_160)]',
+    P1: 'bg-[oklch(0.93_0.03_255)] text-[oklch(0.42_0.08_255)]',
     P2: 'bg-[oklch(0.95_0_0)] text-[oklch(0.55_0_0)]',
   }
   return (
     <div className="flex items-center gap-2 rounded-lg px-2.5 py-[6px]">
       <span className={`shrink-0 rounded px-[4px] py-[1px] text-[9px] font-semibold leading-none ${tag[p]}`}>{p}</span>
-      {working && (
-        <span className="relative -ml-0.5 shrink-0">
-          <span className="block h-[5px] w-[5px] rounded-full bg-[oklch(55%_0.18_260)]" />
-          <span className="absolute inset-0 h-[5px] w-[5px] animate-pulse-dot rounded-full bg-[oklch(55%_0.18_260)]" />
-        </span>
-      )}
       <span className="flex-1 truncate text-[12px] leading-[1.4] text-[oklch(40%_0.01_270)]">{title}</span>
       {isNew && <span className="h-[5px] w-[5px] shrink-0 animate-pulse-dot rounded-full bg-[oklch(55%_0.18_260)]" />}
     </div>
@@ -302,13 +294,13 @@ function TaskCard({
     ? `border border-l-2 border-[oklch(88%_0.006_270)] ${tint}`
     : 'border border-[oklch(88%_0.006_270)] bg-white'
   return (
-    <div className={`rounded-xl px-3.5 py-3 ${base}`}>
+    <div className={`rounded-xl px-4 py-4 ${base}`}>
       <h4 className="text-[13px] font-medium leading-[1.5] text-[oklch(18%_0.01_270)]">
         <Priority p={p} />
         {title}
       </h4>
-      {desc && <p className="mt-1.5 text-[12px] leading-[1.5] text-[oklch(40%_0.01_270)]">{desc}</p>}
-      <div className="mt-2.5 flex items-center gap-3 text-[10.5px] text-[oklch(58%_0.01_270)]">
+      {desc && <p className="mt-2 text-[12px] leading-[1.5] text-[oklch(40%_0.01_270)]">{desc}</p>}
+      <div className="mt-3.5 flex items-center gap-3 text-[10.5px] text-[oklch(58%_0.01_270)]">
         <span className="inline-flex items-center gap-1">
           {srcIcon[src]}
           {srcLabel[src]}

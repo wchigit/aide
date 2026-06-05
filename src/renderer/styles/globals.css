@@ -90,12 +90,12 @@
 }
 @media (min-width: 900px) {
   .chat-content-width {
-    max-width: min(860px, 85%);
+    max-width: min(780px, 88%);
   }
 }
 @media (min-width: 1440px) {
   .chat-content-width {
-    max-width: min(880px, 62%);
+    max-width: min(820px, 64%);
   }
 }
 

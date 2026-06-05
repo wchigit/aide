@@ -5,13 +5,25 @@ import { listRelations, getRelation } from '../relations'
 import { getAutonomyLevel } from '../preferences'
 import { getConnectionStatus } from '../connections'
 import { showSystemNotification } from '../index'
-import type { ChatMessage, Task, PendingAction } from '@shared/types'
+import type { ChatMessage, Task, PendingAction, TurnStep } from '@shared/types'
 import { v4 as uuid } from 'uuid'
 import { getDb } from '../db'
 import { BrowserWindow } from 'electron'
 import type { CopilotClient, CopilotSession } from '@github/copilot-sdk'
 import type { SessionConfig, PermissionRequest, PermissionRequestResult } from '@github/copilot-sdk'
 import { buildTools } from './tools'
+import { sdkError } from '../health'
+
+// Build the user-facing error when the SDK never came up. Prefer the real
+// startup failure (captured in health) over a generic message so packaging or
+// auth issues are diagnosable instead of opaque.
+function sdkUnavailableError(): Error {
+  return new Error(
+    sdkError
+      ? `Copilot SDK failed to start: ${sdkError}`
+      : 'Copilot SDK not initialized. Ensure SDK is configured.'
+  )
+}
 
 // ============================================================
 // Agent Engine — Adapter between Aide and Copilot SDK
@@ -215,6 +227,21 @@ const hooks: SessionConfig['hooks'] = {
     const resultPreview = resultStr.length > 120 ? resultStr.slice(0, 120) + '…' : resultStr
     console.log(`[Agent] tool_post: ${toolName} | session: ${invocation.sessionId} | ${durationMs}ms | result_size: ${resultStr.length}`)
 
+    // Background job sessions must never surface in any chat window.
+    if (invocation.sessionId.startsWith('job-')) return
+
+    // Record into the active turn's process trail (chronological with narration).
+    if (activeTurnSteps) {
+      activeTurnSteps.push({
+        kind: 'tool',
+        toolName,
+        status: 'done',
+        durationMs,
+        inputPreview,
+        resultPreview
+      })
+    }
+
     emitEvent({
       type: 'chat:tool-use',
       taskId,
@@ -238,6 +265,11 @@ const hooks: SessionConfig['hooks'] = {
 
 // Tool call timing tracker
 const toolCallTimestamps = new Map<string, number>()
+// Active interactive turn's step sink (set by runTurn). Tool hooks push their
+// completed steps here so the turn's process trail stays in chronological order
+// alongside the assistant's narration. Null when no interactive turn is running
+// (e.g. background jobs), so those never collect a trail.
+let activeTurnSteps: TurnStep[] | null = null
 // Track sessions where task has been auto-promoted to in_progress
 const activatedTaskSessions = new Set<string>()
 // Track interaction count per session for periodic memory flush
@@ -423,7 +455,7 @@ export function setSelectedModel(modelId: string): void {
 // === Core API: send message ===
 
 async function getOrCreateSession(taskId: string | null): Promise<CopilotSession> {
-  if (!client) throw new Error('Copilot SDK not initialized. Ensure SDK is configured.')
+  if (!client) throw sdkUnavailableError()
 
   const sessionId = taskId ? getTaskSessionId(taskId) : 'general'
   const config: SessionConfig = {
@@ -442,6 +474,108 @@ async function getOrCreateSession(taskId: string | null): Promise<CopilotSession
   } catch {
     return await client.createSession(config)
   }
+}
+
+// === Turn runner ===
+//
+// A "turn" is one user prompt → assistant response cycle. Rather than blocking
+// on a fixed total-duration timeout (which kills long-but-healthy work, loses
+// streamed output, and leaves the agent running as a zombie), we drive the turn
+// off the SDK event stream:
+//
+//   - Every event is a heartbeat that resets an *idle* watchdog.
+//   - The turn finishes on `session.idle` (done), `session.error`, or `abort`.
+//   - The watchdog fires only after IDLE_TIMEOUT_MS of *complete silence*,
+//     which means the upstream is genuinely dead/hung — then we abort the
+//     session (killing any zombie work) and finalize with whatever we have.
+//
+// This is how long-running agents (Codex, Claude Code) stay alive for hours:
+// the limit is on inactivity, not on total elapsed time.
+const IDLE_TIMEOUT_MS = 180_000
+
+type TurnOutcome = {
+  content: string
+  process?: TurnStep[]
+  kind: 'complete' | 'stalled' | 'error' | 'aborted'
+  error?: string
+}
+
+function runTurn(
+  session: CopilotSession,
+  prompt: string,
+  onStream: (delta: string) => void
+): Promise<TurnOutcome> {
+  return new Promise((resolve) => {
+    let streamed = ''        // everything streamed live (partial fallback)
+    let finalMessage = ''    // canonical reply = last completed assistant.message
+    let settled = false
+    let watchdog: ReturnType<typeof setTimeout> | null = null
+
+    // Ordered process trail (narration + tool calls). Tool hooks push into this
+    // same array via `activeTurnSteps`, so steps stay in chronological order.
+    const steps: TurnStep[] = []
+    activeTurnSteps = steps
+
+    const finish = (kind: TurnOutcome['kind'], error?: string) => {
+      if (settled) return
+      settled = true
+      if (watchdog) clearTimeout(watchdog)
+      if (activeTurnSteps === steps) activeTurnSteps = null
+      unsubscribe()
+      const content = finalMessage || streamed
+      // The final answer is the last narration segment; everything before it is
+      // the foldable "work" trail. Drop that segment from the trail so it isn't
+      // shown twice.
+      const lastTextIdx = (() => {
+        for (let i = steps.length - 1; i >= 0; i--) if (steps[i].kind === 'text') return i
+        return -1
+      })()
+      const trail = lastTextIdx >= 0 ? steps.filter((_, i) => i !== lastTextIdx) : steps.slice()
+      resolve({ content, process: trail.length ? trail : undefined, kind, error })
+    }
+
+    const armWatchdog = () => {
+      if (watchdog) clearTimeout(watchdog)
+      watchdog = setTimeout(() => {
+        // No activity for IDLE_TIMEOUT_MS — the turn is stalled. Abort to stop
+        // any zombie run, then finalize with whatever was produced.
+        session.abort().catch(() => {})
+        finish('stalled')
+      }, IDLE_TIMEOUT_MS)
+    }
+
+    const unsubscribe = session.on((event: any) => {
+      // Any event proves the turn is still alive — reset the death timer.
+      armWatchdog()
+      switch (event.type) {
+        case 'assistant.message_delta': {
+          const delta: string = event.data?.deltaContent || ''
+          if (delta) { onStream(delta); streamed += delta }
+          break
+        }
+        case 'assistant.message': {
+          const content: string = event.data?.content || ''
+          if (content) {
+            finalMessage = content
+            steps.push({ kind: 'text', content })
+          }
+          break
+        }
+        case 'session.idle':
+          finish('complete')
+          break
+        case 'session.error':
+          finish('error', event.data?.message || 'The assistant hit an error.')
+          break
+        case 'abort':
+          finish('aborted')
+          break
+      }
+    })
+
+    armWatchdog()
+    session.send({ prompt }).catch((err: any) => finish('error', err?.message || String(err)))
+  })
 }
 
 export async function sendMessage(
@@ -475,42 +609,46 @@ export async function sendMessage(
     prompt = `${userMessage}\n\n${attachmentDescriptions}`
   }
 
-  // Subscribe to streaming events
-  let fullResponse = ''
-  const unsubscribe = session.on('assistant.message_delta', (event) => {
-    const delta = event.data.deltaContent || ''
-    onStream(delta)
-    fullResponse += delta
-  })
-
+  // Run the turn via the event stream (not a blocking total-duration timeout).
+  // The turn ends when the session goes idle, errors, or is aborted — and an
+  // idle watchdog only fires after a long stretch of *complete silence*, so a
+  // task that keeps making progress is never cut off, however long it runs.
+  let outcome: TurnOutcome
   try {
-    const result = await session.sendAndWait({ prompt }, 180_000)
-    if (result) {
-      fullResponse = result.data.content || fullResponse
-    }
-  } catch (err) {
-    // On error/timeout, abort the session to clean up any pending state
-    try {
-      session.abort()
-      await session.disconnect()
-    } catch {
-      // Ignore disconnect errors on cleanup
-    }
-    throw err
+    outcome = await runTurn(session, prompt, onStream)
   } finally {
-    unsubscribe()
     activeSession = null
   }
 
-  // Save the agent reply
+  // Always persist *something* so a turn is never silently lost. Partial output
+  // from a stalled/errored/aborted turn is kept (annotated), and a turn that
+  // produced nothing gets a clear explanation instead of vanishing.
+  let content = outcome.content
+  if (content) {
+    if (outcome.kind === 'stalled') {
+      content += '\n\n⚠️ _Response interrupted — the assistant went silent. The text above may be incomplete._'
+    } else if (outcome.kind === 'error') {
+      content += `\n\n⚠️ _${outcome.error || 'The assistant hit an error.'}_`
+    }
+  } else {
+    if (outcome.kind === 'stalled') {
+      content = '⚠️ The assistant stopped responding (no activity for a while). It may still be working in the background — try again shortly.'
+    } else if (outcome.kind === 'error') {
+      content = `⚠️ ${outcome.error || 'The assistant hit an error.'}`
+    }
+    // A clean turn with no text, or a user abort with nothing generated yet,
+    // leaves nothing worth persisting.
+  }
+
   const agentMsg: ChatMessage = {
     id: uuid(),
     role: 'agent',
-    content: fullResponse,
+    content,
     timestamp: new Date().toISOString(),
-    taskId
+    taskId,
+    process: outcome.process
   }
-  saveMessage(agentMsg)
+  if (content) saveMessage(agentMsg)
   return agentMsg
 }
 
@@ -557,7 +695,7 @@ const jobHooks = {
 import { setJobSession } from './state'
 
 export async function executeJobSession(instruction: string, jobId: string, lastRunAt?: string | null): Promise<string> {
-  if (!client) throw new Error('Copilot SDK not initialized')
+  if (!client) throw sdkUnavailableError()
 
   // Timeouts per job type (MCP calls like ask_work_iq take 60-90s each)
   const JOB_TIMEOUTS: Record<string, number> = {
@@ -612,9 +750,17 @@ export async function generateMorningBriefing(): Promise<string> {
 function saveMessage(msg: ChatMessage): void {
   const db = getDb()
   db.prepare(`
-    INSERT INTO chat_messages (id, role, content, timestamp, task_id, pending_action)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(msg.id, msg.role, msg.content, msg.timestamp, msg.taskId, msg.pendingAction ? JSON.stringify(msg.pendingAction) : null)
+    INSERT INTO chat_messages (id, role, content, timestamp, task_id, pending_action, process)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    msg.id,
+    msg.role,
+    msg.content,
+    msg.timestamp,
+    msg.taskId,
+    msg.pendingAction ? JSON.stringify(msg.pendingAction) : null,
+    msg.process && msg.process.length ? JSON.stringify(msg.process) : null
+  )
 }
 
 /**
@@ -647,7 +793,8 @@ export function getChatHistory(taskId: string | null): ChatMessage[] {
     content: row.content as string,
     timestamp: row.timestamp as string,
     taskId: row.task_id as string | null,
-    pendingAction: row.pending_action ? JSON.parse(row.pending_action as string) : undefined
+    pendingAction: row.pending_action ? JSON.parse(row.pending_action as string) : undefined,
+    process: row.process ? JSON.parse(row.process as string) : undefined
   }))
 }
 

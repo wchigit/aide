@@ -3,10 +3,29 @@
  * Provides the public API consumed by IPC handlers.
  */
 
+import { app } from 'electron'
+import fs from 'node:fs'
+import path from 'node:path'
 import { loadToken, clearToken, login, getBaseUrl } from './connection'
 import { sendTextMessage, startMonitor, stopMonitor, isMonitorRunning, setMessageHandler } from './messaging'
-import { dispatch, setCommandContext } from './commands'
+import { dispatch, setCommandContext, setContextTokenCallback } from './commands'
 import type { WeChatStatus, WeChatState, WeChatTokenData } from './client'
+
+const STATE_DIR = path.join(app.getPath('userData'), 'wechat')
+const CONTEXT_FILE = path.join(STATE_DIR, 'context.json')
+
+function loadContextToken(): string {
+  try {
+    if (!fs.existsSync(CONTEXT_FILE)) return ''
+    const data = JSON.parse(fs.readFileSync(CONTEXT_FILE, 'utf-8'))
+    return data.contextToken || ''
+  } catch { return '' }
+}
+
+function saveContextToken(token: string): void {
+  fs.mkdirSync(STATE_DIR, { recursive: true })
+  fs.writeFileSync(CONTEXT_FILE, JSON.stringify({ contextToken: token, savedAt: new Date().toISOString() }), 'utf-8')
+}
 
 let currentState: WeChatState | null = null
 let lastError: string | null = null
@@ -43,15 +62,18 @@ export async function connectWeChat(): Promise<WeChatStatus> {
       }
     }
 
-    // Initialize state
+    // Initialize state — restore persisted contextToken for proactive delivery
     currentState = {
       targetUserId: tokenData.userId,
-      contextToken: '',
+      contextToken: loadContextToken(),
       lastMessageAt: new Date().toISOString()
     }
 
     // Set up command context
     setCommandContext({ tokenData, state: currentState })
+
+    // Persist contextToken whenever it's refreshed from inbound messages
+    setContextTokenCallback((token) => saveContextToken(token))
 
     // Wire message handler to command dispatcher
     setMessageHandler(dispatch)
@@ -93,6 +115,8 @@ export async function pushToWeChat(text: string): Promise<void> {
     }
   }
 
+  console.log(`[WeChat] pushToWeChat → targetUserId=${currentState.targetUserId}, text=${text.slice(0, 50)}...`)
+
   await sendTextMessage({
     tokenData,
     state: currentState,
@@ -104,6 +128,9 @@ export async function pushToWeChat(text: string): Promise<void> {
  * Set the target user for outbound messages.
  * The userId from auth is the bot's own ID; for pushing to a specific user
  * we need their ilink_user_id (obtained from first inbound message).
+ */
+/**
+ * Set the target user for outbound messages.
  */
 export function setTargetUser(userId: string): void {
   if (!currentState) {

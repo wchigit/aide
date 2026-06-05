@@ -59,7 +59,7 @@ The sidebar is the navigation spine. It does **not** include the Done/history li
 - Right-click context menu: **Done**, **Cancel**, **Lower priority** (→ P2), **Snooze to tomorrow**, **Snooze to next Monday**
 
 **Bottom (pinned)**
-- `Ask Aide anything` button → switches the main area to **General chat**
+- `Tell Aide what you need` button → switches the main area to **General chat**
 
 ## Main area — three modes
 

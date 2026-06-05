@@ -5,7 +5,7 @@ import { IconGithub } from './icons'
 const links = [
   { label: 'Features', href: '#features' },
   { label: 'Preview', href: '#preview' },
-  { label: 'Anywhere', href: '#reach' },
+  { label: 'Always on', href: '#reach' },
   { label: 'How it works', href: '#how' },
 ]
 

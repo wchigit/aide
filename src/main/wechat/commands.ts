@@ -31,9 +31,14 @@ interface CommandContext {
 }
 
 let commandContext: CommandContext | null = null
+let onContextTokenChanged: ((token: string) => void) | null = null
 
 export function setCommandContext(ctx: CommandContext): void {
   commandContext = ctx
+}
+
+export function setContextTokenCallback(cb: (token: string) => void): void {
+  onContextTokenChanged = cb
 }
 
 export function getCommandContext(): CommandContext | null {
@@ -55,6 +60,7 @@ export async function dispatch(msg: WeixinMessage): Promise<void> {
   // Capture context_token from incoming message (required for replies)
   if (msg.context_token) {
     commandContext.state.contextToken = msg.context_token
+    onContextTokenChanged?.(msg.context_token)
   }
 
   // 1. Check confirmation replies

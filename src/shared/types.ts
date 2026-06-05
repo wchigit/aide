@@ -114,7 +114,7 @@ export type RelationRole = 'manager' | 'peer' | 'report' | 'external' | 'stakeho
 
 // === Job ===
 
-export type DeliveryTarget = 'desktop' | 'wechat'
+export type DeliveryTarget = 'desktop' | 'wechat' | 'telegram' | 'discord'
 
 export interface Job {
   id: string
@@ -159,6 +159,36 @@ export interface WeChatStatus {
   targetUser: string | null
   lastError: string | null
   monitorActive: boolean
+}
+
+// === Telegram ===
+
+export interface TelegramStatus {
+  connection: 'disconnected' | 'connecting' | 'connected' | 'error'
+  botUsername: string | null
+  chatId: string | null
+  lastError: string | null
+  monitorActive: boolean
+}
+
+// === Discord ===
+
+export interface DiscordStatus {
+  connection: 'disconnected' | 'connecting' | 'connected' | 'error'
+  botUsername: string | null
+  channelId: string | null
+  lastError: string | null
+  monitorActive: boolean
+}
+
+// === Channels ===
+
+export type ChannelId = 'wechat' | 'telegram' | 'discord'
+
+export interface ChannelStatusInfo {
+  id: ChannelId
+  connection: 'disconnected' | 'connecting' | 'connected' | 'error'
+  lastError: string | null
 }
 
 // === IPC API ===
@@ -238,6 +268,22 @@ export interface AideAPI {
     setTargetUser(userId: string): Promise<void>
     setBaseUrl(url: string): Promise<void>
   }
+  telegram: {
+    getStatus(): Promise<TelegramStatus>
+    connect(config?: { botToken: string; chatId: string }): Promise<TelegramStatus>
+    disconnect(clearConfig?: boolean): Promise<TelegramStatus>
+    push(text: string): Promise<void>
+  }
+  discord: {
+    getStatus(): Promise<DiscordStatus>
+    connect(config?: { botToken: string; channelId: string }): Promise<DiscordStatus>
+    disconnect(clearConfig?: boolean): Promise<DiscordStatus>
+    push(text: string): Promise<void>
+  }
+  channels: {
+    list(): Promise<ChannelStatusInfo[]>
+    deliver(channelId: ChannelId, text: string): Promise<void>
+  }
   updates: {
     getState(): Promise<UpdateState>
     check(): Promise<UpdateState>
@@ -257,6 +303,7 @@ export type UpdateStatus =
   | 'available'
   | 'downloading'
   | 'downloaded'
+  | 'installing'
   | 'not-available'
   | 'error'
 
@@ -331,7 +378,23 @@ export interface ChatMessage {
   timestamp: string
   taskId: string | null
   pendingAction?: PendingAction
+  /** Ordered "work" steps (narration + tool calls) that led to this reply.
+   *  Kept as a foldable process trail so a long turn's intermediate output is
+   *  preserved instead of being discarded once the final answer lands. */
+  process?: TurnStep[]
 }
+
+/** One step in an agent turn's process trail. */
+export type TurnStep =
+  | { kind: 'text'; content: string }
+  | {
+      kind: 'tool'
+      toolName: string
+      status: 'done' | 'error'
+      durationMs?: number
+      inputPreview?: string
+      resultPreview?: string
+    }
 
 export interface PendingAction {
   id: string
@@ -394,4 +457,6 @@ export type AideEvent =
   | { type: 'wechat:qrcode'; qrcode: string; imgContent: string }
   | { type: 'wechat:login-progress'; stage: 'scanned' | 'confirmed' | 'expired' | 'timeout' }
   | { type: 'wechat:status'; status: WeChatStatus }
+  | { type: 'telegram:status'; status: TelegramStatus }
+  | { type: 'discord:status'; status: DiscordStatus }
   | { type: 'update:state'; state: UpdateState }

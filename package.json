@@ -1,6 +1,6 @@
 {
   "name": "aide",
-  "version": "0.2.0",
+  "version": "0.2.8",
   "description": "A personal work agent that sees the full picture, learns as you work, and helps you get things done.",
   "author": {
     "name": "Aide",
@@ -22,8 +22,8 @@
     "download:browser": "npx playwright install chromium"
   },
   "dependencies": {
-    "@github/copilot-sdk": "^1.0.0-beta.4",
     "@nut-tree-fork/nut-js": "^4.2.0",
+    "@github/copilot-sdk": "^1.0.0",
     "@tailwindcss/typography": "^0.5.19",
     "better-sqlite3": "^11.0.0",
     "croner": "^8.0.0",
@@ -31,7 +31,8 @@
     "playwright-core": "^1.52.0",
     "qrcode": "^1.5.4",
     "remark-gfm": "^4.0.1",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
@@ -42,6 +43,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.12",
     "autoprefixer": "^10.4.0",
     "electron": "^35.7.5",
     "electron-builder": "^25.0.0",

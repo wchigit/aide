@@ -11,13 +11,24 @@ files:
   - out/**/*
   - package.json
 
-# Rebuild native modules (better-sqlite3, nut.js) for the target platform.
-npmRebuild: true
-
-# Unpack native modules and Playwright from asar for proper execution
+# The Copilot CLI is a standalone executable shipped in a platform-specific
+# package. Executables cannot be spawned from inside app.asar, so unpack the
+# binary packages to app.asar.unpacked (client.ts resolves them from there).
+# npm may install these either hoisted (node_modules/@github/copilot-*) or
+# nested under the loader (node_modules/@github/copilot/node_modules/@github/
+# copilot-*), so the leading **/ matches the binary at any depth.
 asarUnpack:
+  - "**/node_modules/@github/copilot-win32-x64/**"
+  - "**/node_modules/@github/copilot-win32-arm64/**"
+  - "**/node_modules/@github/copilot-darwin-arm64/**"
+  - "**/node_modules/@github/copilot-darwin-x64/**"
+  - "**/node_modules/@github/copilot-linux-x64/**"
+  - "**/node_modules/@github/copilot-linux-arm64/**"
   - "**/node_modules/@nut-tree-fork/**"
   - "**/node_modules/playwright-core/**"
+
+# Rebuild native modules (better-sqlite3) for the target platform.
+npmRebuild: true
 
 # Bundle Playwright browser per-platform (downloaded in CI)
 extraResources:

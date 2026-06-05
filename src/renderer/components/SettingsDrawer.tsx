@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, MessageCircle, Send, RefreshCw, Download, CheckCircle2, AlertCircle } from 'lucide-react'
+import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, Send, RefreshCw, Download, CheckCircle2, AlertCircle } from 'lucide-react'
+import { WeChatLogo, TelegramLogo, DiscordLogo } from '../brand/icons'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, DeliveryTarget, UpdateState } from '@shared/types'
+import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, TelegramStatus, DiscordStatus, DeliveryTarget, UpdateState } from '@shared/types'
 
 function MicrosoftIcon() {
   return (
@@ -215,6 +216,8 @@ function ConnectionsTab({ connections }: { connections: ConnectionStatus[] }) {
         <SectionLabel title="Channels" desc="How Aide reaches you and takes commands on the go." />
         <div className="space-y-4">
           <WeChatConnectionCard />
+          <TelegramConnectionCard />
+          <DiscordConnectionCard />
         </div>
       </section>
     </div>
@@ -637,11 +640,15 @@ function JobForm({ initial, managed, onSave, onCancel, onDelete }: {
 const DELIVERY_OPTIONS: { value: DeliveryTarget; label: string }[] = [
   { value: 'desktop', label: 'Aide chat' },
   { value: 'wechat', label: 'WeChat' },
+  { value: 'telegram', label: 'Telegram' },
+  { value: 'discord', label: 'Discord' },
 ]
 
 const DELIVERY_LABELS: Record<DeliveryTarget, string> = {
   desktop: 'Aide chat',
   wechat: 'WeChat',
+  telegram: 'Telegram',
+  discord: 'Discord',
 }
 
 function parseCronToSchedule(cron: string) {
@@ -854,7 +861,12 @@ function UpdatesSection() {
   const busy = state.status === 'checking' || state.status === 'downloading'
 
   const check = () => window.aide.updates.check().then(setState)
-  const install = () => window.aide.updates.install()
+  const install = () => {
+    // Optimistically reflect the restart immediately — quitAndInstall can take a
+    // moment to spin up, and without instant feedback the button feels frozen.
+    setState(s => (s ? { ...s, status: 'installing' } : s))
+    window.aide.updates.install()
+  }
   const retryDownload = () => window.aide.updates.download().then(setState)
 
   return (
@@ -911,18 +923,21 @@ function UpdateStatusLine({ state, onInstall, onRetry }: { state: UpdateState; o
     )
   }
 
-  if (state.status === 'downloaded') {
+  if (state.status === 'downloaded' || state.status === 'installing') {
+    const installing = state.status === 'installing'
     return (
       <div className="flex items-center justify-between mt-3">
         <div className="flex items-center gap-1.5 text-[11.5px] text-text-secondary">
           <Download size={13} className="text-accent" />
-          Version {state.latestVersion} is ready.
+          {installing ? 'Restarting to install…' : `Version ${state.latestVersion} is ready.`}
         </div>
         <button
           onClick={onInstall}
-          className="px-3 py-1.5 rounded-md text-[12px] font-medium text-white bg-accent hover:opacity-90 transition-opacity"
+          disabled={installing}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-white bg-accent hover:opacity-90 disabled:opacity-60 transition-opacity"
         >
-          Restart &amp; install
+          {installing && <RefreshCw size={12} className="animate-spin" />}
+          {installing ? 'Restarting…' : 'Restart & install'}
         </button>
       </div>
     )
@@ -1005,8 +1020,8 @@ function WeChatConnectionCard() {
     <Card>
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-green-500/10 text-green-600">
-            <MessageCircle size={18} />
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-[#07C160] text-white">
+            <WeChatLogo size={18} />
           </div>
           <div>
             <p className="text-[13px] font-medium text-text-primary">WeChat</p>
@@ -1036,6 +1051,10 @@ function WeChatConnectionCard() {
         </div>
       </div>
 
+      {isConnected && (
+        <p className="mt-3 text-[11px] text-text-tertiary">Say hi to the bot in WeChat to let Aide reach you.</p>
+      )}
+
       {/* QR Code display */}
       {qrImg && (
         <div className="mt-4 flex flex-col items-center gap-2 p-4 rounded-lg bg-surface-2 border border-edge">
@@ -1045,6 +1064,198 @@ function WeChatConnectionCard() {
             className="w-48 h-48 rounded-md"
           />
           <p className="text-[11px] text-text-tertiary">Scan the QR code with WeChat to sign in</p>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function TelegramConnectionCard() {
+  const [status, setStatus] = useState<TelegramStatus | null>(null)
+  const [connecting, setConnecting] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
+  const [botToken, setBotToken] = useState('')
+  const [chatId, setChatId] = useState('')
+
+  useEffect(() => {
+    window.aide.telegram?.getStatus().then(setStatus)
+  }, [])
+
+  useEffect(() => {
+    const handler = (event: any) => {
+      if (event.type === 'telegram:status') setStatus(event.status)
+    }
+    const unsub = window.aideEvents.on(handler)
+    return unsub
+  }, [])
+
+  const handleConnect = async () => {
+    if (!status?.chatId && !showConfig) { setShowConfig(true); return }
+    if (showConfig) {
+      if (!botToken.trim() || !chatId.trim()) return
+      setConnecting(true)
+      try {
+        const result = await window.aide.telegram.connect({ botToken: botToken.trim(), chatId: chatId.trim() })
+        setStatus(result)
+        if (result.connection === 'connected') { setShowConfig(false); setBotToken(''); setChatId('') }
+      } catch { window.aide.telegram?.getStatus().then(setStatus) }
+      finally { setConnecting(false) }
+    } else {
+      setConnecting(true)
+      try { const result = await window.aide.telegram.connect(); setStatus(result) }
+      catch { window.aide.telegram?.getStatus().then(setStatus) }
+      finally { setConnecting(false) }
+    }
+  }
+
+  const handleDisconnect = async () => {
+    const result = await window.aide.telegram.disconnect(true)
+    setStatus(result)
+    setShowConfig(false)
+  }
+
+  const isConnected = status?.connection === 'connected'
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-[#26A5E4] text-white">
+            <TelegramLogo size={18} />
+          </div>
+          <div>
+            <p className="text-[13px] font-medium text-text-primary">Telegram</p>
+            <p className="text-[12px] text-text-tertiary mt-0.5">Reports · Notifications · Remote chat</p>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <div className={`w-[6px] h-[6px] rounded-full ${isConnected ? 'bg-success' : 'bg-text-tertiary'}`} />
+              <span className={`text-[11px] ${isConnected ? 'text-success' : 'text-text-tertiary'}`}>
+                {isConnected ? `Connected${status?.botUsername ? ` · @${status.botUsername}` : ''}` : connecting ? 'Connecting…' : 'Not connected'}
+              </span>
+            </div>
+            {status?.lastError && <p className="text-[11px] text-danger mt-1">{status.lastError}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {isConnected && <Btn variant="danger" onClick={handleDisconnect}>Disconnect</Btn>}
+          {!isConnected && <Btn onClick={handleConnect} disabled={connecting}>{connecting ? 'Connecting…' : showConfig ? 'Save & Connect' : 'Connect'}</Btn>}
+        </div>
+      </div>
+      {showConfig && !isConnected && (
+        <div className="mt-4 space-y-3 p-3 rounded-lg bg-surface-2 border border-edge">
+          <details className="text-[11px] text-text-tertiary">
+            <summary className="cursor-pointer hover:text-text-secondary">How do I get these values?</summary>
+            <ol className="mt-2 ml-4 space-y-1 list-decimal text-[11px] text-text-tertiary">
+              <li>Message <a href="https://t.me/BotFather" className="text-accent hover:underline" target="_blank" rel="noreferrer">@BotFather</a> → /newbot → copy the token</li>
+              <li>Start a chat with your new bot (send /start)</li>
+              <li>Message <a href="https://t.me/userinfobot" className="text-accent hover:underline" target="_blank" rel="noreferrer">@userinfobot</a> to get your Chat ID</li>
+            </ol>
+          </details>
+          <div>
+            <label className="text-[11px] font-medium text-text-secondary block mb-1">Bot Token</label>
+            <input type="password" value={botToken} onChange={e => setBotToken(e.target.value)} placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v..." className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[11px] font-medium text-text-secondary block mb-1">Chat ID</label>
+            <input type="text" value={chatId} onChange={e => setChatId(e.target.value)} placeholder="123456789" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
+          </div>
+          <button onClick={() => { setShowConfig(false); setBotToken(''); setChatId('') }} className="text-[11px] text-text-tertiary hover:text-text-secondary">Cancel</button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function DiscordConnectionCard() {
+  const [status, setStatus] = useState<DiscordStatus | null>(null)
+  const [connecting, setConnecting] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
+  const [botToken, setBotToken] = useState('')
+  const [channelId, setChannelId] = useState('')
+
+  useEffect(() => {
+    window.aide.discord?.getStatus().then(setStatus)
+  }, [])
+
+  useEffect(() => {
+    const handler = (event: any) => {
+      if (event.type === 'discord:status') setStatus(event.status)
+    }
+    const unsub = window.aideEvents.on(handler)
+    return unsub
+  }, [])
+
+  const handleConnect = async () => {
+    if (!status?.channelId && !showConfig) { setShowConfig(true); return }
+    if (showConfig) {
+      if (!botToken.trim() || !channelId.trim()) return
+      setConnecting(true)
+      try {
+        const result = await window.aide.discord.connect({ botToken: botToken.trim(), channelId: channelId.trim() })
+        setStatus(result)
+        if (result.connection === 'connected') { setShowConfig(false); setBotToken(''); setChannelId('') }
+      } catch { window.aide.discord?.getStatus().then(setStatus) }
+      finally { setConnecting(false) }
+    } else {
+      setConnecting(true)
+      try { const result = await window.aide.discord.connect(); setStatus(result) }
+      catch { window.aide.discord?.getStatus().then(setStatus) }
+      finally { setConnecting(false) }
+    }
+  }
+
+  const handleDisconnect = async () => {
+    const result = await window.aide.discord.disconnect(true)
+    setStatus(result)
+    setShowConfig(false)
+  }
+
+  const isConnected = status?.connection === 'connected'
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-[#5865F2] text-white">
+            <DiscordLogo size={18} />
+          </div>
+          <div>
+            <p className="text-[13px] font-medium text-text-primary">Discord</p>
+            <p className="text-[12px] text-text-tertiary mt-0.5">Reports · Notifications · Remote chat</p>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <div className={`w-[6px] h-[6px] rounded-full ${isConnected ? 'bg-success' : 'bg-text-tertiary'}`} />
+              <span className={`text-[11px] ${isConnected ? 'text-success' : 'text-text-tertiary'}`}>
+                {isConnected ? `Connected${status?.botUsername ? ` · ${status.botUsername}` : ''}` : connecting ? 'Connecting…' : 'Not connected'}
+              </span>
+            </div>
+            {status?.lastError && <p className="text-[11px] text-danger mt-1">{status.lastError}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {isConnected && <Btn variant="danger" onClick={handleDisconnect}>Disconnect</Btn>}
+          {!isConnected && <Btn onClick={handleConnect} disabled={connecting}>{connecting ? 'Connecting…' : showConfig ? 'Save & Connect' : 'Connect'}</Btn>}
+        </div>
+      </div>
+      {showConfig && !isConnected && (
+        <div className="mt-4 space-y-3 p-3 rounded-lg bg-surface-2 border border-edge">
+          <details className="text-[11px] text-text-tertiary">
+            <summary className="cursor-pointer hover:text-text-secondary">How do I get these values?</summary>
+            <ol className="mt-2 ml-4 space-y-1 list-decimal text-[11px] text-text-tertiary">
+              <li>Go to <a href="https://discord.com/developers/applications" className="text-accent hover:underline" target="_blank" rel="noreferrer">Discord Developer Portal</a> → New Application</li>
+              <li>Bot tab → Reset Token → copy it below</li>
+              <li>Enable <strong>Message Content Intent</strong> under Privileged Gateway Intents</li>
+              <li>OAuth2 → URL Generator → check <strong>bot</strong> → Bot Permissions: check <strong>Send Messages</strong> + <strong>Read Message History</strong> → use the URL to invite to your server</li>
+              <li>In Discord, enable Developer Mode (Settings → Advanced), right-click channel → Copy Channel ID</li>
+            </ol>
+          </details>
+          <div>
+            <label className="text-[11px] font-medium text-text-secondary block mb-1">Bot Token</label>
+            <input type="password" value={botToken} onChange={e => setBotToken(e.target.value)} placeholder="MTIzNDU2Nzg5MDEy..." className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[11px] font-medium text-text-secondary block mb-1">Channel ID</label>
+            <input type="text" value={channelId} onChange={e => setChannelId(e.target.value)} placeholder="1234567890123456789" className="w-full h-8 px-2.5 text-[12px] rounded-md bg-surface-0 border border-edge text-text-primary placeholder:text-text-tertiary/50 focus:border-accent focus:outline-none" />
+          </div>
+          <button onClick={() => { setShowConfig(false); setBotToken(''); setChannelId('') }} className="text-[11px] text-text-tertiary hover:text-text-secondary">Cancel</button>
         </div>
       )}
     </Card>

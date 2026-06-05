@@ -28,9 +28,9 @@ export function Hero() {
           className={`reveal ${shown ? 'in' : ''} mx-auto mt-6 max-w-xl text-balance text-[16.5px] leading-relaxed text-ink-500 sm:text-[18px]`}
           style={{ transitionDelay: '120ms' }}
         >
-          Aide pulls every task from your inbox, chats, and repos into one place,
-          learns how you work, and acts on your behalf. It keeps working in the
-          background and reaches you on WeChat — so nothing waits for you to sit down.
+          Aide draws your scattered work — inbox, chats, repos — into one living
+          picture, and learns how you work, so it can act on your behalf. It keeps
+          moving while you're away and reaches you wherever you are.
         </p>
 
         <div
