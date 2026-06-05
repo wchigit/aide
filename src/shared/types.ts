@@ -306,6 +306,11 @@ export interface AideAPI {
     download(): Promise<UpdateState>
     install(): Promise<void>
   }
+  files: {
+    open(taskId: string | null, ref: string): Promise<{ ok: boolean; error?: string }>
+    reveal(taskId: string | null, ref: string): Promise<{ ok: boolean; error?: string }>
+    exists(taskId: string | null, ref: string): Promise<boolean>
+  }
   system: {
     health(): Promise<{ sdk: 'initializing' | 'ready' | 'error'; sdkError: string | null }>
   }

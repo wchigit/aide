@@ -14,6 +14,7 @@ import { getTelegramStatus, connectTelegram, disconnectTelegram, pushToTelegram 
 import { getDiscordStatus, connectDiscord, disconnectDiscord, pushToDiscord } from '../discord'
 import { listChannels, deliverTo } from '../channels'
 import { getUpdateState, checkForUpdates, downloadUpdate, quitAndInstall } from '../updater'
+import { openArtifact, revealArtifact, artifactExists } from '../files'
 import { sdkHealth, sdkError } from '../health'
 
 export function registerIpcHandlers(): void {
@@ -132,6 +133,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('updates:check', () => checkForUpdates())
   ipcMain.handle('updates:download', () => downloadUpdate())
   ipcMain.handle('updates:install', () => quitAndInstall())
+
+  // === Files (agent artifacts) ===
+  ipcMain.handle('files:open', (_, taskId, ref) => openArtifact(taskId, ref))
+  ipcMain.handle('files:reveal', (_, taskId, ref) => revealArtifact(taskId, ref))
+  ipcMain.handle('files:exists', (_, taskId, ref) => artifactExists(taskId, ref))
 
   // === System health ===
   ipcMain.handle('system:health', () => ({ sdk: sdkHealth, sdkError }))

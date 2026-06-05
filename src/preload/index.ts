@@ -105,6 +105,11 @@ const api: AideAPI = {
     download: () => ipcRenderer.invoke('updates:download'),
     install: () => ipcRenderer.invoke('updates:install')
   },
+  files: {
+    open: (taskId, ref) => ipcRenderer.invoke('files:open', taskId, ref),
+    reveal: (taskId, ref) => ipcRenderer.invoke('files:reveal', taskId, ref),
+    exists: (taskId, ref) => ipcRenderer.invoke('files:exists', taskId, ref)
+  },
   system: {
     health: () => ipcRenderer.invoke('system:health')
   }
