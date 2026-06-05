@@ -190,6 +190,9 @@ const hooks: SessionConfig['hooks'] = {
 
     // Push a "running" record to the UI
     toolCallTimestamps.set(toolCallId, Date.now())
+    // Mark a tool as in-flight so the idle watchdog treats this as activity and
+    // won't declare the turn "stalled" while the tool (possibly slow) runs.
+    activeTurnSignal?.toolStart()
     emitEvent({
       type: 'chat:tool-use',
       taskId,
@@ -206,6 +209,7 @@ const hooks: SessionConfig['hooks'] = {
           record: { id: toolCallId, toolName, status: 'error', timestamp: new Date().toISOString(), inputPreview, resultPreview: 'Cancelled by user' }
         })
         toolCallTimestamps.delete(toolCallId)
+        activeTurnSignal?.toolEnd()
         return { permissionDecision: 'deny' as const, permissionDecisionReason: 'User cancelled the operation' }
       }
     }
@@ -226,6 +230,9 @@ const hooks: SessionConfig['hooks'] = {
     const resultStr = JSON.stringify(input.toolResult || '')
     const resultPreview = resultStr.length > 120 ? resultStr.slice(0, 120) + '…' : resultStr
     console.log(`[Agent] tool_post: ${toolName} | session: ${invocation.sessionId} | ${durationMs}ms | result_size: ${resultStr.length}`)
+
+    // Tool finished → clear in-flight state and re-arm the idle watchdog from now.
+    activeTurnSignal?.toolEnd()
 
     // Background job sessions must never surface in any chat window.
     if (invocation.sessionId.startsWith('job-')) return
@@ -257,6 +264,12 @@ const toolCallTimestamps = new Map<string, number>()
 // alongside the assistant's narration. Null when no interactive turn is running
 // (e.g. background jobs), so those never collect a trail.
 let activeTurnSteps: TurnStep[] | null = null
+// Heartbeat + in-flight tool tracking for the active interactive turn's idle
+// watchdog (set by runTurn). Tool hooks call these so a long-running tool call
+// counts as *activity*: the turn is declared "stalled" only during genuine
+// silence with no tool in flight — never while the agent is busy inside a tool
+// (e.g. running a long test suite), which previously tripped a false abort.
+let activeTurnSignal: { toolStart: () => void; toolEnd: () => void } | null = null
 // Track sessions where task has been auto-promoted to in_progress
 const activatedTaskSessions = new Set<string>()
 // Track interaction count per session for periodic memory flush
@@ -503,11 +516,20 @@ function runTurn(
     const steps: TurnStep[] = []
     activeTurnSteps = steps
 
+    // In-flight tool counter. While a tool runs the agent is busy (not idle), so
+    // the watchdog must not declare a stall — waiting on a tool is activity.
+    let inFlightTools = 0
+    activeTurnSignal = {
+      toolStart: () => { inFlightTools++; armWatchdog() },
+      toolEnd: () => { inFlightTools = Math.max(0, inFlightTools - 1); armWatchdog() }
+    }
+
     const finish = (kind: TurnOutcome['kind'], error?: string) => {
       if (settled) return
       settled = true
       if (watchdog) clearTimeout(watchdog)
       if (activeTurnSteps === steps) activeTurnSteps = null
+      if (activeTurnSignal) activeTurnSignal = null
       unsubscribe()
       const content = finalMessage || streamed
       // The final answer is the last narration segment; everything before it is
@@ -524,8 +546,11 @@ function runTurn(
     const armWatchdog = () => {
       if (watchdog) clearTimeout(watchdog)
       watchdog = setTimeout(() => {
-        // No activity for IDLE_TIMEOUT_MS — the turn is stalled. Abort to stop
-        // any zombie run, then finalize with whatever was produced.
+        // A tool is still running — that's legitimate work, not a hang. Re-arm
+        // and keep waiting instead of killing a busy turn (e.g. a long test run).
+        if (inFlightTools > 0) { armWatchdog(); return }
+        // No activity for IDLE_TIMEOUT_MS and nothing in flight — the turn is
+        // genuinely stalled. Abort to stop any zombie run, then finalize.
         session.abort().catch(() => {})
         finish('stalled')
       }, IDLE_TIMEOUT_MS)
