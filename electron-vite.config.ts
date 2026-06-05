@@ -8,12 +8,6 @@ export default defineConfig({
       alias: {
         '@shared': resolve('src/shared')
       }
-    },
-    build: {
-      rollupOptions: {
-        // Keep ws external so its try/catch for optional native deps works at runtime
-        external: ['ws']
-      }
     }
   },
   preload: {
