@@ -135,8 +135,10 @@ export interface Skill {
   id: string
   name: string
   description: string
-  source: 'local' | 'github'
+  source: 'local' | 'marketplace' | 'github-search'
+  sourceId?: string              // Marketplace source ID (e.g., 'aide-official')
   sourceUrl: string | null
+  verified: boolean              // true if from official/community marketplace
   enabled: boolean
   path: string
   createdAt: string
@@ -148,6 +150,50 @@ export interface GithubSkillSearchResult {
   description: string | null
   stars: number
   url: string
+}
+
+// === Marketplace ===
+
+export type MarketplaceSourceType = 'official' | 'community' | 'private'
+
+export interface MarketplaceSource {
+  id: string
+  name: string
+  type: MarketplaceSourceType
+  url: string                    // Git repo URL (https://github.com/owner/repo)
+  branch: string                 // Default: 'main'
+  enabled: boolean
+  lastSyncedAt: string | null
+  skillCount: number
+}
+
+/** marketplace.json format (Claude standard) */
+export interface MarketplaceManifest {
+  version: string
+  name?: string
+  description?: string
+  skills: MarketplaceSkillEntry[]
+}
+
+export interface MarketplaceSkillEntry {
+  name: string
+  description: string
+  path: string                   // Relative path to SKILL.md
+  category?: string
+  tags?: string[]
+}
+
+/** Skill that can be browsed but not yet installed */
+export interface BrowsableSkill {
+  name: string
+  description: string
+  category?: string
+  tags: string[]
+  sourceId: string
+  sourceName: string
+  sourceType: MarketplaceSourceType
+  path: string                   // Path in the repository
+  installed: boolean
 }
 
 // === Models ===
@@ -284,12 +330,22 @@ export interface AideAPI {
   skills: {
     list(): Promise<Skill[]>
     get(id: string): Promise<Skill | null>
-    createFromFile(name: string, content: string): Promise<Skill>
+    createFromFolder(files: Array<{ path: string; content: string }>): Promise<Skill>
     searchGithub(query: string): Promise<GithubSkillSearchResult[]>
     findFilesInRepo(repoFullName: string): Promise<string[]>
     downloadFromGithub(repoFullName: string, filePath?: string): Promise<Skill>
     toggle(id: string, enabled: boolean): Promise<Skill>
     delete(id: string): Promise<void>
+  }
+  marketplace: {
+    listSources(): Promise<MarketplaceSource[]>
+    addSource(input: { name: string; url: string; branch?: string }): Promise<MarketplaceSource>
+    removeSource(id: string): Promise<void>
+    toggleSource(id: string, enabled: boolean): Promise<MarketplaceSource>
+    syncSource(id: string): Promise<MarketplaceSource>
+    syncAll(): Promise<void>
+    browse(sourceId?: string): Promise<BrowsableSkill[]>
+    install(sourceId: string, path: string): Promise<Skill>
   }
   wechat: {
     getStatus(): Promise<WeChatStatus>

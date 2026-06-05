@@ -4,18 +4,24 @@
  */
 
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { v4 as uuid } from 'uuid'
 import type { Skill, GithubSkillSearchResult } from '@shared/types'
+
+const execFileAsync = promisify(execFile)
 
 // ─── Directory Management ────────────────────────────────────────────
 
 /**
- * Get the skills directory path (.aide/skills/ in project root).
+ * Get the skills directory path (~/.aide/skills/ in user home).
  * Creates the directory if it doesn't exist.
+ * Uses os.homedir() for stable path across different launch methods.
  */
 export function getSkillsDirectory(): string {
-  const skillsDir = path.join(process.cwd(), '.aide', 'skills')
+  const skillsDir = path.join(os.homedir(), '.aide', 'skills')
   if (!fs.existsSync(skillsDir)) {
     fs.mkdirSync(skillsDir, { recursive: true })
   }
@@ -64,6 +70,7 @@ function parseFrontmatter(content: string): SkillFrontmatter {
 /**
  * List all skills in the skills directory.
  * Scans subdirectories for SKILL.md files and parses their frontmatter.
+ * Source information is read from .source.json if present.
  */
 export function listSkills(): Skill[] {
   const skillsDir = getSkillsDirectory()
@@ -79,6 +86,7 @@ export function listSkills(): Skill[] {
     const skillDir = path.join(skillsDir, entry.name)
     const skillFile = path.join(skillDir, 'SKILL.md')
     const disabledFile = path.join(skillDir, 'SKILL.md.disabled')
+    const sourceFile = path.join(skillDir, '.source.json')
 
     // Check for enabled or disabled skill file
     const isDisabled = !fs.existsSync(skillFile) && fs.existsSync(disabledFile)
@@ -91,24 +99,56 @@ export function listSkills(): Skill[] {
       const frontmatter = parseFrontmatter(content)
       const stat = fs.statSync(activeFile)
 
-      // Determine source from directory name (github downloads use owner--repo format)
-      const isGithub = entry.name.includes('--')
-
-      // Parse GitHub URL from skill ID
-      // Format: owner--repo or owner--repo--path_._to_._dir
+      // Check for source metadata file (new format)
+      let source: 'local' | 'marketplace' | 'github-search' = 'local'
+      let sourceId: string | undefined
       let sourceUrl: string | null = null
-      if (isGithub) {
+      let verified = false
+
+      if (fs.existsSync(sourceFile)) {
+        // Read source info from .source.json
+        try {
+          const sourceData = JSON.parse(fs.readFileSync(sourceFile, 'utf-8'))
+          // Determine source type
+          if (sourceData.sourceType === 'github-search') {
+            source = 'github-search'
+          } else if (sourceData.sourceType) {
+            source = 'marketplace'
+          }
+          sourceId = sourceData.sourceId
+          sourceUrl = sourceData.sourceUrl || (sourceData.owner && sourceData.repo 
+            ? `https://github.com/${sourceData.owner}/${sourceData.repo}` 
+            : null)
+          verified = sourceData.sourceType === 'official' || sourceData.sourceType === 'community'
+        } catch {
+          // Ignore parse errors
+        }
+      } else {
+        // Legacy format: parse from directory name
         const parts = entry.name.split('--')
-        const owner = parts[0]
-        const repo = parts[1]
-        if (parts.length === 2) {
-          // Root SKILL.md
-          sourceUrl = `https://github.com/${owner}/${repo}`
-        } else {
-          // Subdirectory SKILL.md - link to the file
-          // Convert _._ back to /
-          const dirPath = parts.slice(2).join('/').replace(/_\._/g, '/')
-          sourceUrl = `https://github.com/${owner}/${repo}/blob/HEAD/${dirPath}/SKILL.md`
+        
+        if (parts[0] === 'official' || parts[0] === 'community' || parts[0] === 'private') {
+          source = 'marketplace'
+          const sourceType = parts[0]
+          sourceId = sourceType === 'official' ? 'aide-official' 
+                   : sourceType === 'community' ? 'anthropic-community'
+                   : `private-${parts[1]}`
+          if (parts.length >= 3) {
+            const owner = parts[1]
+            const repo = parts[2]
+            sourceUrl = `https://github.com/${owner}/${repo}`
+          }
+          verified = sourceType === 'official' || sourceType === 'community'
+        } else if (parts.length >= 2 && !parts[0].startsWith('local')) {
+          source = 'github-search'
+          const owner = parts[0]
+          const repo = parts[1]
+          if (parts.length === 2) {
+            sourceUrl = `https://github.com/${owner}/${repo}`
+          } else {
+            const dirPath = parts.slice(2).join('/').replace(/_\._/g, '/')
+            sourceUrl = `https://github.com/${owner}/${repo}/blob/HEAD/${dirPath}/SKILL.md`
+          }
         }
       }
 
@@ -116,8 +156,10 @@ export function listSkills(): Skill[] {
         id: entry.name,
         name: frontmatter.name || entry.name,
         description: frontmatter.description || '',
-        source: isGithub ? 'github' : 'local',
+        source,
+        sourceId,
         sourceUrl,
+        verified,
         enabled: !isDisabled,
         path: skillDir,
         createdAt: stat.birthtime.toISOString(),
@@ -140,31 +182,104 @@ export function getSkill(id: string): Skill | null {
 }
 
 /**
- * Create a new skill from uploaded file content.
+ * Create a new skill from uploaded folder.
+ * Expects an array of files with relative paths.
+ * Folder structure should follow Anthropic format:
+ *   skills/
+ *     my-skill/
+ *       SKILL.md       <- Required
+ *       examples/      <- Optional
+ *       templates/     <- Optional
  */
-export function createSkillFromFile(name: string, content: string): Skill {
-  const skillsDir = getSkillsDirectory()
-
+export function createSkillFromFolder(
+  files: Array<{ path: string; content: string }>
+): Skill {
+  // Find SKILL.md to determine skill name
+  const skillMdFile = files.find(f => 
+    f.path.toLowerCase().endsWith('skill.md') || 
+    f.path.toLowerCase() === 'skill.md'
+  )
+  
+  if (!skillMdFile) {
+    throw new Error('No SKILL.md found in uploaded folder. Please include a SKILL.md file.')
+  }
+  
+  // Extract skill name from frontmatter first, then from path
+  let skillName: string | null = null
+  
+  // Try to get name from frontmatter
+  const frontmatterMatch = skillMdFile.content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (frontmatterMatch) {
+    const nameMatch = frontmatterMatch[1].match(/^name:\s*(.+)$/m)
+    if (nameMatch) {
+      skillName = nameMatch[1].trim().replace(/^["']|["']$/g, '')
+    }
+  }
+  
+  // Fallback to directory name
+  if (!skillName) {
+    const pathParts = skillMdFile.path.split(/[/\\]/)
+    if (pathParts.length > 1) {
+      skillName = pathParts[pathParts.length - 2]
+    } else {
+      skillName = `skill-${uuid().slice(0, 8)}`
+    }
+  }
+  
   // Sanitize name for directory
-  const safeName = name
+  const safeName = skillName
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
-
-  const id = safeName || `skill-${uuid().slice(0, 8)}`
-  const skillDir = path.join(skillsDir, id)
-
-  // Check if already exists
+  
+  const skillsDir = getSkillsDirectory()
+  const skillDir = path.join(skillsDir, safeName)
+  
+  // Check for existing skill with same name - always reject duplicates
   if (fs.existsSync(skillDir)) {
-    throw new Error(`Skill "${id}" already exists`)
+    throw new Error(
+      `A skill named "${skillName}" already exists. ` +
+      `Please rename your skill or delete the existing one first.`
+    )
   }
-
-  // Create directory and write file
+  
+  // Create directory
   fs.mkdirSync(skillDir, { recursive: true })
-  fs.writeFileSync(path.join(skillDir, 'SKILL.md'), content, 'utf-8')
-
-  return getSkill(id)!
+  
+  // Find the common prefix to strip (the uploaded folder name)
+  const skillMdDir = path.dirname(skillMdFile.path)
+  const prefix = skillMdDir === '.' ? '' : skillMdDir + '/'
+  
+  // Write all files, preserving relative structure
+  for (const file of files) {
+    // Calculate relative path within skill directory
+    let relativePath = file.path
+    if (prefix && relativePath.startsWith(prefix)) {
+      relativePath = relativePath.slice(prefix.length)
+    }
+    
+    const filePath = path.join(skillDir, relativePath)
+    const fileDir = path.dirname(filePath)
+    
+    // Create subdirectory if needed
+    if (!fs.existsSync(fileDir)) {
+      fs.mkdirSync(fileDir, { recursive: true })
+    }
+    
+    fs.writeFileSync(filePath, file.content, 'utf-8')
+  }
+  
+  // Save source metadata
+  const sourceMetadata = {
+    sourceType: 'local',
+    installedAt: new Date().toISOString()
+  }
+  fs.writeFileSync(path.join(skillDir, '.source.json'), JSON.stringify(sourceMetadata, null, 2), 'utf-8')
+  
+  console.log(`[Skills] Created local skill "${safeName}" with ${files.length} file(s)`)
+  
+  return getSkill(safeName)!
 }
 
 /**
@@ -206,14 +321,10 @@ export function deleteSkill(id: string): void {
 
 // ─── GitHub Integration ──────────────────────────────────────────────
 
-import { exec } from 'node:child_process'
-import { promisify } from 'node:util'
-
-const execAsync = promisify(exec)
-
 /**
  * Search GitHub for skill-related repositories.
  * Appends "skill" to the query if not already present.
+ * Uses execFile with argument array to prevent command injection.
  */
 export async function searchGithubSkills(query: string): Promise<GithubSkillSearchResult[]> {
   if (!query.trim()) return []
@@ -222,8 +333,9 @@ export async function searchGithubSkills(query: string): Promise<GithubSkillSear
     // Only append "skill" if not already in query
     const searchQuery = query.toLowerCase().includes('skill') ? query : `${query} skill`
 
-    const { stdout } = await execAsync(
-      `gh search repos "${searchQuery}" --json fullName,description,stargazersCount,url --limit 15`,
+    const { stdout } = await execFileAsync(
+      'gh',
+      ['search', 'repos', searchQuery, '--json', 'fullName,description,stargazersCount,url', '--limit', '15'],
       { timeout: 15000 }
     )
 
@@ -247,18 +359,42 @@ export async function searchGithubSkills(query: string): Promise<GithubSkillSear
 }
 
 /**
+ * Validate repository name format to prevent injection.
+ */
+function isValidRepoName(repoFullName: string): boolean {
+  // Valid format: owner/repo where both are alphanumeric with - _ .
+  const repoPattern = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/
+  return repoPattern.test(repoFullName)
+}
+
+/**
  * Find all SKILL.md files in a GitHub repository.
  * Returns array of file paths.
+ * Uses execFile with argument array to prevent command injection.
  */
 export async function findSkillFilesInRepo(repoFullName: string): Promise<string[]> {
+  // Validate repo name format to prevent injection
+  if (!isValidRepoName(repoFullName)) {
+    console.error('[Skills] Invalid repository name format:', repoFullName)
+    return []
+  }
+
   try {
     // Use gh CLI to search for SKILL.md files in the repo
-    const { stdout } = await execAsync(
-      `gh api "repos/${repoFullName}/git/trees/HEAD?recursive=1" --jq ".tree[] | select(.path | test(\\"SKILL\\\\.md$\\"; \\"i\\")) | .path"`,
-      { timeout: 10000 }
+    // Use endswith instead of regex to avoid escaping issues
+    const { stdout } = await execFileAsync(
+      'gh',
+      [
+        'api',
+        `repos/${repoFullName}/git/trees/HEAD?recursive=1`,
+        '--jq',
+        '.tree[] | select(.path | ascii_downcase | endswith("skill.md")) | .path'
+      ],
+      { timeout: 30000 }
     )
 
     const paths = stdout.trim().split('\n').filter(p => p.length > 0)
+    console.log(`[Skills] Found ${paths.length} SKILL.md files in ${repoFullName}`)
     return paths
   } catch (err) {
     console.error('[Skills] Failed to find skill files:', err)
@@ -267,7 +403,81 @@ export async function findSkillFilesInRepo(repoFullName: string): Promise<string
 }
 
 /**
+ * Download all files from a GitHub repository directory.
+ */
+async function downloadDirectoryFromGithub(
+  owner: string,
+  repo: string,
+  dirPath: string,
+  localDir: string
+): Promise<void> {
+  try {
+    // Get full tree from GitHub API
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`
+    const res = await fetch(apiUrl, {
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'AIDE-App'
+      }
+    })
+
+    if (!res.ok) {
+      console.error(`[Skills] GitHub API error: ${res.status}`)
+      return
+    }
+
+    const data = await res.json() as { tree: Array<{ path: string; type: string }> }
+
+    // Filter files within target directory
+    const prefix = dirPath === '.' ? '' : dirPath + '/'
+    const files = data.tree.filter(item =>
+      item.type === 'blob' &&
+      (dirPath === '.' ? !item.path.includes('/') || item.path === 'SKILL.md' : item.path.startsWith(prefix))
+    )
+
+    // For root level, only include SKILL.md and immediate subdirectory contents
+    const targetFiles = dirPath === '.'
+      ? files.filter(f => f.path === 'SKILL.md' || !f.path.includes('/'))
+      : files
+
+    console.log(`[Skills] Found ${targetFiles.length} files in ${dirPath}`)
+
+    // Download each file
+    for (const file of targetFiles) {
+      const relativePath = dirPath === '.' ? file.path : file.path.slice(prefix.length)
+      const localFilePath = path.join(localDir, relativePath)
+
+      // Create subdirectory if needed
+      const localFileDir = path.dirname(localFilePath)
+      if (!fs.existsSync(localFileDir)) {
+        fs.mkdirSync(localFileDir, { recursive: true })
+      }
+
+      // Download file
+      for (const branch of ['HEAD', 'main', 'master']) {
+        const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${file.path}`
+        try {
+          const fileRes = await fetch(url)
+          if (fileRes.ok) {
+            const content = await fileRes.text()
+            fs.writeFileSync(localFilePath, content, 'utf-8')
+            console.log(`[Skills] Downloaded: ${relativePath}`)
+            break
+          }
+        } catch {
+          continue
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[Skills] Failed to download directory:`, err)
+  }
+}
+
+/**
  * Download a skill from GitHub repository.
+ * Downloads the entire skill directory (parent of SKILL.md).
+ * Uses the skill name from SKILL.md as directory name for SDK compatibility.
  * @param repoFullName - Repository in format "owner/repo"
  * @param filePath - Optional path to specific SKILL.md file (default: auto-detect)
  */
@@ -293,40 +503,91 @@ export async function downloadSkillFromGithub(repoFullName: string, filePath?: s
     targetPath = skillFiles[0]
   }
 
-  // Download the file
-  let content: string | null = null
+  // Get skill directory path (parent of SKILL.md)
+  const skillDirPath = path.dirname(targetPath)  // e.g., "skills/code-review" or "."
+  const fallbackName = skillDirPath === '.' ? repo : path.basename(skillDirPath)
+
+  // First, fetch SKILL.md to get the actual skill name
+  let skillContent: string | null = null
   for (const branch of ['HEAD', 'main', 'master']) {
     const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${targetPath}`
     try {
       const res = await fetch(url)
       if (res.ok) {
-        content = await res.text()
+        skillContent = await res.text()
         break
       }
     } catch {
       continue
     }
   }
-
-  if (!content) {
+  
+  if (!skillContent) {
     throw new Error(`Could not download ${targetPath} from ${repoFullName}`)
   }
 
-  // Create skill directory - use path for unique id if not root
+  // Parse frontmatter for skill name
+  const frontmatterMatch = skillContent.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  let skillName = fallbackName
+  
+  if (frontmatterMatch) {
+    const yaml = frontmatterMatch[1]
+    const nameMatch = yaml.match(/^name:\s*(.+)$/m)
+    if (nameMatch) {
+      skillName = nameMatch[1].trim().replace(/^["']|["']$/g, '')
+    }
+  }
+  
+  // Sanitize skill name for directory
+  const safeName = skillName
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  // Create local skill directory using skill name
   const skillsDir = getSkillsDirectory()
-  // Use _._  as separator (unlikely to appear in real paths)
-  const pathSuffix = targetPath === 'SKILL.md' ? '' : `--${path.dirname(targetPath).replace(/\//g, '_._')}`
-  const id = `${owner}--${repo}${pathSuffix}`
-  const skillDir = path.join(skillsDir, id)
+  const skillDir = path.join(skillsDir, safeName)
 
   // Remove existing if any
   if (fs.existsSync(skillDir)) {
     fs.rmSync(skillDir, { recursive: true, force: true })
   }
 
-  // Create directory and write file
+  // Create directory
   fs.mkdirSync(skillDir, { recursive: true })
-  fs.writeFileSync(path.join(skillDir, 'SKILL.md'), content, 'utf-8')
 
-  return getSkill(id)!
+  // Download entire skill directory
+  await downloadDirectoryFromGithub(owner, repo, skillDirPath, skillDir)
+
+  // Ensure SKILL.md exists
+  const skillMdPath = path.join(skillDir, 'SKILL.md')
+  if (!fs.existsSync(skillMdPath)) {
+    fs.writeFileSync(skillMdPath, skillContent, 'utf-8')
+  }
+
+  // Save source metadata for tracking
+  const sourceMetadata = {
+    sourceType: 'github-search',
+    owner,
+    repo,
+    originalPath: targetPath,
+    repoUrl: `https://github.com/${owner}/${repo}`,
+    installedAt: new Date().toISOString()
+  }
+  fs.writeFileSync(path.join(skillDir, '.source.json'), JSON.stringify(sourceMetadata, null, 2), 'utf-8')
+
+  // Count files
+  const countFiles = (dir: string): number => {
+    let count = 0
+    const items = fs.readdirSync(dir, { withFileTypes: true })
+    for (const item of items) {
+      if (item.isFile() && !item.name.startsWith('.')) count++
+      else if (item.isDirectory()) count += countFiles(path.join(dir, item.name))
+    }
+    return count
+  }
+  console.log(`[Skills] Installed skill "${skillName}" from ${repoFullName} with ${countFiles(skillDir)} file(s)`)
+
+  return getSkill(safeName)!
 }

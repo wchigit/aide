@@ -12,7 +12,8 @@ import { setBaseUrl as setWeChatBaseUrl } from '../wechat/connection'
 import { getTelegramStatus, connectTelegram, disconnectTelegram, pushToTelegram } from '../telegram'
 import { getDiscordStatus, connectDiscord, disconnectDiscord, pushToDiscord } from '../discord'
 import { listChannels, deliverTo } from '../channels'
-import { listSkills, getSkill, createSkillFromFile, searchGithubSkills, findSkillFilesInRepo, downloadSkillFromGithub, toggleSkill, deleteSkill } from '../skills'
+import { listSkills, getSkill, createSkillFromFolder, searchGithubSkills, findSkillFilesInRepo, downloadSkillFromGithub, toggleSkill, deleteSkill } from '../skills'
+import { listSources, addSource, removeSource, toggleSource, syncSource, syncAllSources, browseSkills, installFromMarketplace } from '../skills/sources'
 import { getUpdateState, checkForUpdates, downloadUpdate, quitAndInstall } from '../updater'
 import { sdkHealth, sdkError } from '../health'
 
@@ -96,12 +97,22 @@ export function registerIpcHandlers(): void {
   // === Skills ===
   ipcMain.handle('skills:list', () => listSkills())
   ipcMain.handle('skills:get', (_, id) => getSkill(id))
-  ipcMain.handle('skills:createFromFile', (_, name, content) => createSkillFromFile(name, content))
+  ipcMain.handle('skills:createFromFolder', (_, files) => createSkillFromFolder(files))
   ipcMain.handle('skills:searchGithub', (_, query) => searchGithubSkills(query))
   ipcMain.handle('skills:findFilesInRepo', (_, repoFullName) => findSkillFilesInRepo(repoFullName))
   ipcMain.handle('skills:downloadFromGithub', (_, repoFullName, filePath) => downloadSkillFromGithub(repoFullName, filePath))
   ipcMain.handle('skills:toggle', (_, id, enabled) => toggleSkill(id, enabled))
   ipcMain.handle('skills:delete', (_, id) => deleteSkill(id))
+
+  // === Marketplace ===
+  ipcMain.handle('marketplace:listSources', () => listSources())
+  ipcMain.handle('marketplace:addSource', (_, input) => addSource(input))
+  ipcMain.handle('marketplace:removeSource', (_, id) => removeSource(id))
+  ipcMain.handle('marketplace:toggleSource', (_, id, enabled) => toggleSource(id, enabled))
+  ipcMain.handle('marketplace:syncSource', (_, id) => syncSource(id))
+  ipcMain.handle('marketplace:syncAll', () => syncAllSources())
+  ipcMain.handle('marketplace:browse', (_, sourceId) => browseSkills(sourceId))
+  ipcMain.handle('marketplace:install', (_, sourceId, path) => installFromMarketplace(sourceId, path))
 
   // === WeChat ===
   ipcMain.handle('wechat:getStatus', () => getWeChatStatus())
