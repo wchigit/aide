@@ -6,7 +6,7 @@
 
 ### Your personal work agent
 
-Sees the full picture · learns as you work · helps you get things done
+**Sees the full picture · learns as you work · helps you get things done**
 
 [![Status](https://img.shields.io/badge/status-early%20access-3fb950)](#project-status)
 [![Built with](https://img.shields.io/badge/built%20with-Electron%20%C2%B7%20React%20%C2%B7%20Copilot%20SDK-2563eb)](#under-the-hood)
