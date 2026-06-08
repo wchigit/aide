@@ -4,10 +4,12 @@
 
 # Aide
 
-### Your personal work agent — sees the full picture, learns as you work, and helps you get things done.
+### Your personal work agent
+
+Sees the full picture · learns as you work · helps you get things done
 
 [![Status](https://img.shields.io/badge/status-early%20access-3fb950)](#project-status)
-[![Built with](https://img.shields.io/badge/built%20with-Electron%20%C2%B7%20React%20%C2%B7%20Copilot%20SDK-47848f)](#under-the-hood)
+[![Built with](https://img.shields.io/badge/built%20with-Electron%20%C2%B7%20React%20%C2%B7%20Copilot%20SDK-2563eb)](#under-the-hood)
 [![License](https://img.shields.io/badge/license-private-lightgrey)](#license)
 
 [![Visit the Homepage](https://img.shields.io/badge/Visit%20the%20Homepage-2ea44f?style=for-the-badge)](https://houk-ms.github.io/aide/)
