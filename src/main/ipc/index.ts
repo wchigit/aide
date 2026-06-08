@@ -13,6 +13,8 @@ import { getWhatsAppStatus, connectWhatsApp, disconnectWhatsApp, pushToWhatsApp 
 import { getTelegramStatus, connectTelegram, disconnectTelegram, pushToTelegram } from '../telegram'
 import { getDiscordStatus, connectDiscord, disconnectDiscord, pushToDiscord } from '../discord'
 import { listChannels, deliverTo } from '../channels'
+import { listSkills, getSkill, toggleSkill, deleteSkill } from '../skills'
+import { listSources, syncSource, syncAllSources, browseSkills, installFromMarketplace } from '../skills/sources'
 import { getUpdateState, checkForUpdates, downloadUpdate, quitAndInstall } from '../updater'
 import { openArtifact, revealArtifact, artifactExists } from '../files'
 import { sdkHealth, sdkError } from '../health'
@@ -97,6 +99,19 @@ export function registerIpcHandlers(): void {
   // === Preferences ===
   ipcMain.handle('preferences:get', () => getPreferences())
   ipcMain.handle('preferences:set', (_, prefs) => setPreferences(prefs))
+
+  // === Skills ===
+  ipcMain.handle('skills:list', () => listSkills())
+  ipcMain.handle('skills:get', (_, id) => getSkill(id))
+  ipcMain.handle('skills:toggle', (_, id, enabled) => toggleSkill(id, enabled))
+  ipcMain.handle('skills:delete', (_, id) => deleteSkill(id))
+
+  // === Marketplace ===
+  ipcMain.handle('marketplace:listSources', () => listSources())
+  ipcMain.handle('marketplace:syncSource', (_, id) => syncSource(id))
+  ipcMain.handle('marketplace:syncAll', () => syncAllSources())
+  ipcMain.handle('marketplace:browse', (_, sourceId) => browseSkills(sourceId))
+  ipcMain.handle('marketplace:install', (_, sourceId, path) => installFromMarketplace(sourceId, path))
 
   // === WeChat ===
   ipcMain.handle('wechat:getStatus', () => getWeChatStatus())

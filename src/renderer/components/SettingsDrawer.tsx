@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
-import { Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, Send, RefreshCw, Download, CheckCircle2, AlertCircle } from 'lucide-react'
-import { ChannelsList } from '../channels/registry'
+import React, { useEffect, useState, useRef } from 'react'
+import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, Send, RefreshCw, Download, CheckCircle2, AlertCircle, Sparkles, AlertTriangle, Search } from 'lucide-react'
+import { WeChatLogo, TelegramLogo, DiscordLogo } from '../brand/icons'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, DeliveryTarget, UpdateState } from '@shared/types'
+import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, TelegramStatus, DiscordStatus, DeliveryTarget, UpdateState, Skill, BrowsableSkill } from '@shared/types'
+import { ChannelsList } from '../channels/registry'
 
 function MicrosoftIcon() {
   return (
@@ -31,6 +32,7 @@ export function SettingsDrawer() {
     { id: 'projects', label: 'Projects', icon: <FolderOpen size={14} /> },
     { id: 'relations', label: 'Contacts', icon: <Users size={14} /> },
     { id: 'memory', label: 'Memory', icon: <Brain size={14} /> },
+    { id: 'skills', label: 'Skills', icon: <Sparkles size={14} /> },
     { id: 'preferences', label: 'Preferences', icon: <Sliders size={14} /> },
   ]
 
@@ -40,7 +42,7 @@ export function SettingsDrawer() {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={close} />
 
       {/* Panel */}
-      <div className="absolute right-0 top-0 bottom-0 w-[620px] max-w-[94vw] bg-surface-1 border-l border-edge shadow-2xl flex flex-col anim-slide-in">
+      <div className="absolute right-0 top-0 bottom-0 w-[720px] max-w-[94vw] bg-surface-1 border-l border-edge shadow-2xl flex flex-col anim-slide-in">
         {/* Header */}
         <div className="shrink-0 bg-surface-0">
           <div className="flex items-center pl-5 pr-5 h-[52px]">
@@ -74,6 +76,7 @@ export function SettingsDrawer() {
           {activeTab === 'relations' && <RelationsTab relations={relations} onRefresh={fetchRelations} />}
           {activeTab === 'jobs' && <JobsTab jobs={jobs} onRefresh={fetchJobs} />}
           {activeTab === 'memory' && <MemoryTab />}
+          {activeTab === 'skills' && <SkillsTab />}
           {activeTab === 'preferences' && <PreferencesTab />}
         </div>
       </div>
@@ -716,6 +719,473 @@ function formatRelativeTime(iso: string): string {
 }
 
 /* ═══════════════════════════════════════════
+   Skills Tab
+   ═══════════════════════════════════════════ */
+
+function SkillsTab() {
+  const [skills, setSkills] = useState<Skill[]>([])
+  const [browsableSkills, setBrowsableSkills] = useState<BrowsableSkill[]>([])
+  const [browseLoading, setBrowseLoading] = useState(false)
+  const [installing, setInstalling] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [installedOnly, setInstalledOnly] = useState(false)
+  const [limit, setLimit] = useState(PAGE_SIZE)
+  const [detail, setDetail] = useState<BrowsableSkill | null>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+
+  // Reset pagination whenever the search query or filter changes.
+  useEffect(() => { setLimit(PAGE_SIZE) }, [search, installedOnly])
+
+  useEffect(() => {
+    loadSkills()
+    loadBrowsableSkills()
+  }, [])
+
+  const loadSkills = async () => {
+    try {
+      const list = await window.aide.skills.list()
+      setSkills(list)
+    } catch (err) {
+      console.error('Failed to load skills:', err)
+    }
+  }
+
+  const loadBrowsableSkills = async () => {
+    setBrowseLoading(true)
+    try {
+      const list = await window.aide.marketplace.browse()
+      setBrowsableSkills(list)
+    } catch (err) {
+      console.error('Failed to browse skills:', err)
+    }
+    setBrowseLoading(false)
+  }
+
+  const handleInstall = async (skill: BrowsableSkill) => {
+    setInstalling(`${skill.sourceId}:${skill.path}`)
+    try {
+      await window.aide.marketplace.install(skill.sourceId, skill.path)
+      await loadSkills()
+      await loadBrowsableSkills()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to install skill')
+    }
+    setInstalling(null)
+  }
+
+  const handleToggle = async (skill: Skill) => {
+    try {
+      await window.aide.skills.toggle(skill.id, !skill.enabled)
+      loadSkills()
+    } catch (err) {
+      console.error('Toggle failed:', err)
+    }
+  }
+
+  const handleDelete = async (skill: Skill) => {
+    if (!confirm(`Delete skill "${skill.name}"? This cannot be undone.`)) return
+    try {
+      await window.aide.skills.delete(skill.id)
+      await loadSkills()
+      await loadBrowsableSkills()
+    } catch (err) {
+      console.error('Delete failed:', err)
+    }
+  }
+
+  // Match a marketplace skill to its installed record. Backend installs derive the
+  // skill's directory id from sanitizeSkillName(name), so match on that first (mirrors
+  // browseSkills' installed check) and fall back to the display name.
+  const installedById = new Map(skills.map(s => [s.id, s]))
+  const installedByName = new Map(skills.map(s => [s.name.toLowerCase().trim(), s]))
+  const findInstalled = (name: string) =>
+    installedById.get(sanitizeSkillName(name)) || installedByName.get(name.toLowerCase().trim())
+
+  // Filter the marketplace by search.
+  const q = search.trim().toLowerCase()
+  const searched = q
+    ? browsableSkills.filter(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.description.toLowerCase().includes(q)
+      )
+    : browsableSkills
+  const filtered = installedOnly
+    ? searched.filter(s => findInstalled(s.name))
+    : searched
+
+  // Local / orphan skills that aren't represented in the marketplace list.
+  const marketplaceNames = new Set(browsableSkills.map(s => s.name.toLowerCase().trim()))
+  const localSkills = skills.filter(s => !marketplaceNames.has(s.name.toLowerCase().trim()))
+  const localSearched = q
+    ? localSkills.filter(s => s.name.toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q))
+    : localSkills
+  // Local skills are installed-only items, so they appear only under the Installed filter.
+  const localFiltered = installedOnly ? localSearched : []
+
+  const installedCount = skills.length
+
+  // Only render a paged slice of the (huge) marketplace; scrolling near the bottom loads the next page.
+  const visible = filtered.slice(0, limit)
+  const hasMore = filtered.length > visible.length
+
+  // Auto-load the next page when the sentinel scrolls into view.
+  useEffect(() => {
+    if (!hasMore) return
+    const el = sentinelRef.current
+    if (!el) return
+    const io = new IntersectionObserver(entries => {
+      if (entries[0]?.isIntersecting) setLimit(l => l + PAGE_SIZE)
+    }, { rootMargin: '200px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasMore, filtered.length])
+
+  return (
+    <div className="space-y-3">
+      {/* Search */}
+      <div className="relative">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search skills"
+          className="w-full bg-surface-0 border border-edge rounded-lg pl-9 pr-3 py-[7px] text-[13px] text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
+        />
+      </div>
+
+      {/* Result count + installed filter */}
+      {!browseLoading && (browsableSkills.length > 0 || skills.length > 0) && (
+        <div className="flex items-center justify-between px-0.5">
+          <span className="text-[11.5px] text-text-tertiary">
+            {installedOnly
+              ? `${filtered.length + localFiltered.length} installed`
+              : q
+                ? `${filtered.length} result${filtered.length === 1 ? '' : 's'}`
+                : `${filtered.length} skills available`}
+          </span>
+          <button
+            onClick={() => setInstalledOnly(v => !v)}
+            className={`h-6 px-2.5 rounded-md text-[11.5px] font-medium transition-colors ${
+              installedOnly
+                ? 'bg-accent-muted text-accent'
+                : 'text-text-tertiary hover:text-text-secondary hover:bg-surface-1'
+            }`}
+          >
+            Installed{installedCount > 0 ? ` (${installedCount})` : ''}
+          </button>
+        </div>
+      )}
+
+      {browseLoading && browsableSkills.length === 0 ? (
+        <div className="text-[12px] text-text-tertiary text-center py-10">Loading…</div>
+      ) : filtered.length === 0 && localFiltered.length === 0 ? (
+        <Empty>{installedOnly ? 'No skills installed yet.' : 'No skills found.'}</Empty>
+      ) : (
+        <>
+        <div className="grid grid-cols-2 gap-2">
+          {visible.map(skill => {
+            const installed = findInstalled(skill.name)
+            const isInstalling = installing === `${skill.sourceId}:${skill.path}`
+            const dimmed = installed && !installed.enabled
+            return (
+              <div
+                key={`${skill.sourceId}:${skill.path}`}
+                onClick={() => setDetail(skill)}
+                className="group flex flex-col p-3 rounded-lg border border-edge bg-surface-0 hover:border-accent/30 hover:bg-surface-1 transition-colors cursor-pointer"
+              >
+                <div className={`flex items-start gap-2.5 ${dimmed ? 'opacity-50' : ''}`}>
+                  <SkillAvatar name={skill.name} dimmed={!!dimmed} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13px] font-semibold text-text-primary truncate">{skill.name}</span>
+                      {dimmed && <Tag>Off</Tag>}
+                    </div>
+                    {skill.category && (
+                      <span className="text-[10.5px] text-text-tertiary capitalize">{skill.category}</span>
+                    )}
+                  </div>
+                </div>
+                {skill.description && (
+                  <p className="text-[11.5px] leading-snug text-text-tertiary mt-2 line-clamp-2">{skill.description}</p>
+                )}
+                <SkillBadges skill={skill} />
+                <div className="flex-1 min-h-3" />
+                <div className="flex items-center justify-end gap-1.5 pt-3 border-t border-edge-subtle">
+                  {installed ? (
+                    <>
+                      <span className="mr-auto text-[11px] font-medium text-text-tertiary inline-flex items-center gap-1"><CheckCircle2 size={12} className="text-accent" /> Installed</span>
+                      <Toggle checked={installed.enabled} onChange={() => handleToggle(installed)} />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(installed) }}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-text-tertiary hover:text-danger hover:bg-danger/8 transition-all"
+                        title="Uninstall"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleInstall(skill) }}
+                      disabled={isInstalling}
+                      className="h-7 px-3 rounded-lg text-[12px] font-medium bg-surface-2 text-text-secondary border border-edge hover:bg-surface-3 disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
+                    >
+                      {isInstalling ? 'Installing…' : <><Download size={12} /> Install</>}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Locally-installed skills not present in the marketplace */}
+          {localFiltered.map(skill => (
+            <div
+              key={skill.id}
+              onClick={() => setDetail({
+                name: skill.name,
+                description: skill.description || '',
+                sourceId: 'local',
+                sourceName: 'Local',
+                sourceType: 'local',
+                path: skill.id,
+                installed: true,
+                source: 'local'
+              })}
+              className="group flex flex-col p-3 rounded-lg border border-edge bg-surface-0 hover:border-accent/30 hover:bg-surface-1 transition-colors cursor-pointer"
+            >
+              <div className={`flex items-start gap-2.5 ${skill.enabled ? '' : 'opacity-50'}`}>
+                <SkillAvatar name={skill.name} dimmed={!skill.enabled} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[13px] font-semibold text-text-primary truncate">{skill.name}</span>
+                    <span className="shrink-0 px-1.5 py-0.5 text-[10px] rounded-md bg-surface-2 text-text-tertiary font-medium">Local</span>
+                    {!skill.enabled && <Tag>Off</Tag>}
+                  </div>
+                  {skill.description && (
+                    <p className="text-[11.5px] leading-snug text-text-tertiary mt-1 line-clamp-2">{skill.description}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 min-h-3" />
+              <div className="flex items-center justify-end gap-1.5 pt-3 border-t border-edge-subtle">
+                <Toggle checked={skill.enabled} onChange={() => handleToggle(skill)} />
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDelete(skill) }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-text-tertiary hover:text-danger hover:bg-danger/8 transition-all"
+                  title="Uninstall"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {hasMore && (
+          <div ref={sentinelRef} className="py-4 text-center text-[11.5px] text-text-tertiary">
+            Loading more…
+          </div>
+        )}
+        </>
+      )}
+
+      {detail && (
+        <SkillDetailModal
+          skill={detail}
+          installed={findInstalled(detail.name)}
+          installing={installing === `${detail.sourceId}:${detail.path}`}
+          onClose={() => setDetail(null)}
+          onInstall={() => handleInstall(detail)}
+          onToggle={(s) => handleToggle(s)}
+          onDelete={(s) => handleDelete(s)}
+        />
+      )}
+    </div>
+  )
+}
+
+// Neutral monochrome avatar with the skill's initial — stays within the app's single-accent palette.
+const PAGE_SIZE = 30
+
+// Mirrors the backend's sanitizeSkillName so the renderer matches the same installed-skill directory id.
+function sanitizeSkillName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+function SkillAvatar({ name, dimmed }: { name: string; dimmed?: boolean }) {
+  const initial = (name.replace(/[^a-zA-Z0-9]/g, '')[0] || '?').toUpperCase()
+  return (
+    <div className={`shrink-0 w-9 h-9 rounded-lg bg-accent-muted flex items-center justify-center text-accent text-[14px] font-semibold ${dimmed ? 'opacity-50 grayscale' : ''}`}>
+      {initial}
+    </div>
+  )
+}
+
+// Inline metadata chips — only render the ones that carry a real signal (risk, setup).
+function SkillBadges({ skill }: { skill: BrowsableSkill }) {
+  const risky = skill.risk === 'critical' || skill.risk === 'offensive'
+  const needsSetup = !!skill.setup && skill.setup.type !== 'none'
+  if (!risky && !needsSetup) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+      {risky && (
+        <span
+          className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-danger/10 text-danger inline-flex items-center gap-0.5"
+          title={skill.risk === 'offensive' ? 'Offensive-security tooling — use responsibly' : 'High-impact skill — review before use'}
+        >
+          <AlertTriangle size={9} /> {skill.risk}
+        </span>
+      )}
+      {needsSetup && (
+        <span
+          className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-accent-subtle text-accent inline-flex items-center gap-0.5"
+          title={skill.setup?.summary || 'Requires extra setup before use'}
+        >
+          <Sliders size={9} /> Setup
+        </span>
+      )}
+    </div>
+  )
+}
+
+// Full-detail modal: the place to actually understand a skill before installing.
+function SkillDetailModal({ skill, installed, installing, onClose, onInstall, onToggle, onDelete }: {
+  skill: BrowsableSkill
+  installed?: Skill
+  installing: boolean
+  onClose: () => void
+  onInstall: () => void
+  onToggle: (s: Skill) => void
+  onDelete: (s: Skill) => void
+}) {
+  const needsSetup = !!skill.setup && skill.setup.type !== 'none'
+  const risky = skill.risk === 'critical' || skill.risk === 'offensive'
+  // Turn a provenance string into a clickable link when it's a URL.
+  const sourceUrl = skill.source && /^https?:\/\//.test(skill.source) ? skill.source : null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md max-h-[80vh] overflow-y-auto scrollbar-thin bg-surface-0 border border-edge rounded-2xl shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start gap-3 p-4 border-b border-edge-subtle">
+          <SkillAvatar name={skill.name} />
+          <div className="flex-1 min-w-0 pt-0.5">
+            <h3 className="text-[15px] font-semibold text-text-primary break-words">{skill.name}</h3>
+            {skill.category && <p className="text-[11.5px] text-text-tertiary capitalize mt-0.5">{skill.category}</p>}
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-4 space-y-4">
+          {/* Status / risk badges */}
+          {(installed || risky) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {installed && (
+                <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-accent-muted text-accent inline-flex items-center gap-1">
+                  <CheckCircle2 size={11} /> {installed.enabled ? 'Installed' : 'Installed · Off'}
+                </span>
+              )}
+              {risky && (
+                <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-danger/10 text-danger inline-flex items-center gap-1">
+                  <AlertTriangle size={11} /> {skill.risk}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Full description */}
+          {skill.description && (
+            <div>
+              <p className="text-[10.5px] font-medium text-text-tertiary uppercase tracking-wide mb-1">About</p>
+              <p className="text-[12.5px] leading-relaxed text-text-secondary whitespace-pre-wrap">{skill.description}</p>
+            </div>
+          )}
+
+          {/* Setup requirement */}
+          {needsSetup && (
+            <div className="rounded-lg bg-accent-subtle border border-accent/15 p-3">
+              <p className="text-[11.5px] font-medium text-accent inline-flex items-center gap-1.5 mb-1"><Sliders size={12} /> Setup required</p>
+              {skill.setup?.summary
+                ? <p className="text-[12px] leading-relaxed text-text-secondary">{skill.setup.summary}</p>
+                : <p className="text-[12px] text-text-tertiary">This skill needs extra configuration before it works.</p>}
+              {skill.setup?.docs && (
+                <a
+                  href={skill.setup.docs}
+                  onClick={e => { e.preventDefault(); window.open(skill.setup!.docs!) }}
+                  className="text-[11.5px] text-accent hover:underline mt-1.5 inline-block"
+                >
+                  Setup docs →
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Meta */}
+          <div className="space-y-1.5 text-[11.5px]">
+            {skill.source && (
+              <div className="flex items-center gap-2">
+                <span className="text-text-tertiary w-14 shrink-0">Source</span>
+                {sourceUrl
+                  ? <a href={sourceUrl} onClick={e => { e.preventDefault(); window.open(sourceUrl) }} className="text-accent hover:underline truncate">{skill.source.replace(/^https?:\/\//, '')}</a>
+                  : <span className="text-text-secondary capitalize">{skill.source}</span>}
+              </div>
+            )}
+            {skill.dateAdded && (
+              <div className="flex items-center gap-2">
+                <span className="text-text-tertiary w-14 shrink-0">Added</span>
+                <span className="text-text-secondary">{skill.dateAdded}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-text-tertiary w-14 shrink-0">Path</span>
+              <span className="text-text-secondary font-mono text-[11px] truncate">{skill.path}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer actions */}
+        <div className="flex items-center gap-2 p-4 border-t border-edge-subtle">
+          {installed ? (
+            <>
+              <span className="text-[12px] text-text-tertiary">Enabled</span>
+              <Toggle checked={installed.enabled} onChange={() => onToggle(installed)} />
+              <button
+                onClick={() => { onDelete(installed); onClose() }}
+                className="ml-auto h-8 px-3 rounded-lg text-[12px] font-medium text-danger hover:bg-danger/8 transition-colors inline-flex items-center gap-1.5"
+              >
+                <Trash2 size={13} /> Uninstall
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onInstall}
+              disabled={installing}
+              className="ml-auto h-8 px-4 rounded-lg text-[12.5px] font-medium bg-accent text-white hover:brightness-110 disabled:opacity-50 transition-all inline-flex items-center gap-1.5"
+            >
+              {installing ? 'Installing…' : <><Download size={13} /> Install</>}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════
    Memory Tab
    ═══════════════════════════════════════════ */
 
@@ -975,12 +1445,12 @@ function Desc({ children }: { children: string }) {
   return <p className="text-[12px] text-text-tertiary leading-relaxed">{children}</p>
 }
 
-function SectionLabel({ title, desc, meta }: { title: string; desc: string; meta?: React.ReactNode }) {
+function SectionLabel({ title, desc, meta }: { title: string; desc?: string; meta?: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <div>
         <p className="text-[12px] font-semibold text-text-secondary">{title}</p>
-        <p className="text-[12px] text-text-tertiary leading-relaxed mt-0.5">{desc}</p>
+        {desc && <p className="text-[12px] text-text-tertiary leading-relaxed mt-0.5">{desc}</p>}
       </div>
       {meta != null && <span className="text-[11px] text-text-tertiary tabular-nums shrink-0 mt-0.5">{meta}</span>}
     </div>

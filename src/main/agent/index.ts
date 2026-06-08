@@ -4,6 +4,7 @@ import { getProject } from '../projects'
 import { listRelations, getRelation } from '../relations'
 import { getAutonomyLevel } from '../preferences'
 import { getConnectionStatus } from '../connections'
+import { getSkillsDirectory } from '../skills'
 import { showSystemNotification } from '../index'
 import type { ChatMessage, Task, PendingAction, TurnStep } from '@shared/types'
 import { v4 as uuid } from 'uuid'
@@ -479,7 +480,8 @@ async function getOrCreateSession(taskId: string | null): Promise<CopilotSession
     hooks,
     infiniteSessions: { enabled: true },
     systemMessage: { mode: 'append', content: buildSystemMessage() },
-    onPermissionRequest: handlePermissionRequest
+    onPermissionRequest: handlePermissionRequest,
+    skillDirectories: [getSkillsDirectory()]
   }
 
   try {
@@ -741,7 +743,8 @@ export async function executeJobSession(instruction: string, jobId: string, last
       hooks: jobHooks,
       infiniteSessions: { enabled: false },
       systemMessage: { mode: 'append', content: buildSystemMessage() },
-      onPermissionRequest: jobPermissionHandler
+      onPermissionRequest: jobPermissionHandler,
+      skillDirectories: [getSkillsDirectory()]
     })
 
     // Inject time context into the prompt so Agent knows the time window
