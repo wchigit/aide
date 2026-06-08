@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react'
-import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, Send, RefreshCw, Download, CheckCircle2, AlertCircle, Sparkles, Upload, Star, ExternalLink, AlertTriangle, ChevronDown, ChevronRight, Shield, Globe, Settings2 } from 'lucide-react'
+import React, { useEffect, useState, useRef } from 'react'
+import { X, Link2, FolderOpen, Users, Timer, Brain, Sliders, Trash2, Plus, Save, Check, Github, Send, RefreshCw, Download, CheckCircle2, AlertCircle, Sparkles, AlertTriangle, Search } from 'lucide-react'
 import { WeChatLogo, TelegramLogo, DiscordLogo } from '../brand/icons'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, TelegramStatus, DiscordStatus, DeliveryTarget, UpdateState, Skill, GithubSkillSearchResult, MarketplaceSource, BrowsableSkill } from '@shared/types'
-import anthropicLogo from '../../../resources/anthropic-com-logo.png'
+import type { Project, Relation, Job, ConnectionStatus, MemoryEntry, WeChatStatus, TelegramStatus, DiscordStatus, DeliveryTarget, UpdateState, Skill, BrowsableSkill } from '@shared/types'
 import { ChannelsList } from '../channels/registry'
 
 function MicrosoftIcon() {
@@ -724,68 +723,30 @@ function formatRelativeTime(iso: string): string {
    ═══════════════════════════════════════════ */
 
 function SkillsTab() {
-  const [view, setView] = useState<'installed' | 'browse' | 'sources'>('installed')
   const [skills, setSkills] = useState<Skill[]>([])
-  const [loading, setLoading] = useState(false)
-
-  // Browse state
   const [browsableSkills, setBrowsableSkills] = useState<BrowsableSkill[]>([])
   const [browseLoading, setBrowseLoading] = useState(false)
   const [installing, setInstalling] = useState<string | null>(null)
-  const [marketplaceSearch, setMarketplaceSearch] = useState('')
-  const [collapsedSources, setCollapsedSources] = useState<Set<string>>(new Set(['anthropic-community']))
+  const [search, setSearch] = useState('')
+  const [installedOnly, setInstalledOnly] = useState(false)
+  const [limit, setLimit] = useState(PAGE_SIZE)
+  const [detail, setDetail] = useState<BrowsableSkill | null>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
-  // Sources state
-  const [sources, setSources] = useState<MarketplaceSource[]>([])
-  const [syncing, setSyncing] = useState<string | null>(null)
-  const [addingSource, setAddingSource] = useState(false)
-  const [newSourceName, setNewSourceName] = useState('')
-  const [newSourceUrl, setNewSourceUrl] = useState('')
-
-  // Upload state (folder upload)
-  const [uploadMode, setUploadMode] = useState(false)
-  const [uploadFolderName, setUploadFolderName] = useState('')
-  const [uploadFiles, setUploadFiles] = useState<Array<{ path: string; content: string }>>([])  
-
-  // GitHub search fallback state
-  const [githubExpanded, setGithubExpanded] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<GithubSkillSearchResult[]>([])
-  const [searching, setSearching] = useState(false)
-  const [searchPerformed, setSearchPerformed] = useState(false)
-  const [downloading, setDownloading] = useState<string | null>(null)
-  const [selectingRepo, setSelectingRepo] = useState<GithubSkillSearchResult | null>(null)
-  const [availableFiles, setAvailableFiles] = useState<string[]>([])
-  const [confirmInstall, setConfirmInstall] = useState<GithubSkillSearchResult | null>(null)
+  // Reset pagination whenever the search query or filter changes.
+  useEffect(() => { setLimit(PAGE_SIZE) }, [search, installedOnly])
 
   useEffect(() => {
     loadSkills()
-    loadSources()
+    loadBrowsableSkills()
   }, [])
 
-  useEffect(() => {
-    if (view === 'browse') {
-      loadBrowsableSkills()
-    }
-  }, [view])
-
   const loadSkills = async () => {
-    setLoading(true)
     try {
       const list = await window.aide.skills.list()
       setSkills(list)
     } catch (err) {
       console.error('Failed to load skills:', err)
-    }
-    setLoading(false)
-  }
-
-  const loadSources = async () => {
-    try {
-      const list = await window.aide.marketplace.listSources()
-      setSources(list)
-    } catch (err) {
-      console.error('Failed to load sources:', err)
     }
   }
 
@@ -800,176 +761,16 @@ function SkillsTab() {
     setBrowseLoading(false)
   }
 
-  const handleInstallFromMarketplace = async (skill: BrowsableSkill) => {
+  const handleInstall = async (skill: BrowsableSkill) => {
     setInstalling(`${skill.sourceId}:${skill.path}`)
     try {
       await window.aide.marketplace.install(skill.sourceId, skill.path)
-      loadSkills()
-      loadBrowsableSkills()
+      await loadSkills()
+      await loadBrowsableSkills()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to install skill')
     }
     setInstalling(null)
-  }
-
-  const handleSyncSource = async (sourceId: string) => {
-    setSyncing(sourceId)
-    try {
-      await window.aide.marketplace.syncSource(sourceId)
-      loadSources()
-      loadBrowsableSkills()
-    } catch (err) {
-      console.error('Sync failed:', err)
-    }
-    setSyncing(null)
-  }
-
-  const handleToggleSource = async (source: MarketplaceSource) => {
-    try {
-      await window.aide.marketplace.toggleSource(source.id, !source.enabled)
-      loadSources()
-    } catch (err) {
-      console.error('Toggle failed:', err)
-    }
-  }
-
-  const handleAddSource = async () => {
-    if (!newSourceName.trim() || !newSourceUrl.trim()) return
-    try {
-      const newSource = await window.aide.marketplace.addSource({ name: newSourceName, url: newSourceUrl })
-      setNewSourceName('')
-      setNewSourceUrl('')
-      setAddingSource(false)
-      // Auto-sync to get skill count
-      await window.aide.marketplace.syncSource(newSource.id)
-      loadSources()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add source')
-    }
-  }
-
-  const handleRemoveSource = async (id: string) => {
-    if (!confirm('Remove this source? Skills already installed will remain.')) return
-    try {
-      await window.aide.marketplace.removeSource(id)
-      loadSources()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Cannot remove this source')
-    }
-  }
-
-  const handleFileSelect = async () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.webkitdirectory = true
-    input.multiple = true
-    input.onchange = async (e) => {
-      const fileList = (e.target as HTMLInputElement).files
-      if (!fileList || fileList.length === 0) return
-      
-      // Get folder name from first file's path
-      const firstPath = fileList[0].webkitRelativePath || fileList[0].name
-      const folderName = firstPath.split('/')[0] || 'uploaded-skill'
-      
-      // Read all files
-      const files: Array<{ path: string; content: string }> = []
-      for (let i = 0; i < fileList.length; i++) {
-        const file = fileList[i]
-        // Only include text-based files
-        if (file.type.startsWith('text/') || 
-            file.name.endsWith('.md') || 
-            file.name.endsWith('.txt') ||
-            file.name.endsWith('.json') ||
-            file.name.endsWith('.yaml') ||
-            file.name.endsWith('.yml')) {
-          try {
-            const content = await file.text()
-            const relativePath = file.webkitRelativePath || file.name
-            files.push({ path: relativePath, content })
-          } catch {
-            console.warn('Failed to read file:', file.name)
-          }
-        }
-      }
-      
-      if (files.length === 0) {
-        alert('No valid files found in folder.')
-        return
-      }
-      
-      // Check for SKILL.md
-      const hasSkillMd = files.some(f => f.path.toLowerCase().endsWith('skill.md'))
-      if (!hasSkillMd) {
-        alert('No SKILL.md found in folder. Please ensure your folder contains a SKILL.md file.')
-        return
-      }
-      
-      setUploadFolderName(folderName)
-      setUploadFiles(files)
-      setUploadMode(true)
-    }
-    input.click()
-  }
-
-  const handleUpload = async () => {
-    if (uploadFiles.length === 0) return
-    try {
-      await window.aide.skills.createFromFolder(uploadFiles)
-      setUploadFolderName('')
-      setUploadFiles([])
-      setUploadMode(false)
-      loadSkills()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to upload skill')
-    }
-  }
-
-  const handleGithubSearch = async () => {
-    if (!searchQuery.trim()) return
-    setSearching(true)
-    setSearchPerformed(true)
-    try {
-      const results = await window.aide.skills.searchGithub(searchQuery)
-      setSearchResults(results)
-    } catch (err) {
-      console.error('Search failed:', err)
-      setSearchResults([])
-    }
-    setSearching(false)
-  }
-
-  const handleGithubDownload = async (repo: GithubSkillSearchResult, filePath?: string) => {
-    if (downloading) return
-    setDownloading(repo.fullName)
-
-    try {
-      if (!filePath) {
-        const files = await window.aide.skills.findFilesInRepo(repo.fullName)
-        if (files.length === 0) {
-          alert(`No SKILL.md found in ${repo.fullName}`)
-          setDownloading(null)
-          return
-        }
-        if (files.length > 1) {
-          setSelectingRepo(repo)
-          setAvailableFiles(files)
-          setDownloading(null)
-          return
-        }
-        filePath = files[0]
-      }
-
-      await window.aide.skills.downloadFromGithub(repo.fullName, filePath)
-      setSearchQuery('')
-      setSearchResults([])
-      setSelectingRepo(null)
-      setAvailableFiles([])
-      setConfirmInstall(null)
-      loadSkills()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to download skill')
-    }
-    setDownloading(null)
   }
 
   const handleToggle = async (skill: Skill) => {
@@ -985,519 +786,401 @@ function SkillsTab() {
     if (!confirm(`Delete skill "${skill.name}"? This cannot be undone.`)) return
     try {
       await window.aide.skills.delete(skill.id)
-      loadSkills()
+      await loadSkills()
+      await loadBrowsableSkills()
     } catch (err) {
       console.error('Delete failed:', err)
     }
   }
 
-  const getSourceBadge = (skill: Skill) => {
-    // Determine source label
-    let sourceLabel = ''
-    let bgColor = 'bg-surface-2'
-    let textColor = 'text-text-tertiary'
-    
-    if (skill.source === 'local') {
-      sourceLabel = 'Local'
-    } else if (skill.source === 'github-search') {
-      sourceLabel = 'GitHub'
-      bgColor = 'bg-amber-500/10'
-      textColor = 'text-amber-600'
-    } else if (skill.source === 'marketplace' && skill.sourceId) {
-      // Map sourceId to friendly name
-      if (skill.sourceId === 'aide-official') {
-        sourceLabel = 'AIDE'
-        bgColor = 'bg-accent/10'
-        textColor = 'text-accent'
-      } else if (skill.sourceId === 'anthropic-community') {
-        sourceLabel = 'Anthropic'
-        bgColor = 'bg-orange-500/10'
-        textColor = 'text-orange-600'
-      } else if (skill.sourceId?.startsWith('private-')) {
-        // Private source - just show "Private"
-        sourceLabel = 'Private'
-        bgColor = 'bg-purple-500/10'
-        textColor = 'text-purple-600'
-      } else {
-        // Custom source - show sourceId or truncated version
-        sourceLabel = skill.sourceId && skill.sourceId.length > 15 ? skill.sourceId.slice(0, 12) + '...' : (skill.sourceId || '')
-        bgColor = 'bg-purple-500/10'
-        textColor = 'text-purple-600'
-      }
-    }
-    
-    if (!sourceLabel) return null
-    
-    return (
-      <span className={`px-1.5 py-0.5 text-[10px] rounded ${bgColor} ${textColor} font-medium`}>
-        {sourceLabel}
-      </span>
-    )
-  }
+  // Match a marketplace skill to its installed record. Backend installs derive the
+  // skill's directory id from sanitizeSkillName(name), so match on that first (mirrors
+  // browseSkills' installed check) and fall back to the display name.
+  const installedById = new Map(skills.map(s => [s.id, s]))
+  const installedByName = new Map(skills.map(s => [s.name.toLowerCase().trim(), s]))
+  const findInstalled = (name: string) =>
+    installedById.get(sanitizeSkillName(name)) || installedByName.get(name.toLowerCase().trim())
+
+  // Filter the marketplace by search.
+  const q = search.trim().toLowerCase()
+  const searched = q
+    ? browsableSkills.filter(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.description.toLowerCase().includes(q)
+      )
+    : browsableSkills
+  const filtered = installedOnly
+    ? searched.filter(s => findInstalled(s.name))
+    : searched
+
+  // Local / orphan skills that aren't represented in the marketplace list.
+  const marketplaceNames = new Set(browsableSkills.map(s => s.name.toLowerCase().trim()))
+  const localSkills = skills.filter(s => !marketplaceNames.has(s.name.toLowerCase().trim()))
+  const localSearched = q
+    ? localSkills.filter(s => s.name.toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q))
+    : localSkills
+  // Local skills are installed-only items, so they appear only under the Installed filter.
+  const localFiltered = installedOnly ? localSearched : []
+
+  const installedCount = skills.length
+
+  // Only render a paged slice of the (huge) marketplace; scrolling near the bottom loads the next page.
+  const visible = filtered.slice(0, limit)
+  const hasMore = filtered.length > visible.length
+
+  // Auto-load the next page when the sentinel scrolls into view.
+  useEffect(() => {
+    if (!hasMore) return
+    const el = sentinelRef.current
+    if (!el) return
+    const io = new IntersectionObserver(entries => {
+      if (entries[0]?.isIntersecting) setLimit(l => l + PAGE_SIZE)
+    }, { rootMargin: '200px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasMore, filtered.length])
 
   return (
-    <div className="space-y-6">
-      {/* Tab Navigation */}
-      <div className="flex gap-1 p-1 bg-surface-1 rounded-lg">
-        {(['installed', 'browse', 'sources'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setView(tab)}
-            className={`flex-1 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
-              view === tab
-                ? 'bg-surface-0 text-text-primary shadow-sm'
-                : 'text-text-tertiary hover:text-text-secondary'
-            }`}
-          >
-            {tab === 'installed' && 'Installed'}
-            {tab === 'browse' && 'Browse Marketplace'}
-            {tab === 'sources' && 'Sources'}
-          </button>
-        ))}
+    <div className="space-y-3">
+      {/* Search */}
+      <div className="relative">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search skills"
+          className="w-full bg-surface-0 border border-edge rounded-lg pl-9 pr-3 py-[7px] text-[13px] text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
+        />
       </div>
 
-      {/* ===== INSTALLED VIEW ===== */}
-      {view === 'installed' && (
-        <>
-          {/* Installed Skills List */}
-          <section className="space-y-3">
-            <SectionLabel
-              title="Installed Skills"
-              meta={`${skills.length} installed`}
-            />
-
-            {skills.length === 0 ? (
-              <Empty>No skills installed. Browse the marketplace or upload from Sources tab.</Empty>
-            ) : (
-              <div className="space-y-2">
-                {skills.map(skill => (
-                  <div key={skill.id} className={`group p-3 rounded-lg bg-surface-0 border transition-colors ${skill.enabled ? 'border-edge' : 'border-edge opacity-60'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Sparkles size={14} className={skill.enabled ? 'text-accent' : 'text-text-tertiary'} />
-                          <span className="text-[13px] font-medium text-text-primary">{skill.name}</span>
-                          {getSourceBadge(skill)}
-                          {!skill.enabled && <Tag>Disabled</Tag>}
-                        </div>
-                        {skill.description && (
-                          <p className="text-[12px] text-text-tertiary mt-1">{skill.description}</p>
-                        )}
-                        <div className="flex items-center gap-2 mt-1.5 text-[11px] text-text-tertiary">
-                          {skill.sourceUrl && (
-                            <a href={skill.sourceUrl} target="_blank" rel="noopener" className="hover:text-accent transition-colors inline-flex items-center gap-0.5">
-                              <ExternalLink size={10} /> Source
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Toggle checked={skill.enabled} onChange={() => handleToggle(skill)} />
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDelete(skill) }}
-                          className="w-6 h-6 rounded-md flex items-center justify-center text-text-tertiary hover:text-danger hover:bg-danger/8 opacity-0 group-hover:opacity-100 transition-all"
-                          title="Delete"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </>
+      {/* Result count + installed filter */}
+      {!browseLoading && (browsableSkills.length > 0 || skills.length > 0) && (
+        <div className="flex items-center justify-between px-0.5">
+          <span className="text-[11.5px] text-text-tertiary">
+            {installedOnly
+              ? `${filtered.length + localFiltered.length} installed`
+              : q
+                ? `${filtered.length} result${filtered.length === 1 ? '' : 's'}`
+                : `${filtered.length} skills available`}
+          </span>
+          <button
+            onClick={() => setInstalledOnly(v => !v)}
+            className={`h-6 px-2.5 rounded-md text-[11.5px] font-medium transition-colors ${
+              installedOnly
+                ? 'bg-accent-muted text-accent'
+                : 'text-text-tertiary hover:text-text-secondary hover:bg-surface-1'
+            }`}
+          >
+            Installed{installedCount > 0 ? ` (${installedCount})` : ''}
+          </button>
+        </div>
       )}
 
-      {/* ===== BROWSE VIEW ===== */}
-      {view === 'browse' && (
+      {browseLoading && browsableSkills.length === 0 ? (
+        <div className="text-[12px] text-text-tertiary text-center py-10">Loading…</div>
+      ) : filtered.length === 0 && localFiltered.length === 0 ? (
+        <Empty>{installedOnly ? 'No skills installed yet.' : 'No skills found.'}</Empty>
+      ) : (
         <>
-          {/* Search + Refresh */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                value={marketplaceSearch}
-                onChange={e => setMarketplaceSearch(e.target.value)}
-                placeholder="Search marketplace skills..."
-                className="w-full bg-surface-0 border border-edge rounded-lg px-3 py-2 text-[13px] text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50 transition-colors"
-              />
-            </div>
-            <button
-              onClick={loadBrowsableSkills}
-              disabled={browseLoading}
-              className="p-2 rounded-lg bg-surface-0 border border-edge hover:border-accent/50 text-text-tertiary hover:text-text-secondary transition-colors disabled:opacity-50"
-              title="Refresh marketplace"
-            >
-              <RefreshCw size={14} className={browseLoading ? 'animate-spin' : ''} />
-            </button>
-          </div>
-
-          {browseLoading ? (
-            <div className="text-[12px] text-text-tertiary text-center py-8">Loading marketplace…</div>
-          ) : browsableSkills.length === 0 ? (
-            <Empty>No skills available. Try syncing your sources.</Empty>
-          ) : (() => {
-            // Filter by search
-            const filtered = marketplaceSearch.trim()
-              ? browsableSkills.filter(s => 
-                  s.name.toLowerCase().includes(marketplaceSearch.toLowerCase()) ||
-                  s.description.toLowerCase().includes(marketplaceSearch.toLowerCase())
-                )
-              : browsableSkills
-            
-            // Group by source
-            const grouped = filtered.reduce((acc, skill) => {
-              if (!acc[skill.sourceId]) {
-                acc[skill.sourceId] = { name: skill.sourceName, type: skill.sourceType, skills: [] }
-              }
-              acc[skill.sourceId].skills.push(skill)
-              return acc
-            }, {} as Record<string, { name: string; type: string; skills: BrowsableSkill[] }>)
-
-            return Object.entries(grouped).map(([sourceId, group]) => {
-              const isCollapsed = collapsedSources.has(sourceId)
-              const toggleCollapse = () => {
-                setCollapsedSources(prev => {
-                  const next = new Set(prev)
-                  if (next.has(sourceId)) next.delete(sourceId)
-                  else next.add(sourceId)
-                  return next
-                })
-              }
-              
-              // Source-specific logos
-              const SourceLogo = () => {
-                if (sourceId === 'aide-official') {
-                  return (
-                    <svg width="16" height="16" viewBox="0 0 32 32" fill="none" className="shrink-0">
-                      <rect width="32" height="32" rx="7" fill="#4172F0"/>
-                      <path d="M16 6 L24 26 L20.5 26 L18.5 21 L13.5 21 L11.5 26 L8 26 Z M16 12 L14.2 19 L17.8 19 Z" fill="white"/>
-                      <path d="M23 7 L24 9.5 L26.5 10.5 L24 11.5 L23 14 L22 11.5 L19.5 10.5 L22 9.5 Z" fill="white" opacity="0.85"/>
-                    </svg>
-                  )
-                }
-                if (sourceId === 'anthropic-community') {
-                  return (
-                    <img 
-                      src={anthropicLogo} 
-                      alt="Anthropic" 
-                      width={16} 
-                      height={16} 
-                      className="shrink-0 rounded"
-                    />
-                  )
-                }
-                return <Settings2 size={16} className="text-purple-500 shrink-0" />
-              }
-              
-              return (
-                <section key={sourceId} className="space-y-2">
-                  <button
-                    onClick={toggleCollapse}
-                    className="flex items-center gap-2 pt-2 w-full text-left hover:opacity-80 transition-opacity"
-                  >
-                    {isCollapsed ? <ChevronRight size={14} className="text-text-tertiary" /> : <ChevronDown size={14} className="text-text-tertiary" />}
-                    <SourceLogo />
-                    <span className="text-[12px] font-medium text-text-secondary">{group.name}</span>
-                    <span className="text-[11px] text-text-tertiary">({group.skills.length})</span>
-                  </button>
-                  {!isCollapsed && (
-                    <div className="space-y-2 ml-5">
-                      {group.skills.map(skill => (
-                        <div key={`${skill.sourceId}:${skill.path}`} className="p-3 rounded-lg bg-surface-0 border border-edge hover:border-accent/30 transition-colors">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <Sparkles size={14} className="text-accent" />
-                                <span className="text-[13px] font-medium text-text-primary">{skill.name}</span>
-                              </div>
-                              {skill.description && (
-                                <p className="text-[12px] text-text-tertiary mt-1">{skill.description}</p>
-                              )}
-                              {skill.tags && skill.tags.length > 0 && (
-                                <div className="flex items-center gap-1 mt-1.5">
-                                  {skill.tags.slice(0, 3).map(tag => (
-                                    <span key={tag} className="px-1 py-0.5 bg-surface-2 rounded text-[10px] text-text-tertiary">{tag}</span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            <Btn 
-                              onClick={() => handleInstallFromMarketplace(skill)} 
-                              disabled={skill.installed || installing === `${skill.sourceId}:${skill.path}`}
-                            >
-                              {skill.installed ? (
-                                <><Check size={12} /> Installed</>
-                              ) : installing === `${skill.sourceId}:${skill.path}` ? (
-                                'Installing...'
-                              ) : (
-                                <><Download size={12} /> Install</>
-                              )}
-                            </Btn>
-                          </div>
-                        </div>
-                      ))}
+        <div className="grid grid-cols-2 gap-2">
+          {visible.map(skill => {
+            const installed = findInstalled(skill.name)
+            const isInstalling = installing === `${skill.sourceId}:${skill.path}`
+            const dimmed = installed && !installed.enabled
+            return (
+              <div
+                key={`${skill.sourceId}:${skill.path}`}
+                onClick={() => setDetail(skill)}
+                className="group flex flex-col p-3 rounded-lg border border-edge bg-surface-0 hover:border-accent/30 hover:bg-surface-1 transition-colors cursor-pointer"
+              >
+                <div className={`flex items-start gap-2.5 ${dimmed ? 'opacity-50' : ''}`}>
+                  <SkillAvatar name={skill.name} dimmed={!!dimmed} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13px] font-semibold text-text-primary truncate">{skill.name}</span>
+                      {dimmed && <Tag>Off</Tag>}
                     </div>
-                  )}
-                </section>
-              )
-            })
-          })()}
-
-          {/* GitHub Search Fallback */}
-          <div className="border-t border-edge pt-4">
-            <button
-              onClick={() => setGithubExpanded(!githubExpanded)}
-              className="flex items-center gap-2 text-[12px] text-amber-600 hover:text-amber-500 transition-colors"
-            >
-              {githubExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              <AlertTriangle size={14} />
-              <span>Search GitHub (unverified sources)</span>
-            </button>
-
-            {githubExpanded && (
-              <div className="mt-3 space-y-3">
-                <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                    <strong>Warning:</strong> Skills from GitHub search are not reviewed. They may reference tools not available in AIDE, contain untested instructions, or have security implications.
-                  </p>
-                </div>
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleGithubSearch()}
-                    placeholder="Search for skills on GitHub..."
-                    className="flex-1 bg-surface-0 border border-edge rounded-lg px-3 py-2 text-[13px] text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50 transition-colors"
-                  />
-                  <Btn onClick={handleGithubSearch} disabled={searching || !searchQuery.trim()}>
-                    {searching ? 'Searching...' : 'Search'}
-                  </Btn>
-                </div>
-
-                {searchResults.length > 0 && (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {searchResults.map(repo => (
-                      <div key={repo.fullName} className="p-3 rounded-lg bg-surface-0 border border-edge hover:border-amber-500/30 transition-colors">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <Github size={14} className="text-text-tertiary shrink-0" />
-                              <a href={repo.url} target="_blank" rel="noopener" className="text-[13px] font-medium text-text-primary hover:text-accent transition-colors truncate">
-                                {repo.fullName}
-                              </a>
-                              <div className="flex items-center gap-1 text-[11px] text-text-tertiary shrink-0">
-                                <Star size={11} />
-                                <span>{repo.stars}</span>
-                              </div>
-                            </div>
-                            {repo.description && (
-                              <p className="text-[12px] text-text-tertiary mt-1 line-clamp-2">{repo.description}</p>
-                            )}
-                          </div>
-                          <Btn onClick={() => setConfirmInstall(repo)} disabled={downloading === repo.fullName}>
-                            {downloading === repo.fullName ? 'Installing...' : <><Download size={12} /> Install</>}
-                          </Btn>
-                        </div>
-                      </div>
-                    ))}
+                    {skill.category && (
+                      <span className="text-[10.5px] text-text-tertiary capitalize">{skill.category}</span>
+                    )}
                   </div>
-                )}
-
-                {searchResults.length === 0 && searchPerformed && !searching && (
-                  <Empty>No skills found. Try a different search term.</Empty>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Multiple SKILL.md Selection Modal */}
-          {selectingRepo && availableFiles.length > 1 && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => { setSelectingRepo(null); setAvailableFiles([]) }}>
-              <div className="bg-surface-1 rounded-xl p-5 max-w-lg w-full mx-4 shadow-xl max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                <h3 className="text-[14px] font-semibold text-text-primary mb-3">
-                  Multiple skills found, please choose one:
-                </h3>
-                <div className="space-y-1.5 overflow-y-auto flex-1 pr-1">
-                  {availableFiles.map(filePath => {
-                    const dirPath = filePath.replace(/\/SKILL\.md$/i, '')
-                    return (
-                      <button
-                        key={filePath}
-                        onClick={() => handleGithubDownload(selectingRepo, filePath)}
-                        disabled={downloading === selectingRepo.fullName}
-                        className="w-full text-left px-3 py-2 rounded-md bg-surface-0 border border-edge hover:border-accent/50 text-[12px] text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
-                      >
-                        {dirPath}
-                      </button>
-                    )
-                  })}
                 </div>
-                <button 
-                  onClick={() => { setSelectingRepo(null); setAvailableFiles([]) }} 
-                  className="mt-3 w-full py-2 rounded-lg border border-edge text-[12px] text-text-secondary hover:text-text-primary hover:border-accent/30 transition-colors"
+                {skill.description && (
+                  <p className="text-[11.5px] leading-snug text-text-tertiary mt-2 line-clamp-2">{skill.description}</p>
+                )}
+                <SkillBadges skill={skill} />
+                <div className="flex-1 min-h-3" />
+                <div className="flex items-center justify-end gap-1.5 pt-3 border-t border-edge-subtle">
+                  {installed ? (
+                    <>
+                      <span className="mr-auto text-[11px] font-medium text-text-tertiary inline-flex items-center gap-1"><CheckCircle2 size={12} className="text-accent" /> Installed</span>
+                      <Toggle checked={installed.enabled} onChange={() => handleToggle(installed)} />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(installed) }}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-text-tertiary hover:text-danger hover:bg-danger/8 transition-all"
+                        title="Uninstall"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleInstall(skill) }}
+                      disabled={isInstalling}
+                      className="h-7 px-3 rounded-lg text-[12px] font-medium bg-surface-2 text-text-secondary border border-edge hover:bg-surface-3 disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
+                    >
+                      {isInstalling ? 'Installing…' : <><Download size={12} /> Install</>}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Locally-installed skills not present in the marketplace */}
+          {localFiltered.map(skill => (
+            <div
+              key={skill.id}
+              onClick={() => setDetail({
+                name: skill.name,
+                description: skill.description || '',
+                sourceId: 'local',
+                sourceName: 'Local',
+                sourceType: 'local',
+                path: skill.id,
+                installed: true,
+                source: 'local'
+              })}
+              className="group flex flex-col p-3 rounded-lg border border-edge bg-surface-0 hover:border-accent/30 hover:bg-surface-1 transition-colors cursor-pointer"
+            >
+              <div className={`flex items-start gap-2.5 ${skill.enabled ? '' : 'opacity-50'}`}>
+                <SkillAvatar name={skill.name} dimmed={!skill.enabled} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[13px] font-semibold text-text-primary truncate">{skill.name}</span>
+                    <span className="shrink-0 px-1.5 py-0.5 text-[10px] rounded-md bg-surface-2 text-text-tertiary font-medium">Local</span>
+                    {!skill.enabled && <Tag>Off</Tag>}
+                  </div>
+                  {skill.description && (
+                    <p className="text-[11.5px] leading-snug text-text-tertiary mt-1 line-clamp-2">{skill.description}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 min-h-3" />
+              <div className="flex items-center justify-end gap-1.5 pt-3 border-t border-edge-subtle">
+                <Toggle checked={skill.enabled} onChange={() => handleToggle(skill)} />
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDelete(skill) }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-text-tertiary hover:text-danger hover:bg-danger/8 transition-all"
+                  title="Uninstall"
                 >
-                  Cancel
+                  <Trash2 size={13} />
                 </button>
               </div>
             </div>
-          )}
+          ))}
+        </div>
 
-          {/* Confirm Dialog for GitHub Install */}
-          {confirmInstall && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setConfirmInstall(null)}>
-              <div className="bg-surface-1 rounded-xl p-6 max-w-md mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-                    <AlertTriangle size={20} className="text-amber-500" />
-                  </div>
-                  <div>
-                    <h3 className="text-[14px] font-semibold text-text-primary">Install Unverified Skill?</h3>
-                    <p className="text-[12px] text-text-tertiary">{confirmInstall.fullName}</p>
-                  </div>
-                </div>
-                <p className="text-[12px] text-text-secondary mb-6">
-                  This skill is from an unverified GitHub repository and has not been reviewed. It may not work correctly with AIDE or could contain unsafe instructions.
-                </p>
-                <div className="flex justify-end gap-2">
-                  <Btn onClick={() => setConfirmInstall(null)}>Cancel</Btn>
-                  <button
-                    onClick={() => { handleGithubDownload(confirmInstall); setConfirmInstall(null) }}
-                    className="px-4 py-2 rounded-lg bg-amber-500 text-white text-[12px] font-medium hover:bg-amber-600 transition-colors"
-                  >
-                    Install Anyway
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+        {hasMore && (
+          <div ref={sentinelRef} className="py-4 text-center text-[11.5px] text-text-tertiary">
+            Loading more…
+          </div>
+        )}
         </>
       )}
 
-      {/* ===== SOURCES VIEW ===== */}
-      {view === 'sources' && (
-        <>
-          <section className="space-y-3">
-            <SectionLabel
-              title="Marketplace Sources"
-              desc="Repositories containing skill collections"
-            />
+      {detail && (
+        <SkillDetailModal
+          skill={detail}
+          installed={findInstalled(detail.name)}
+          installing={installing === `${detail.sourceId}:${detail.path}`}
+          onClose={() => setDetail(null)}
+          onInstall={() => handleInstall(detail)}
+          onToggle={(s) => handleToggle(s)}
+          onDelete={(s) => handleDelete(s)}
+        />
+      )}
+    </div>
+  )
+}
 
-            <div className="space-y-2">
-              {sources.map(source => (
-                <div key={source.id} className={`group p-3 rounded-lg bg-surface-0 border transition-colors ${source.enabled ? 'border-edge' : 'border-edge opacity-60'}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        {source.type === 'official' && <Shield size={14} className="text-green-500" />}
-                        {source.type === 'community' && <Globe size={14} className="text-blue-500" />}
-                        {source.type === 'private' && <Settings2 size={14} className="text-purple-500" />}
-                        <span className="text-[13px] font-medium text-text-primary">{source.name}</span>
-                        <span className="px-1.5 py-0.5 text-[10px] rounded bg-surface-2 text-text-tertiary capitalize">{source.type}</span>
-                      </div>
-                      <p className="text-[12px] text-text-tertiary mt-1 truncate">{source.url}</p>
-                      <div className="flex items-center gap-2 mt-1.5 text-[11px] text-text-tertiary">
-                        <span>{source.skillCount} skills</span>
-                        {source.lastSyncedAt && (
-                          <>
-                            <span>•</span>
-                            <span>Synced {new Date(source.lastSyncedAt).toLocaleDateString()}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleSyncSource(source.id)}
-                        disabled={syncing === source.id}
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-text-tertiary hover:text-accent hover:bg-accent/8 transition-all"
-                        title="Sync"
-                      >
-                        <RefreshCw size={14} className={syncing === source.id ? 'animate-spin' : ''} />
-                      </button>
-                      <Toggle checked={source.enabled} onChange={() => handleToggleSource(source)} />
-                      {source.type === 'private' && (
-                        <button
-                          onClick={() => handleRemoveSource(source.id)}
-                          className="w-6 h-6 rounded-md flex items-center justify-center text-text-tertiary hover:text-danger hover:bg-danger/8 opacity-0 group-hover:opacity-100 transition-all"
-                          title="Remove"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+// Neutral monochrome avatar with the skill's initial — stays within the app's single-accent palette.
+const PAGE_SIZE = 30
+
+// Mirrors the backend's sanitizeSkillName so the renderer matches the same installed-skill directory id.
+function sanitizeSkillName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+function SkillAvatar({ name, dimmed }: { name: string; dimmed?: boolean }) {
+  const initial = (name.replace(/[^a-zA-Z0-9]/g, '')[0] || '?').toUpperCase()
+  return (
+    <div className={`shrink-0 w-9 h-9 rounded-lg bg-accent-muted flex items-center justify-center text-accent text-[14px] font-semibold ${dimmed ? 'opacity-50 grayscale' : ''}`}>
+      {initial}
+    </div>
+  )
+}
+
+// Inline metadata chips — only render the ones that carry a real signal (risk, setup).
+function SkillBadges({ skill }: { skill: BrowsableSkill }) {
+  const risky = skill.risk === 'critical' || skill.risk === 'offensive'
+  const needsSetup = !!skill.setup && skill.setup.type !== 'none'
+  if (!risky && !needsSetup) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+      {risky && (
+        <span
+          className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-danger/10 text-danger inline-flex items-center gap-0.5"
+          title={skill.risk === 'offensive' ? 'Offensive-security tooling — use responsibly' : 'High-impact skill — review before use'}
+        >
+          <AlertTriangle size={9} /> {skill.risk}
+        </span>
+      )}
+      {needsSetup && (
+        <span
+          className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-accent-subtle text-accent inline-flex items-center gap-0.5"
+          title={skill.setup?.summary || 'Requires extra setup before use'}
+        >
+          <Sliders size={9} /> Setup
+        </span>
+      )}
+    </div>
+  )
+}
+
+// Full-detail modal: the place to actually understand a skill before installing.
+function SkillDetailModal({ skill, installed, installing, onClose, onInstall, onToggle, onDelete }: {
+  skill: BrowsableSkill
+  installed?: Skill
+  installing: boolean
+  onClose: () => void
+  onInstall: () => void
+  onToggle: (s: Skill) => void
+  onDelete: (s: Skill) => void
+}) {
+  const needsSetup = !!skill.setup && skill.setup.type !== 'none'
+  const risky = skill.risk === 'critical' || skill.risk === 'offensive'
+  // Turn a provenance string into a clickable link when it's a URL.
+  const sourceUrl = skill.source && /^https?:\/\//.test(skill.source) ? skill.source : null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md max-h-[80vh] overflow-y-auto scrollbar-thin bg-surface-0 border border-edge rounded-2xl shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start gap-3 p-4 border-b border-edge-subtle">
+          <SkillAvatar name={skill.name} />
+          <div className="flex-1 min-w-0 pt-0.5">
+            <h3 className="text-[15px] font-semibold text-text-primary break-words">{skill.name}</h3>
+            {skill.category && <p className="text-[11.5px] text-text-tertiary capitalize mt-0.5">{skill.category}</p>}
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-surface-2 transition-colors shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-4 space-y-4">
+          {/* Status / risk badges */}
+          {(installed || risky) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {installed && (
+                <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-accent-muted text-accent inline-flex items-center gap-1">
+                  <CheckCircle2 size={11} /> {installed.enabled ? 'Installed' : 'Installed · Off'}
+                </span>
+              )}
+              {risky && (
+                <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-danger/10 text-danger inline-flex items-center gap-1">
+                  <AlertTriangle size={11} /> {skill.risk}
+                </span>
+              )}
             </div>
-          </section>
-
-          {/* Add Source */}
-          {addingSource ? (
-            <FormCard>
-              <Field label="Source Name" value={newSourceName} onChange={setNewSourceName} placeholder="My Team Skills" required />
-              <Field label="GitHub Repository URL" value={newSourceUrl} onChange={setNewSourceUrl} placeholder="https://github.com/owner/repo" required />
-              <FormActions
-                onSave={handleAddSource}
-                onCancel={() => { setAddingSource(false); setNewSourceName(''); setNewSourceUrl('') }}
-                disabled={!newSourceName.trim() || !newSourceUrl.trim()}
-              />
-            </FormCard>
-          ) : (
-            <Btn onClick={() => setAddingSource(true)}>
-              <Plus size={12} /> Add Private Source
-            </Btn>
           )}
 
-          {/* Upload Local Skill Folder */}
-          <section className="space-y-3 border-t border-edge pt-4">
-            <SectionLabel
-              title="Upload Local Skill"
-              desc="Upload a skill folder from your computer"
-            />
-            
-            {uploadMode ? (
-              <FormCard>
-                <div className="text-[11px] text-text-tertiary bg-surface-2 rounded-md px-3 py-2 mb-2">
-                  <p className="font-medium mb-1">Uploading folder: <code className="text-accent">{uploadFolderName}</code></p>
-                  <p>{uploadFiles.length} file(s) found</p>
-                </div>
-                <div>
-                  <label className="text-[11px] text-text-tertiary font-medium block mb-1">Files</label>
-                  <div className="w-full bg-surface-0 border border-edge rounded-lg p-3 text-[12px] text-text-secondary max-h-32 overflow-y-auto">
-                    {uploadFiles.map((f, i) => (
-                      <div key={i} className="flex items-center gap-1.5 py-0.5">
-                        <span className={f.path.toLowerCase().endsWith('skill.md') ? 'text-accent font-medium' : ''}>
-                          {f.path}
-                        </span>
-                        <span className="text-text-tertiary text-[10px]">({(f.content.length / 1024).toFixed(1)}KB)</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <FormActions
-                  onSave={handleUpload}
-                  onCancel={() => { setUploadMode(false); setUploadFolderName(''); setUploadFiles([]) }}
-                  disabled={uploadFiles.length === 0}
-                />
-              </FormCard>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-[11px] text-text-tertiary">
-                  Folder should include at least a <code className="text-accent">SKILL.md</code> file.
-                </p>
-                <Btn onClick={handleFileSelect}>
-                  <FolderOpen size={12} /> Select Skill Folder
-                </Btn>
+          {/* Full description */}
+          {skill.description && (
+            <div>
+              <p className="text-[10.5px] font-medium text-text-tertiary uppercase tracking-wide mb-1">About</p>
+              <p className="text-[12.5px] leading-relaxed text-text-secondary whitespace-pre-wrap">{skill.description}</p>
+            </div>
+          )}
+
+          {/* Setup requirement */}
+          {needsSetup && (
+            <div className="rounded-lg bg-accent-subtle border border-accent/15 p-3">
+              <p className="text-[11.5px] font-medium text-accent inline-flex items-center gap-1.5 mb-1"><Sliders size={12} /> Setup required</p>
+              {skill.setup?.summary
+                ? <p className="text-[12px] leading-relaxed text-text-secondary">{skill.setup.summary}</p>
+                : <p className="text-[12px] text-text-tertiary">This skill needs extra configuration before it works.</p>}
+              {skill.setup?.docs && (
+                <a
+                  href={skill.setup.docs}
+                  onClick={e => { e.preventDefault(); window.open(skill.setup!.docs!) }}
+                  className="text-[11.5px] text-accent hover:underline mt-1.5 inline-block"
+                >
+                  Setup docs →
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Meta */}
+          <div className="space-y-1.5 text-[11.5px]">
+            {skill.source && (
+              <div className="flex items-center gap-2">
+                <span className="text-text-tertiary w-14 shrink-0">Source</span>
+                {sourceUrl
+                  ? <a href={sourceUrl} onClick={e => { e.preventDefault(); window.open(sourceUrl) }} className="text-accent hover:underline truncate">{skill.source.replace(/^https?:\/\//, '')}</a>
+                  : <span className="text-text-secondary capitalize">{skill.source}</span>}
               </div>
             )}
-          </section>
-        </>
-      )}
+            {skill.dateAdded && (
+              <div className="flex items-center gap-2">
+                <span className="text-text-tertiary w-14 shrink-0">Added</span>
+                <span className="text-text-secondary">{skill.dateAdded}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-text-tertiary w-14 shrink-0">Path</span>
+              <span className="text-text-secondary font-mono text-[11px] truncate">{skill.path}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer actions */}
+        <div className="flex items-center gap-2 p-4 border-t border-edge-subtle">
+          {installed ? (
+            <>
+              <span className="text-[12px] text-text-tertiary">Enabled</span>
+              <Toggle checked={installed.enabled} onChange={() => onToggle(installed)} />
+              <button
+                onClick={() => { onDelete(installed); onClose() }}
+                className="ml-auto h-8 px-3 rounded-lg text-[12px] font-medium text-danger hover:bg-danger/8 transition-colors inline-flex items-center gap-1.5"
+              >
+                <Trash2 size={13} /> Uninstall
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onInstall}
+              disabled={installing}
+              className="ml-auto h-8 px-4 rounded-lg text-[12.5px] font-medium bg-accent text-white hover:brightness-110 disabled:opacity-50 transition-all inline-flex items-center gap-1.5"
+            >
+              {installing ? 'Installing…' : <><Download size={13} /> Install</>}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -1762,12 +1445,12 @@ function Desc({ children }: { children: string }) {
   return <p className="text-[12px] text-text-tertiary leading-relaxed">{children}</p>
 }
 
-function SectionLabel({ title, desc, meta }: { title: string; desc: string; meta?: React.ReactNode }) {
+function SectionLabel({ title, desc, meta }: { title: string; desc?: string; meta?: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <div>
         <p className="text-[12px] font-semibold text-text-secondary">{title}</p>
-        <p className="text-[12px] text-text-tertiary leading-relaxed mt-0.5">{desc}</p>
+        {desc && <p className="text-[12px] text-text-tertiary leading-relaxed mt-0.5">{desc}</p>}
       </div>
       {meta != null && <span className="text-[11px] text-text-tertiary tabular-nums shrink-0 mt-0.5">{meta}</span>}
     </div>

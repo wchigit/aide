@@ -135,26 +135,19 @@ export interface Skill {
   id: string
   name: string
   description: string
-  source: 'local' | 'marketplace' | 'github-search'
-  sourceId?: string              // Marketplace source ID (e.g., 'aide-official')
+  source: 'local' | 'marketplace'
+  sourceId?: string              // Marketplace source ID (e.g., 'anthropic-official')
   sourceUrl: string | null
-  verified: boolean              // true if from official/community marketplace
+  verified: boolean              // true if from an official/curated marketplace source
   enabled: boolean
   path: string
   createdAt: string
   updatedAt: string
 }
 
-export interface GithubSkillSearchResult {
-  fullName: string
-  description: string | null
-  stars: number
-  url: string
-}
-
 // === Marketplace ===
 
-export type MarketplaceSourceType = 'official' | 'community' | 'private'
+export type MarketplaceSourceType = 'official' | 'community'
 
 export interface MarketplaceSource {
   id: string
@@ -180,7 +173,17 @@ export interface MarketplaceSkillEntry {
   description: string
   path: string                   // Relative path to SKILL.md
   category?: string
-  tags?: string[]
+  risk?: string                  // Safety hint from the source index (e.g., 'safe')
+  source?: string                // Provenance from the index (e.g., 'community', 'official', a repo URL)
+  dateAdded?: string             // ISO date the entry was added to the catalog
+  setup?: SkillSetup             // Extra setup the skill needs before it works
+}
+
+/** Whether a skill needs manual configuration before it can run. */
+export interface SkillSetup {
+  type: 'none' | 'manual' | string
+  summary?: string               // Human-readable setup steps (when type !== 'none')
+  docs?: string | null           // Optional link to setup docs
 }
 
 /** Skill that can be browsed but not yet installed */
@@ -188,12 +191,15 @@ export interface BrowsableSkill {
   name: string
   description: string
   category?: string
-  tags: string[]
   sourceId: string
   sourceName: string
   sourceType: MarketplaceSourceType
   path: string                   // Path in the repository
   installed: boolean
+  risk?: string                  // Safety hint from the source index (e.g., 'safe')
+  source?: string                // Provenance (e.g., 'community', 'official', a repo URL)
+  dateAdded?: string             // ISO date added to the catalog
+  setup?: SkillSetup             // Extra setup the skill needs before it works
 }
 
 // === Models ===
@@ -340,18 +346,11 @@ export interface AideAPI {
   skills: {
     list(): Promise<Skill[]>
     get(id: string): Promise<Skill | null>
-    createFromFolder(files: Array<{ path: string; content: string }>): Promise<Skill>
-    searchGithub(query: string): Promise<GithubSkillSearchResult[]>
-    findFilesInRepo(repoFullName: string): Promise<string[]>
-    downloadFromGithub(repoFullName: string, filePath?: string): Promise<Skill>
     toggle(id: string, enabled: boolean): Promise<Skill>
     delete(id: string): Promise<void>
   }
   marketplace: {
     listSources(): Promise<MarketplaceSource[]>
-    addSource(input: { name: string; url: string; branch?: string }): Promise<MarketplaceSource>
-    removeSource(id: string): Promise<void>
-    toggleSource(id: string, enabled: boolean): Promise<MarketplaceSource>
     syncSource(id: string): Promise<MarketplaceSource>
     syncAll(): Promise<void>
     browse(sourceId?: string): Promise<BrowsableSkill[]>

@@ -72,18 +72,11 @@ const api: AideAPI = {
   skills: {
     list: () => ipcRenderer.invoke('skills:list'),
     get: (id) => ipcRenderer.invoke('skills:get', id),
-    createFromFolder: (files) => ipcRenderer.invoke('skills:createFromFolder', files),
-    searchGithub: (query) => ipcRenderer.invoke('skills:searchGithub', query),
-    findFilesInRepo: (repoFullName) => ipcRenderer.invoke('skills:findFilesInRepo', repoFullName),
-    downloadFromGithub: (repoFullName, filePath) => ipcRenderer.invoke('skills:downloadFromGithub', repoFullName, filePath),
     toggle: (id, enabled) => ipcRenderer.invoke('skills:toggle', id, enabled),
     delete: (id) => ipcRenderer.invoke('skills:delete', id)
   },
   marketplace: {
     listSources: () => ipcRenderer.invoke('marketplace:listSources'),
-    addSource: (input) => ipcRenderer.invoke('marketplace:addSource', input),
-    removeSource: (id) => ipcRenderer.invoke('marketplace:removeSource', id),
-    toggleSource: (id, enabled) => ipcRenderer.invoke('marketplace:toggleSource', id, enabled),
     syncSource: (id) => ipcRenderer.invoke('marketplace:syncSource', id),
     syncAll: () => ipcRenderer.invoke('marketplace:syncAll'),
     browse: (sourceId?) => ipcRenderer.invoke('marketplace:browse', sourceId),

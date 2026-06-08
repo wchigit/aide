@@ -5,7 +5,6 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { v4 as uuid } from 'uuid'
 import type {
   MarketplaceSource,
   MarketplaceManifest,
@@ -19,20 +18,10 @@ import { getSkillsDirectory, listSkills } from './index'
 
 const DEFAULT_SOURCES: MarketplaceSource[] = [
   {
-    id: 'aide-official',
-    name: 'AIDE Official',
-    type: 'official',
-    url: 'https://github.com/lyxxn0414/aide-skills',
-    branch: 'main',
-    enabled: true,
-    lastSyncedAt: null,
-    skillCount: 0
-  },
-  {
-    id: 'anthropic-community',
-    name: 'Anthropic Skills',
+    id: 'awesome-skills',
+    name: 'Skills Marketplace',
     type: 'community',
-    url: 'https://github.com/anthropics/skills',
+    url: 'https://github.com/sickn33/antigravity-awesome-skills',
     branch: 'main',
     enabled: true,
     lastSyncedAt: null,
@@ -50,10 +39,6 @@ function getAideConfigDir(): string {
   return dir
 }
 
-function getSourcesConfigPath(): string {
-  return path.join(getAideConfigDir(), 'marketplace-sources.json')
-}
-
 function getCacheDir(): string {
   const dir = path.join(getAideConfigDir(), 'marketplace-cache')
   if (!fs.existsSync(dir)) {
@@ -66,49 +51,22 @@ function getCachedManifestPath(sourceId: string): string {
   return path.join(getCacheDir(), `${sourceId}.json`)
 }
 
-// ─── Source CRUD ─────────────────────────────────────────────────────
-
-interface SourcesConfig {
-  customSources: MarketplaceSource[]
-  disabledDefaults: string[]  // IDs of disabled default sources
-}
-
-function loadSourcesConfig(): SourcesConfig {
-  const filePath = getSourcesConfigPath()
-  if (!fs.existsSync(filePath)) {
-    return { customSources: [], disabledDefaults: [] }
-  }
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'))
-  } catch {
-    return { customSources: [], disabledDefaults: [] }
-  }
-}
-
-function saveSourcesConfig(config: SourcesConfig): void {
-  const filePath = getSourcesConfigPath()
-  fs.writeFileSync(filePath, JSON.stringify(config, null, 2), 'utf-8')
-}
+// ─── Sources ─────────────────────────────────────────────────────────
+// Sources are a fixed, curated set (no user-managed custom sources).
+// listSources reads each source's skillCount/lastSync from its cached manifest.
 
 /**
- * List all marketplace sources (default + custom).
- * For default sources, reads skillCount from cached manifest.
+ * List marketplace sources. For each, reads skillCount from cached manifest.
  */
 export function listSources(): MarketplaceSource[] {
-  const config = loadSourcesConfig()
-  
-  // Apply disabled state to defaults and read skillCount from cache
-  const defaults = DEFAULT_SOURCES.map(source => {
+  return DEFAULT_SOURCES.map(source => {
     const cached = getCachedManifest(source.id)
     return {
       ...source,
-      enabled: !config.disabledDefaults.includes(source.id),
       skillCount: cached?.skills.length || 0,
       lastSyncedAt: cached ? getManifestCacheTime(source.id) : null
     }
   })
-  
-  return [...defaults, ...config.customSources]
 }
 
 /**
@@ -132,99 +90,6 @@ export function getSource(id: string): MarketplaceSource | null {
   return listSources().find(s => s.id === id) || null
 }
 
-/**
- * Add a custom marketplace source.
- */
-export function addSource(input: {
-  name: string
-  url: string
-  branch?: string
-}): MarketplaceSource {
-  const config = loadSourcesConfig()
-  
-  // Validate URL format
-  const urlPattern = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/
-  if (!urlPattern.test(input.url)) {
-    throw new Error('Invalid GitHub repository URL. Expected format: https://github.com/owner/repo')
-  }
-  
-  // Check for duplicates
-  const allSources = listSources()
-  if (allSources.some(s => s.url === input.url)) {
-    throw new Error('A source with this URL already exists')
-  }
-  
-  const source: MarketplaceSource = {
-    id: `private-${uuid().slice(0, 8)}`,
-    name: input.name,
-    type: 'private',
-    url: input.url,
-    branch: input.branch || 'main',
-    enabled: true,
-    lastSyncedAt: null,
-    skillCount: 0
-  }
-  
-  config.customSources.push(source)
-  saveSourcesConfig(config)
-  
-  return source
-}
-
-/**
- * Remove a custom marketplace source.
- * Cannot remove default sources.
- */
-export function removeSource(id: string): void {
-  const config = loadSourcesConfig()
-  
-  // Check if it's a default source
-  if (DEFAULT_SOURCES.some(s => s.id === id)) {
-    throw new Error('Cannot remove default sources. You can disable them instead.')
-  }
-  
-  config.customSources = config.customSources.filter(s => s.id !== id)
-  saveSourcesConfig(config)
-  
-  // Remove cached manifest
-  const cachePath = getCachedManifestPath(id)
-  if (fs.existsSync(cachePath)) {
-    fs.unlinkSync(cachePath)
-  }
-}
-
-/**
- * Toggle a source enabled/disabled.
- */
-export function toggleSource(id: string, enabled: boolean): MarketplaceSource {
-  const config = loadSourcesConfig()
-  
-  // Check if it's a default source
-  const defaultSource = DEFAULT_SOURCES.find(s => s.id === id)
-  if (defaultSource) {
-    if (enabled) {
-      config.disabledDefaults = config.disabledDefaults.filter(i => i !== id)
-    } else {
-      if (!config.disabledDefaults.includes(id)) {
-        config.disabledDefaults.push(id)
-      }
-    }
-    saveSourcesConfig(config)
-    return { ...defaultSource, enabled }
-  }
-  
-  // Custom source
-  const source = config.customSources.find(s => s.id === id)
-  if (!source) {
-    throw new Error('Source not found')
-  }
-  
-  source.enabled = enabled
-  saveSourcesConfig(config)
-  
-  return source
-}
-
 // ─── Manifest Fetching ───────────────────────────────────────────────
 
 /**
@@ -246,31 +111,83 @@ export async function fetchManifest(source: MarketplaceSource): Promise<Marketpl
     console.error('[Sources] Invalid GitHub URL:', source.url)
     return null
   }
-  
+
   const { owner, repo } = parsed
-  
-  // Try to fetch marketplace.json from raw.githubusercontent.com
+
   for (const branch of [source.branch, 'main', 'master']) {
+    // 1. Prefer a prebuilt index: skills_index.json (array) — the whole catalog in one request.
+    const indexManifest = await tryFetchIndexArray(owner, repo, branch)
+    if (indexManifest) {
+      cacheManifest(source.id, indexManifest)
+      return indexManifest
+    }
+
+    // 2. Or a marketplace.json manifest (Claude standard).
     const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/marketplace.json`
     try {
       const res = await fetch(url)
       if (res.ok) {
         const manifest = await res.json() as MarketplaceManifest
-        
-        // Cache the manifest
-        const cachePath = getCachedManifestPath(source.id)
-        fs.writeFileSync(cachePath, JSON.stringify(manifest, null, 2), 'utf-8')
-        
+        cacheManifest(source.id, manifest)
         return manifest
       }
     } catch (err) {
       console.error(`[Sources] Failed to fetch from ${url}:`, err)
     }
   }
-  
-  // Fallback: scan repository for SKILL.md files
-  console.log(`[Sources] No marketplace.json found for ${source.name}, scanning for SKILL.md files...`)
+
+  // 3. Fallback: scan the repository tree for SKILL.md files (small repos without an index).
+  console.log(`[Sources] No index found for ${source.name}, scanning tree for SKILL.md files...`)
   return await scanForSkillFiles(source)
+}
+
+/**
+ * Fetch a prebuilt skills_index.json (array of skill entries) if the repo ships one.
+ * Fast path for large catalogs — the entire list arrives in a single request,
+ * avoiding any per-skill fetch storm.
+ */
+async function tryFetchIndexArray(owner: string, repo: string, branch: string): Promise<MarketplaceManifest | null> {
+  const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/skills_index.json`
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const raw = await res.json()
+    if (!Array.isArray(raw)) return null
+    const skills: MarketplaceSkillEntry[] = raw
+      .filter((e: any) => e && typeof e.path === 'string')
+      .map((e: any) => {
+        const setupRaw = e.plugin?.setup
+        const setup = setupRaw && typeof setupRaw.type === 'string'
+          ? {
+              type: setupRaw.type,
+              summary: typeof setupRaw.summary === 'string' && setupRaw.summary ? setupRaw.summary : undefined,
+              docs: typeof setupRaw.docs === 'string' ? setupRaw.docs : null
+            }
+          : undefined
+        return {
+          name: e.name || e.id || (e.path.split('/').pop() ?? 'skill'),
+          description: e.description || '',
+          path: e.path,
+          category: typeof e.category === 'string' ? e.category : undefined,
+          risk: typeof e.risk === 'string' ? e.risk : undefined,
+          source: typeof e.source === 'string' ? e.source : undefined,
+          dateAdded: typeof e.date_added === 'string' ? e.date_added : undefined,
+          setup
+        }
+      })
+    if (skills.length === 0) return null
+    return { version: '1', skills }
+  } catch {
+    return null
+  }
+}
+
+function cacheManifest(sourceId: string, manifest: MarketplaceManifest): void {
+  try {
+    fs.writeFileSync(getCachedManifestPath(sourceId), JSON.stringify(manifest, null, 2), 'utf-8')
+  } catch (err) {
+    console.error('[Sources] Failed to cache manifest:', err)
+  }
 }
 
 /**
@@ -298,21 +215,39 @@ async function scanForSkillFiles(source: MarketplaceSource): Promise<Marketplace
       return null
     }
     
-    const data = await res.json() as { tree: Array<{ path: string; type: string }> }
-    
-    // Find all SKILL.md files
+    const data = await res.json() as { tree: Array<{ path: string; type: string }>; truncated?: boolean }
+
+    if (data.truncated) {
+      console.warn(`[Sources] Tree for ${owner}/${repo} is truncated; some skills may be missing. A skills_index.json would give full coverage.`)
+    }
+
+    // Find files literally named SKILL.md at any depth (avoids matching e.g. MY-SKILL.md).
     const skillFiles = data.tree
-      .filter(item => item.type === 'blob' && /SKILL\.md$/i.test(item.path))
+      .filter(item => item.type === 'blob' && /(^|\/)SKILL\.md$/i.test(item.path))
       .map(item => item.path)
-    
+
     if (skillFiles.length === 0) {
       console.log(`[Sources] No SKILL.md files found in ${owner}/${repo}`)
       return null
     }
-    
-    // Fetch each SKILL.md to extract metadata
+
+    // Guard against per-skill fetch storms: only read each SKILL.md's frontmatter
+    // when the count is small. Large catalogs should ship a skills_index.json
+    // (handled earlier); here we degrade gracefully to path-derived names.
+    const FETCH_DETAIL_LIMIT = 60
     const skills: MarketplaceSkillEntry[] = []
-    
+
+    if (skillFiles.length > FETCH_DETAIL_LIMIT) {
+      for (const filePath of skillFiles) {
+        const dir = filePath.replace(/(^|\/)SKILL\.md$/i, '')
+        skills.push({ name: dir.split('/').pop() || filePath, description: '', path: filePath })
+      }
+      const manifest: MarketplaceManifest = { version: '1', name: source.name, skills }
+      cacheManifest(source.id, manifest)
+      console.log(`[Sources] Indexed ${skills.length} skills (names only) from ${owner}/${repo}`)
+      return manifest
+    }
+
     for (const filePath of skillFiles) {
       try {
         const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${filePath}`
@@ -387,36 +322,18 @@ function getCachedManifest(sourceId: string): MarketplaceManifest | null {
  * Sync a single source - fetch its manifest and update skill count.
  */
 export async function syncSource(sourceId: string): Promise<MarketplaceSource> {
-  const config = loadSourcesConfig()
-  const sources = listSources()
-  const source = sources.find(s => s.id === sourceId)
-  
+  const source = listSources().find(s => s.id === sourceId)
   if (!source) {
     throw new Error('Source not found')
   }
-  
+
   const manifest = await fetchManifest(source)
-  
-  // Update source metadata
-  const updatedSource: MarketplaceSource = {
+
+  return {
     ...source,
     lastSyncedAt: new Date().toISOString(),
     skillCount: manifest?.skills.length || 0
   }
-  
-  // Save updated metadata
-  const isDefault = DEFAULT_SOURCES.some(s => s.id === sourceId)
-  if (isDefault) {
-    // For defaults, we just cache the manifest, don't modify the source
-  } else {
-    const idx = config.customSources.findIndex(s => s.id === sourceId)
-    if (idx >= 0) {
-      config.customSources[idx] = updatedSource
-      saveSourcesConfig(config)
-    }
-  }
-  
-  return updatedSource
 }
 
 /**
@@ -475,12 +392,15 @@ export async function browseSkills(sourceId?: string): Promise<BrowsableSkill[]>
         name: entry.name,
         description: entry.description,
         category: entry.category,
-        tags: entry.tags || [],
         sourceId: source.id,
         sourceName: source.name,
         sourceType: source.type,
         path: entry.path,
-        installed: isInstalled
+        installed: isInstalled,
+        risk: entry.risk,
+        source: entry.source,
+        dateAdded: entry.dateAdded,
+        setup: entry.setup
       })
     }
   }
@@ -631,6 +551,10 @@ export async function installFromMarketplace(
   const skillsDir = getSkillsDirectory()
   const skillDir = path.join(skillsDir, safeName)
   
+  // Remember whether a prior install was disabled so a reinstall keeps that state.
+  const wasDisabled = fs.existsSync(path.join(skillDir, 'SKILL.md.disabled')) &&
+    !fs.existsSync(path.join(skillDir, 'SKILL.md'))
+  
   // Remove existing if any
   if (fs.existsSync(skillDir)) {
     fs.rmSync(skillDir, { recursive: true, force: true })
@@ -662,7 +586,12 @@ export async function installFromMarketplace(
   }
   fs.writeFileSync(path.join(skillDir, '.source.json'), JSON.stringify(sourceMetadata, null, 2), 'utf-8')
   
-  const stat = fs.statSync(localSkillMdPath)
+  // Restore the disabled state if the skill was disabled before reinstall.
+  if (wasDisabled) {
+    fs.renameSync(localSkillMdPath, path.join(skillDir, 'SKILL.md.disabled'))
+  }
+  
+  const stat = fs.statSync(wasDisabled ? path.join(skillDir, 'SKILL.md.disabled') : localSkillMdPath)
   
   // Count files in directory
   const countFiles = (dir: string): number => {
@@ -685,7 +614,7 @@ export async function installFromMarketplace(
     sourceId: source.id,
     sourceUrl: `${source.url}/blob/${source.branch}/${skillPath}`,
     verified: source.type === 'official' || source.type === 'community',
-    enabled: true,
+    enabled: !wasDisabled,
     path: skillDir,
     createdAt: stat.birthtime.toISOString(),
     updatedAt: stat.mtime.toISOString()
