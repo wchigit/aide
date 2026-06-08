@@ -17,7 +17,7 @@ function MicrosoftIcon() {
 }
 
 export function SettingsDrawer() {
-  const { isOpen, activeTab, close, setTab, projects, relations, jobs, connections,
+  const { isOpen, activeTab, close, setTab, projects, jobs, connections,
     fetchProjects, fetchRelations, fetchJobs, fetchConnections } = useSettingsStore()
 
   useEffect(() => {
@@ -30,7 +30,6 @@ export function SettingsDrawer() {
     { id: 'connections', label: 'Connections', icon: <Link2 size={14} /> },
     { id: 'jobs', label: 'Jobs', icon: <Timer size={14} /> },
     { id: 'projects', label: 'Projects', icon: <FolderOpen size={14} /> },
-    { id: 'relations', label: 'Contacts', icon: <Users size={14} /> },
     { id: 'memory', label: 'Memory', icon: <Brain size={14} /> },
     { id: 'skills', label: 'Skills', icon: <Sparkles size={14} /> },
     { id: 'preferences', label: 'Preferences', icon: <Sliders size={14} /> },
@@ -73,7 +72,6 @@ export function SettingsDrawer() {
         <div className="flex-1 overflow-y-auto scrollbar-thin p-5">
           {activeTab === 'connections' && <ConnectionsTab connections={connections} />}
           {activeTab === 'projects' && <ProjectsTab projects={projects} onRefresh={fetchProjects} />}
-          {activeTab === 'relations' && <RelationsTab relations={relations} onRefresh={fetchRelations} />}
           {activeTab === 'jobs' && <JobsTab jobs={jobs} onRefresh={fetchJobs} />}
           {activeTab === 'memory' && <MemoryTab />}
           {activeTab === 'skills' && <SkillsTab />}
