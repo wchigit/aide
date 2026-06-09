@@ -194,25 +194,32 @@ export async function searchMemory(query: string, limit: number = 10): Promise<M
   return embeddingResults
 }
 
-// === Embedding-based Semantic Search (lazy-loaded fallback) ===
+// === Embedding-based Semantic Search (loaded at startup) ===
 
 let embeddingModel: any = null
-let embeddingModelLoading = false
+let embeddingModelReady: Promise<any | null> | null = null
+
+/** Call once at app startup to begin loading the embedding model */
+export function initEmbeddingModel(): void {
+  if (embeddingModelReady) return
+  embeddingModelReady = (async () => {
+    // Use require() to load from node_modules at runtime (bypasses Vite bundling)
+    const modulePath = '@xenova/transformers'
+    const { pipeline } = require(modulePath)
+    const model = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2')
+    embeddingModel = model
+    console.log('[Memory] Embedding model loaded')
+    return model
+  })().catch((err: any) => {
+    console.warn('[Memory] Embedding model not available, semantic fallback disabled:', err)
+    return null
+  })
+}
 
 async function getEmbeddingModel(): Promise<any | null> {
   if (embeddingModel) return embeddingModel
-  if (embeddingModelLoading) return null
-  embeddingModelLoading = true
-  try {
-    // Attempt to load transformers.js for local embedding
-    const { pipeline } = await import('@xenova/transformers' as any)
-    embeddingModel = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2')
-    return embeddingModel
-  } catch (err) {
-    console.warn('[Memory] Embedding model not available, semantic fallback disabled:', err)
-    embeddingModelLoading = false
-    return null
-  }
+  if (!embeddingModelReady) return null
+  return embeddingModelReady
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
