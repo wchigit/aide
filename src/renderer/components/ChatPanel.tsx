@@ -6,7 +6,7 @@ import { ArrowUp, ChevronLeft, Check, X, Pencil, ChevronDown, ChevronRight, Pape
 import { useTaskStore } from '../stores/taskStore'
 import { useChatStore, GENERAL_KEY } from '../stores/chatStore'
 import type { LiveStep } from '../stores/chatStore'
-import type { ChatMessage, PendingAction, ModelInfo, TaskActivity, TurnStep } from '@shared/types'
+import type { ChatMessage, PendingAction, ModelInfo, TaskActivity, TurnStep, Task } from '@shared/types'
 
 // Stable empty reference so the per-session live selector doesn't return a new
 // array each render (which would thrash zustand's equality check).
@@ -259,8 +259,10 @@ export function ChatPanel() {
         </header>
       )}
 
-      {/* Task activity — pinned above messages */}
-      {selectedTask && <TaskActivityPanel taskId={selectedTask.id} lastActivityAt={selectedTask.lastActivityAt} />}
+      {/* Task status — pinned above messages */}
+      {selectedTask && (
+        <TaskStatusBar task={selectedTask} />
+      )}
 
       {/* Messages */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
@@ -503,6 +505,53 @@ function TaskHeader({ task, onBack }: {
   )
 }
 
+/* === Task Status Bar — pinned section with working state + activity === */
+
+function TaskStatusBar({ task }: { task: Task }) {
+  const [stateExpanded, setStateExpanded] = useState(false)
+
+  return (
+    <div className="shrink-0 border-b border-edge">
+      <div className="chat-content-width mx-auto px-6 py-3 space-y-2">
+        {/* Working state card */}
+        {task.workingState && (
+          <div className="rounded-xl border border-edge bg-surface-1/50 overflow-hidden">
+            <button
+              onClick={() => setStateExpanded(v => !v)}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-surface-2/50 transition-colors text-left"
+            >
+              <div className="w-6 h-6 rounded-md bg-surface-2 flex items-center justify-center shrink-0">
+                <FileText size={13} className="text-text-secondary" strokeWidth={2} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-[12px] font-medium text-text-secondary">Current state</span>
+                {!stateExpanded && (
+                  <div className="text-[12px] text-text-tertiary truncate mt-0.5">
+                    {task.workingState.split('\n')[0]}
+                  </div>
+                )}
+              </div>
+              <div className="shrink-0 text-text-tertiary">
+                {stateExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </div>
+            </button>
+            {stateExpanded && (
+              <div className="px-4 pb-3 pt-0">
+                <div className="text-[12.5px] text-text-secondary leading-[1.6] whitespace-pre-wrap break-words select-text">
+                  {task.workingState}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Activity timeline */}
+        <TaskActivityPanel taskId={task.id} lastActivityAt={task.lastActivityAt} />
+      </div>
+    </div>
+  )
+}
+
 /* === Task Activity Panel — prominent card at top of conversation === */
 
 function TaskActivityPanel({ taskId, lastActivityAt }: { taskId: string; lastActivityAt?: string | null }) {
@@ -527,37 +576,35 @@ function TaskActivityPanel({ taskId, lastActivityAt }: { taskId: string; lastAct
   }
 
   return (
-    <div className="shrink-0 border-b border-edge">
-      <div className="chat-content-width mx-auto px-6 py-3">
-        <div className="rounded-xl border border-accent/25 bg-accent/[0.04] overflow-hidden">
+    <div className="rounded-xl border border-accent/25 bg-accent/[0.04] overflow-hidden">
       <button
         onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-accent/[0.06] transition-colors text-left"
+        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-accent/[0.06] transition-colors text-left"
       >
-        <div className="w-7 h-7 rounded-lg bg-accent/12 flex items-center justify-center shrink-0">
-          <Activity size={15} className="text-accent" strokeWidth={2} />
+        <div className="w-6 h-6 rounded-md bg-accent/12 flex items-center justify-center shrink-0">
+          <Activity size={13} className="text-accent" strokeWidth={2} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-text-primary">Task activity</span>
+            <span className="text-[12px] font-semibold text-text-primary">Activity</span>
             <span className="text-[11px] font-medium text-accent bg-accent/12 rounded-full px-1.5 py-[1px]">{activities.length}</span>
           </div>
           {!expanded && latest && (
-            <div className="text-[13px] text-text-secondary truncate mt-0.5">
+            <div className="text-[12px] text-text-secondary truncate mt-0.5">
               Latest · {latest.summary}
             </div>
           )}
         </div>
         <div className="shrink-0 text-text-tertiary">
-          {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </div>
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 pt-1">
+        <div className="px-4 pb-3 pt-1">
           <div className="relative pl-5">
             <div className="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-edge" />
-            <div className="space-y-4">
+            <div className="space-y-3">
               {activities.map(a => {
                 const m = typeMeta[a.type] || typeMeta.note
                 return (
@@ -567,7 +614,7 @@ function TaskActivityPanel({ taskId, lastActivityAt }: { taskId: string; lastAct
                       <span className={`text-[11px] font-medium ${m.text}`}>{m.label}</span>
                       <span className="text-[11px] text-text-tertiary/70">{formatActivityTime(a.timestamp)}</span>
                     </div>
-                    <div className="text-[13px] text-text-secondary leading-[1.55] break-words select-text">{a.summary}</div>
+                    <div className="text-[12.5px] text-text-secondary leading-[1.55] break-words select-text">{a.summary}</div>
                     {a.sourceRef && (
                       <div className="inline-flex items-center mt-1 text-[10.5px] text-text-tertiary/70 bg-surface-1 border border-edge rounded px-1.5 py-[1px] font-mono max-w-full truncate">
                         {a.sourceRef}
@@ -580,8 +627,6 @@ function TaskActivityPanel({ taskId, lastActivityAt }: { taskId: string; lastAct
           </div>
         </div>
       )}
-        </div>
-      </div>
     </div>
   )
 }

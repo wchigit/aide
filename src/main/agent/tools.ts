@@ -314,13 +314,14 @@ const updateTaskTool: Tool<any> = {
       title: { type: 'string' },
       description: { type: 'string' },
       working_state: { type: 'string', description: 'Current progress, decisions, outputs for this task. Updated in real-time as work progresses.' },
+      progress_summary: { type: 'string', description: 'One-sentence summary of what changed (logged to the activity timeline). Provide this whenever you update working_state.' },
       projectIds: { type: 'array', items: { type: 'string' }, description: 'Project IDs this task relates to' }
     },
     required: ['id']
   },
   skipPermission: true,
   handler: async (args: any) => {
-    const { id, working_state, projectIds, ...changes } = args
+    const { id, working_state, progress_summary, projectIds, ...changes } = args
     if (working_state !== undefined) changes.workingState = working_state
     if (projectIds !== undefined) changes.projectIds = projectIds
 
@@ -342,6 +343,13 @@ const updateTaskTool: Tool<any> = {
 
     const task = updateTask(id, changes)
     emitToRenderer({ type: 'task:updated', task })
+
+    // Auto-log progress activity when working_state is updated with a summary
+    if (changes.workingState !== undefined && progress_summary) {
+      const activity = addTaskActivity(id, { type: 'progress', summary: progress_summary })
+      emitToRenderer({ type: 'task:activity', taskId: id, activity })
+    }
+
     return { success: true, task: { id: task.id, title: task.title, status: task.status } }
   }
 }
@@ -375,7 +383,7 @@ const findRelatedTaskTool: Tool<any> = {
 
 const addTaskActivityTool: Tool<any> = {
   name: 'add_task_activity',
-  description: 'Record one "substantive update" for an existing task. The bar is strict: only record when things actually moved forward, got blocked, changed status, or require the user\'s direct response. Pleasantries / acknowledgements / forwards / CCs / bot notifications / minor wording tweaks are never recorded. Record each update only once (check first with get_task_activities). summary must state "what substantive thing happened", not paraphrase the raw message.',
+  description: 'Record a substantive update on a task. Use for real progress, blockers, or comments needing user response. Do not record pleasantries, acknowledgements, or bot notifications.',
   parameters: {
     type: 'object',
     properties: {
