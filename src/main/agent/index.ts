@@ -145,10 +145,29 @@ const hooks: SessionConfig['hooks'] = {
 
   // Inject L1 Knowledge — FTS5 retrieval based on the user message
   onUserPromptSubmitted: async (input: any, invocation: { sessionId: string }) => {
+    // Keep session ID current (onSessionStart only fires once, but user switches between sessions)
+    setCurrentSessionId(invocation.sessionId)
+
+    const contextParts: string[] = []
+
+    // If in a task session, inject the CURRENT working_state every turn
+    // (it may have been updated externally from general chat since onSessionStart)
+    const taskId = extractTaskIdFromSession(invocation.sessionId)
+    if (taskId) {
+      const task = getTask(taskId)
+      if (task?.workingState) {
+        contextParts.push(`<working-state>\n${task.workingState}\n</working-state>`)
+      }
+    }
+
     const memories = await searchMemory(input.prompt, 5)
-    if (memories.length === 0) return {}
-    const block = memories.map(m => `- [id: ${m.id}] ${m.content}`).join('\n')
-    return { modifiedPrompt: `<memory-context>\nRelevant memories (use the id with memory_write update/remove if one is wrong):\n${block}\n</memory-context>\n\n${input.prompt}` }
+    if (memories.length > 0) {
+      const block = memories.map(m => `- [id: ${m.id}] ${m.content}`).join('\n')
+      contextParts.push(`<memory-context>\nRelevant memories (use the id with memory_write update/remove if one is wrong):\n${block}\n</memory-context>`)
+    }
+
+    if (contextParts.length === 0) return {}
+    return { modifiedPrompt: `${contextParts.join('\n\n')}\n\n${input.prompt}` }
   },
 
   // On session end — compact working_state if too long

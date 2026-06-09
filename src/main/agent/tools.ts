@@ -1,5 +1,5 @@
 import { writeMemory, searchMemory, updateMemory, markMemoryInactive } from '../memory'
-import { createTask, updateTask, listTasks, addTaskActivity, listTaskActivities, findRelatedTask } from '../tasks'
+import { createTask, updateTask, listTasks, getTask, addTaskActivity, listTaskActivities, findRelatedTask } from '../tasks'
 import { listProjects, createProject, updateProject, deleteProject } from '../projects'
 import { listRelations, createRelation, updateRelation, deleteRelation } from '../relations'
 import { getPreferences, setPreferences } from '../preferences'
@@ -324,6 +324,14 @@ const updateTaskTool: Tool<any> = {
     if (working_state !== undefined) changes.workingState = working_state
     if (projectIds !== undefined) changes.projectIds = projectIds
 
+    // Auto-promote pending → in_progress when working_state is updated
+    if (changes.workingState !== undefined && !changes.status) {
+      const current = getTask(id)
+      if (current && current.status === 'pending') {
+        changes.status = 'in_progress'
+      }
+    }
+
     // Prevent jobs from completing tasks they JUST created in the same session (anti-self-completion)
     // But allow completing pre-existing tasks based on new external info (e.g. PR merged → task done)
     if (isJobSession && changes.status && (changes.status === 'completed' || changes.status === 'cancelled')) {
@@ -332,10 +340,7 @@ const updateTaskTool: Tool<any> = {
       }
     }
 
-    const task = updateTask(id, changes, {
-      // Only log activity if updating from outside the task's own session
-      silent: currentSessionId.startsWith(`task-${id}-`)
-    })
+    const task = updateTask(id, changes)
     emitToRenderer({ type: 'task:updated', task })
     return { success: true, task: { id: task.id, title: task.title, status: task.status } }
   }

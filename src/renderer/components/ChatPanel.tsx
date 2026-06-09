@@ -259,10 +259,12 @@ export function ChatPanel() {
         </header>
       )}
 
+      {/* Task activity — pinned above messages */}
+      {selectedTask && <TaskActivityPanel taskId={selectedTask.id} lastActivityAt={selectedTask.lastActivityAt} />}
+
       {/* Messages */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
         <div className="chat-content-width mx-auto px-6 py-6 space-y-5">
-          {selectedTask && <TaskActivityPanel taskId={selectedTask.id} lastActivityAt={selectedTask.lastActivityAt} />}
 
           {messages.length === 0 && !isStreaming && <EmptyState taskTitle={selectedTask?.title} />}
 
@@ -521,12 +523,13 @@ function TaskActivityPanel({ taskId, lastActivityAt }: { taskId: string; lastAct
     status_change: { label: 'Status', dot: 'bg-text-tertiary', text: 'text-text-secondary' },
     blocker: { label: 'Blocked', dot: 'bg-danger', text: 'text-danger' },
     comment: { label: 'Needs reply', dot: 'bg-success', text: 'text-success' },
-    note: { label: 'Note', dot: 'bg-text-tertiary', text: 'text-text-tertiary' }
+    note: { label: 'Note', dot: 'bg-accent', text: 'text-accent' }
   }
 
   return (
-    <div className="rounded-xl border border-accent/25 bg-accent/[0.04] overflow-hidden anim-fade-up">
-      {/* Header — clickable to toggle */}
+    <div className="shrink-0 border-b border-edge">
+      <div className="chat-content-width mx-auto px-6 py-3">
+        <div className="rounded-xl border border-accent/25 bg-accent/[0.04] overflow-hidden">
       <button
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-accent/[0.06] transition-colors text-left"
@@ -539,8 +542,8 @@ function TaskActivityPanel({ taskId, lastActivityAt }: { taskId: string; lastAct
             <span className="text-[13px] font-semibold text-text-primary">Task activity</span>
             <span className="text-[11px] font-medium text-accent bg-accent/12 rounded-full px-1.5 py-[1px]">{activities.length}</span>
           </div>
-          {!expanded && (
-            <div className="text-[12px] text-text-tertiary truncate mt-0.5">
+          {!expanded && latest && (
+            <div className="text-[13px] text-text-secondary truncate mt-0.5">
               Latest · {latest.summary}
             </div>
           )}
@@ -550,18 +553,15 @@ function TaskActivityPanel({ taskId, lastActivityAt }: { taskId: string; lastAct
         </div>
       </button>
 
-      {/* Expanded timeline */}
       {expanded && (
         <div className="px-4 pb-4 pt-1">
           <div className="relative pl-5">
-            {/* vertical connector line */}
             <div className="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-edge" />
             <div className="space-y-4">
               {activities.map(a => {
                 const m = typeMeta[a.type] || typeMeta.note
                 return (
                   <div key={a.id} className="relative">
-                    {/* dot on the line */}
                     <div className={`absolute -left-5 top-1 w-[11px] h-[11px] rounded-full ring-2 ring-surface-0 ${m.dot}`} />
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className={`text-[11px] font-medium ${m.text}`}>{m.label}</span>
@@ -580,6 +580,8 @@ function TaskActivityPanel({ taskId, lastActivityAt }: { taskId: string; lastAct
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   )
 }

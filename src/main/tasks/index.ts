@@ -120,9 +120,9 @@ export function createTask(input: CreateTaskInput): CreateTaskResult {
 
   const priority = input.priority || 'p1'
 
-  // Auto-infer projects if none explicitly set (for external task sources)
+  // Auto-infer projects if none explicitly set
   let projectIds = input.projectIds || []
-  if (projectIds.length === 0 && input.source.type !== 'chat') {
+  if (projectIds.length === 0) {
     const allProjects = listProjects()
     if (allProjects.length > 0) {
       projectIds = inferProjects(input.title, input.description || '', allProjects)
@@ -151,7 +151,7 @@ export function createTask(input: CreateTaskInput): CreateTaskResult {
   return { task: getTask(id)!, deduplicated: false }
 }
 
-export function updateTask(id: string, changes: Partial<Task>, opts?: { silent?: boolean }): Task {
+export function updateTask(id: string, changes: Partial<Task>): Task {
   const db = getDb()
   const now = new Date().toISOString()
 
@@ -197,17 +197,6 @@ export function updateTask(id: string, changes: Partial<Task>, opts?: { silent?:
       summary: `Status changed: ${prior.status} → ${changes.status}`,
       statusFrom: prior.status,
       statusTo: changes.status
-    })
-  }
-
-  // Auto-log when working_state is updated from outside the task session
-  if (changes.workingState !== undefined && !opts?.silent) {
-    const snippet = changes.workingState.length > 80
-      ? changes.workingState.slice(0, 80) + '…'
-      : changes.workingState
-    addTaskActivity(id, {
-      type: 'note',
-      summary: `Working state updated: ${snippet}`
     })
   }
 
