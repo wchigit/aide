@@ -396,3 +396,178 @@ Non-issue in dev mode — only one user, no production data to preserve.
 5. Add `embedding` BLOB column to memory_entries
 6. Start fresh with clean write guidance
 
+---
+
+## Test Plan
+
+### Prerequisites
+
+- Run `npm run dev` — app starts without crash
+- DB schema version = 4 (`PRAGMA user_version` returns 4)
+- Embedding model loads at startup (log: `[Memory] Embedding model loaded`)
+
+### Test 1: Schema Migration
+
+**Steps:**
+1. Delete existing DB: `del "$env:APPDATA/aide/data/aide.db"`
+2. Start app → DB created fresh at v4
+3. Inspect schema:
+   ```powershell
+   sqlite3 "$env:APPDATA/aide/data/aide.db" ".schema memory_entries"
+   sqlite3 "$env:APPDATA/aide/data/aide.db" ".schema tasks"
+   sqlite3 "$env:APPDATA/aide/data/aide.db" "PRAGMA user_version"
+   ```
+
+**Expected:**
+- `memory_entries` has `embedding BLOB` column
+- `tasks` has `project_ids TEXT NOT NULL DEFAULT '[]'` and `working_state TEXT`
+- `user_version` = 4
+- No L2 entries exist
+
+### Test 2: Memory Write + Embedding
+
+**Steps:**
+1. Chat: "Remember that my preferred CI system is GitHub Actions"
+2. Query DB:
+   ```powershell
+   sqlite3 "$env:APPDATA/aide/data/aide.db" "SELECT id, content, length(embedding) as embed_len FROM memory_entries ORDER BY created_at DESC LIMIT 1"
+   ```
+
+**Expected:**
+- Entry exists with content about GitHub Actions
+- `embed_len` is non-null (should be ~3000+ chars — JSON array of 384 floats)
+
+### Test 3: FTS5 Retrieval (keyword match)
+
+**Steps:**
+1. Write a memory: "Remember that Alice is my tech lead at Contoso"
+2. In a new message, ask: "What do you know about Alice?"
+
+**Expected:**
+- Agent uses the Alice memory in its response
+- Check `recall_count` increased:
+  ```powershell
+  sqlite3 "$env:APPDATA/aide/data/aide.db" "SELECT content, recall_count FROM memory_entries WHERE content LIKE '%Alice%'"
+  ```
+
+### Test 4: Embedding Fallback (semantic match)
+
+**Steps:**
+1. Ensure a memory exists: "My boss prefers async communication over meetings"
+2. Search with different words: ask the agent "How does my manager like to communicate?"
+
+**Expected:**
+- Agent retrieves the "boss prefers async" entry even though the query uses "manager" and "communicate" instead of "boss" and "async"
+- If FTS5 misses (no keyword overlap), the embedding fallback fires and finds it
+
+### Test 5: BM25 Threshold (noise rejection)
+
+**Steps:**
+1. Send a very short message: "ok" or "yes"
+2. Check that no memories are injected (agent doesn't mention recalling anything)
+
+**Expected:**
+- Short/generic messages don't trigger spurious memory recalls
+- The BM25 threshold filters out weak matches
+
+### Test 6: Working_state on Tasks
+
+**Steps:**
+1. Open a task session
+2. Ask the agent to do some work, e.g. "Research options for a caching layer"
+3. The agent should update working_state during the session
+4. Verify:
+   ```powershell
+   sqlite3 "$env:APPDATA/aide/data/aide.db" "SELECT title, working_state FROM tasks WHERE working_state IS NOT NULL"
+   ```
+
+**Expected:**
+- `working_state` contains a summary of what was done/decided
+
+### Test 7: Working_state Compaction
+
+**Steps:**
+1. Manually inflate a task's working_state past 1500 chars:
+   ```powershell
+   sqlite3 "$env:APPDATA/aide/data/aide.db" "UPDATE tasks SET working_state = printf('%01600d', 0) WHERE id = (SELECT id FROM tasks LIMIT 1)"
+   ```
+2. End the task session (close the chat or switch away)
+3. Re-check the working_state length:
+   ```powershell
+   sqlite3 "$env:APPDATA/aide/data/aide.db" "SELECT length(working_state) FROM tasks WHERE working_state IS NOT NULL ORDER BY updated_at DESC LIMIT 1"
+   ```
+
+**Expected:**
+- Length is now ~830 chars (truncated to last 800 + marker prefix)
+
+### Test 8: ProjectIds + inferProjects
+
+**Steps:**
+1. Create a project named "codeToCloud" with a repo path
+2. Create a task via external source (WeChat/Telegram) with title containing "codeToCloud"
+3. Check:
+   ```powershell
+   sqlite3 "$env:APPDATA/aide/data/aide.db" "SELECT title, project_ids FROM tasks ORDER BY created_at DESC LIMIT 1"
+   ```
+
+**Expected:**
+- `project_ids` JSON array contains the codeToCloud project's ID
+
+### Test 9: L2 Removal
+
+**Steps:**
+1. Have a long chat session (10+ messages)
+2. End the session
+3. Check:
+   ```powershell
+   sqlite3 "$env:APPDATA/aide/data/aide.db" "SELECT count(*) FROM memory_entries WHERE layer = 'L2'"
+   ```
+
+**Expected:**
+- Count is 0 — no L2 entries created
+
+### Test 10: Write Deduplication
+
+**Steps:**
+1. Tell the agent: "Remember my favorite language is TypeScript"
+2. In a later message: "Remember that I prefer TypeScript"
+3. Check entry count:
+   ```powershell
+   sqlite3 "$env:APPDATA/aide/data/aide.db" "SELECT content FROM memory_entries WHERE content LIKE '%TypeScript%'"
+   ```
+
+**Expected:**
+- Only ONE entry about TypeScript (updated, not duplicated)
+- This relies on the "search first, update if exists" write guidance
+
+### Test 11: Cross-Session Task Continuity
+
+**Steps:**
+1. In general chat: "For task X, I've decided to use Redis for caching"
+2. Agent should call `update_task(X, { working_state: '...' })`
+3. Open task X's dedicated session
+
+**Expected:**
+- Agent knows about the Redis decision without being told again
+- `working_state` contains the Redis context
+
+### Test 12: Task Session Prompt (empty projectIds)
+
+**Steps:**
+1. Create a task with no projectIds
+2. Open its session
+
+**Expected:**
+- System prompt includes guidance to set projectIds if determinable
+- Agent attempts to link it to a project based on context
+
+### Smoke Test Sequence (quick validation)
+
+1. `npm run dev` — no crash
+2. Log shows `[Memory] Embedding model loaded`
+3. General chat → no crash, agent responds
+4. Write a memory → DB has entry with embedding
+5. Search with paraphrase → embedding fallback finds it
+6. Open task session → working_state prompt visible
+7. Long session → no L2 entries afterward
+
