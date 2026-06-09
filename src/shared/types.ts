@@ -193,7 +193,9 @@ export interface BrowsableSkill {
   category?: string
   sourceId: string
   sourceName: string
-  sourceType: MarketplaceSourceType
+  /** Marketplace origin, or 'local' for a skill installed directly on disk
+   *  (no marketplace source) that's surfaced in the same detail view. */
+  sourceType: MarketplaceSourceType | 'local'
   path: string                   // Path in the repository
   installed: boolean
   risk?: string                  // Safety hint from the source index (e.g., 'safe')
