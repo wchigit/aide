@@ -349,7 +349,7 @@ export function ChatPanel() {
 /* === Task Header === */
 
 function TaskHeader({ task, onBack }: {
-  task: { id: string; title: string; status: string; priority: string; description: string; source: { type: string; externalUrl?: string }; dueDate: string | null; relatedRelationIds: string[]; projectId: string | null; lastActivityAt?: string | null }
+  task: { id: string; title: string; status: string; priority: string; description: string; source: { type: string; externalUrl?: string }; dueDate: string | null; relatedRelationIds: string[]; projectIds: string[]; lastActivityAt?: string | null }
   onBack: () => void
 }) {
   const { completeTask, cancelTask } = useTaskStore()

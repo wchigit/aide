@@ -39,7 +39,17 @@ export function buildTools(): Tool<any>[] {
 
 const memoryWriteTool: Tool<any> = {
   name: 'memory_write',
-  description: 'Manage memory. action: add = record new info, update = correct an existing memory, remove = mark a wrong memory inactive. For update/remove you MUST pass the real target_id of an existing memory — get it from memory_search first (never guess an ID). When the user corrects you, search for the wrong memory, then update or remove it by its id before adding the corrected fact.',
+  description: `Manage long-term memory. Records stable knowledge about the user and their world.
+
+Rules:
+1. SEARCH FIRST — before adding, use memory_search to check if the fact already exists.
+2. UPDATE if same subject + same attribute exists (don't duplicate).
+3. Format: one-liner declarative facts ("User prefers X", "Alice: manager at Contoso, prefers async").
+4. People: one compact card per person. Only for recurring/important people.
+5. Do NOT store: task progress (use update_aide_task working_state), transient info, session logs.
+
+Actions: add = new fact, update = correct existing, remove = mark wrong entry inactive.
+For update/remove: pass the real target_id from memory_search (never guess).`,
   parameters: {
     type: 'object',
     properties: {
@@ -85,7 +95,7 @@ const memorySearchTool: Tool<any> = {
   },
   skipPermission: true,
   handler: async (args: { query: string; limit?: number }) => {
-    const results = searchMemory(args.query, args.limit || 5)
+    const results = await searchMemory(args.query, args.limit || 5)
     if (results.length === 0) return { memories: [], message: 'No relevant memories found' }
     return {
       memories: results.map(m => ({
@@ -112,7 +122,7 @@ const createTaskTool: Tool<any> = {
       sourceId: { type: 'string', description: 'Unique source identifier (email ID, notification ID, message ID, PR/Issue number). Extract from MCP response data.' },
       sourceUrl: { type: 'string', description: 'External link to the source (PR/Issue URL, email/message deep link, etc.) for one-click navigation.' },
       dueDate: { type: 'string', description: 'ISO 8601 due date' },
-      projectId: { type: 'string', description: 'Associated project ID' },
+      projectIds: { type: 'array', items: { type: 'string' }, description: 'Associated project IDs' },
       relatedRelationIds: { type: 'array', items: { type: 'string' }, description: 'List of related people IDs' }
     },
     required: ['title', 'priority', 'description']
@@ -190,7 +200,7 @@ const createTaskTool: Tool<any> = {
 
 const updateTaskTool: Tool<any> = {
   name: 'update_aide_task',
-  description: 'Update an Aide task (the user\'s personal task tracker). Change status (complete/cancel), priority, title, etc.',
+  description: 'Update an Aide task. Change status, priority, title, working_state (progress/outputs), or link to projects.',
   parameters: {
     type: 'object',
     properties: {
@@ -198,13 +208,17 @@ const updateTaskTool: Tool<any> = {
       status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'cancelled'] },
       priority: { type: 'string', enum: ['p0', 'p1', 'p2'] },
       title: { type: 'string' },
-      description: { type: 'string' }
+      description: { type: 'string' },
+      working_state: { type: 'string', description: 'Current progress, decisions, outputs for this task. Updated in real-time as work progresses.' },
+      projectIds: { type: 'array', items: { type: 'string' }, description: 'Project IDs this task relates to' }
     },
     required: ['id']
   },
   skipPermission: true,
   handler: async (args: any) => {
-    const { id, ...changes } = args
+    const { id, working_state, projectIds, ...changes } = args
+    if (working_state !== undefined) changes.workingState = working_state
+    if (projectIds !== undefined) changes.projectIds = projectIds
 
     // Prevent jobs from completing tasks they JUST created in the same session (anti-self-completion)
     // But allow completing pre-existing tasks based on new external info (e.g. PR merged → task done)
