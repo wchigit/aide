@@ -151,7 +151,7 @@ export function createTask(input: CreateTaskInput): CreateTaskResult {
   return { task: getTask(id)!, deduplicated: false }
 }
 
-export function updateTask(id: string, changes: Partial<Task>): Task {
+export function updateTask(id: string, changes: Partial<Task>, opts?: { silent?: boolean }): Task {
   const db = getDb()
   const now = new Date().toISOString()
 
@@ -197,6 +197,17 @@ export function updateTask(id: string, changes: Partial<Task>): Task {
       summary: `Status changed: ${prior.status} → ${changes.status}`,
       statusFrom: prior.status,
       statusTo: changes.status
+    })
+  }
+
+  // Auto-log when working_state is updated from outside the task session
+  if (changes.workingState !== undefined && !opts?.silent) {
+    const snippet = changes.workingState.length > 80
+      ? changes.workingState.slice(0, 80) + '…'
+      : changes.workingState
+    addTaskActivity(id, {
+      type: 'note',
+      summary: `Working state updated: ${snippet}`
     })
   }
 

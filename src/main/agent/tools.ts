@@ -5,7 +5,7 @@ import { listRelations, createRelation, updateRelation, deleteRelation } from '.
 import { getPreferences, setPreferences } from '../preferences'
 import { listJobs, createJob, updateJob, deleteJob, toggleJob } from '../jobs'
 import { showSystemNotification } from '../index'
-import { isJobSession, jobCreatedTaskIds } from './state'
+import { isJobSession, jobCreatedTaskIds, currentSessionId } from './state'
 import { getActiveMcpTools } from './mcp'
 import { browser, isBrowserAvailable } from '../automation'
 import { listSkills, installSkillFromLocalPath } from '../skills'
@@ -149,7 +149,8 @@ Rules:
 2. UPDATE if same subject + same attribute exists (don't duplicate).
 3. Format: one-liner declarative facts ("User prefers X", "Alice: manager at Contoso, prefers async").
 4. People: one compact card per person. Only for recurring/important people.
-5. Do NOT store: task progress (use update_aide_task working_state), transient info, session logs.
+5. Do NOT store: task progress, event details (dates/times/venues/budgets/attendees), scheduling info, or anything that expires. Use update_aide_task working_state instead.
+6. Test before writing: "Will this fact still be true and useful in 2 weeks?" If not → working_state, not memory.
 
 Actions: add = new fact, update = correct existing, remove = mark wrong entry inactive.
 For update/remove: pass the real target_id from memory_search (never guess).`,
@@ -331,7 +332,10 @@ const updateTaskTool: Tool<any> = {
       }
     }
 
-    const task = updateTask(id, changes)
+    const task = updateTask(id, changes, {
+      // Only log activity if updating from outside the task's own session
+      silent: currentSessionId.startsWith(`task-${id}-`)
+    })
     emitToRenderer({ type: 'task:updated', task })
     return { success: true, task: { id: task.id, title: task.title, status: task.status } }
   }

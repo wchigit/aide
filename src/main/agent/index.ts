@@ -89,6 +89,7 @@ function extractTaskIdFromSession(sessionId: string): string | null {
 const hooks: SessionConfig['hooks'] = {
   // Inject L0 Identity + dynamic context
   onSessionStart: async (_input: any, invocation: { sessionId: string }) => {
+    setCurrentSessionId(invocation.sessionId)
     const l0 = getL0Content()
     const taskId = extractTaskIdFromSession(invocation.sessionId)
     const parts: string[] = []
@@ -119,13 +120,14 @@ const hooks: SessionConfig['hooks'] = {
       ).join('\n')
       parts.push(`## Connection status\n${connSummary}`)
 
-      // Brief task overview
+      // Brief task overview with titles so agent can match user messages to tasks
       const allTasks = listTasks({})
-      const pendingCount = allTasks.filter(t => t.status === 'pending' || t.status === 'in_progress').length
-      const p0Count = allTasks.filter(t => (t.status === 'pending' || t.status === 'in_progress') && t.priority === 'p0').length
-      const unseenCount = allTasks.filter(t => (t.status === 'pending' || t.status === 'in_progress') && !t.seenAt).length
-      if (pendingCount > 0) {
-        parts.push(`## Tasks overview\nActive tasks: ${pendingCount}${p0Count > 0 ? ` (${p0Count} urgent)` : ''}${unseenCount > 0 ? `, ${unseenCount} unread` : ''}`)
+      const activeTasks = allTasks.filter(t => t.status === 'pending' || t.status === 'in_progress')
+      if (activeTasks.length > 0) {
+        const taskLines = activeTasks.slice(0, 10).map(t =>
+          `- id: "${t.id}" | "${t.title}" | ${t.status}${t.priority === 'p0' ? ' | URGENT' : ''}`
+        ).join('\n')
+        parts.push(`## Active tasks\n${taskLines}`)
       }
 
       // Inject project list for task-project linking
@@ -417,11 +419,12 @@ Be restrained. Quality over quantity.
 - Record: user corrections (highest priority), stable preferences, conventions, recurring people (one card per person)
 - Format: one-liner declarative facts. People: "Name: role. Key traits."
 - Before adding: search first → update if same subject exists → add only if new
-- Do NOT record: task progress (use working_state), transient info, session logs, one-off mentions
-- Use update_aide_task with working_state for task-specific progress and outputs
+- Do NOT record in memory: task progress, event logistics (dates/times/venues/budgets/attendees), scheduling info, session logs, one-off mentions. These belong in the task's working_state.
+- If information is tied to a specific task or event that will expire → put it in working_state, NOT memory
+- Use update_aide_task with working_state for task-specific progress, event details, and outputs
 
 ## Context awareness
-- In general chat, if something relates to an existing Task → suggest switching to it
+- In general chat, if something relates to an existing Task → immediately call update_aide_task to record the progress/info in that task's working_state. Don't just suggest switching — update the task right there.
 - When entering a Task chat → briefly state the task's background, status, and suggested handling`
 }
 
@@ -711,7 +714,7 @@ const jobHooks = {
   }
 }
 
-import { setJobSession } from './state'
+import { setJobSession, setCurrentSessionId } from './state'
 
 export async function executeJobSession(instruction: string, jobId: string, lastRunAt?: string | null): Promise<string> {
   if (!client) throw sdkUnavailableError()
@@ -727,6 +730,7 @@ export async function executeJobSession(instruction: string, jobId: string, last
 
   const sessionId = `job-${jobId}-${Date.now()}`
   setJobSession(true)
+  setCurrentSessionId(sessionId)
   try {
     const session = await client.createSession({
       sessionId,
