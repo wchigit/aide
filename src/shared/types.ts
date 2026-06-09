@@ -287,7 +287,7 @@ export interface AideAPI {
     listActivities(taskId: string): Promise<TaskActivity[]>
   }
   chat: {
-    send(message: string, taskId: string | null, attachments?: { name: string; type: string; dataUrl: string }[]): Promise<ChatMessage>
+    send(message: string, taskId: string | null, attachments?: ChatAttachment[]): Promise<ChatMessage>
     getHistory(taskId: string | null): Promise<ChatMessage[]>
     confirmAction(actionId: string, decision: 'confirm' | 'modify' | 'cancel', modification?: string): Promise<void>
     triggerFirstMessage(taskId: string): Promise<ChatMessage>
@@ -478,6 +478,15 @@ export interface MemoryFilter {
 
 // === Chat Types ===
 
+/** A file the user attached to a chat message. `dataUrl` is the inline
+ *  base64-encoded contents (e.g. `data:image/png;base64,...`), so an image can
+ *  be rendered directly in the conversation without a separate fetch. */
+export interface ChatAttachment {
+  name: string
+  type: string
+  dataUrl: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'agent'
@@ -485,6 +494,8 @@ export interface ChatMessage {
   timestamp: string
   taskId: string | null
   pendingAction?: PendingAction
+  /** Files the user attached when sending this message. */
+  attachments?: ChatAttachment[]
   /** Ordered "work" steps (narration + tool calls) that led to this reply.
    *  Kept as a foldable process trail so a long turn's intermediate output is
    *  preserved instead of being discarded once the final answer lands. */

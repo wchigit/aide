@@ -5,6 +5,7 @@ import { listRelations, getRelation } from '../relations'
 import { getAutonomyLevel } from '../preferences'
 import { getConnectionStatus } from '../connections'
 import { getSkillsDirectory } from '../skills'
+import { saveChatAttachment } from '../files'
 import { showSystemNotification } from '../index'
 import type { ChatMessage, Task, PendingAction, TurnStep } from '@shared/types'
 import { v4 as uuid } from 'uuid'
@@ -617,23 +618,27 @@ export async function sendMessage(
     role: 'user',
     content: userMessage,
     timestamp: new Date().toISOString(),
-    taskId
+    taskId,
+    attachments: attachments && attachments.length > 0 ? attachments : undefined
   }
   saveMessage(userMsg)
 
   const session = await getOrCreateSession(taskId)
   activeSession = session
 
-  // Build the prompt (attachments are appended inline)
+  // Build the prompt. Attachments are written into the session sandbox and
+  // referenced by path, so the agent reads them with its native file tools
+  // (inlining base64 wastes tokens and the model can't parse it anyway).
   let prompt = userMessage
   if (attachments && attachments.length > 0) {
-    const attachmentDescriptions = attachments.map(a => {
-      if (a.type.startsWith('image/')) {
-        return `[Attachment: image "${a.name}" (${a.type}), data: ${a.dataUrl}]`
-      }
-      return `[Attachment: file "${a.name}" (${a.type})]`
+    const lines = attachments.map(a => {
+      const saved = saveChatAttachment(taskId, a.name, a.dataUrl)
+      const type = a.type || 'unknown type'
+      return saved
+        ? `- "${a.name}" (${type}): ${saved.absPath}`
+        : `- "${a.name}" (${type}): [attachment could not be saved]`
     }).join('\n')
-    prompt = `${userMessage}\n\n${attachmentDescriptions}`
+    prompt = `${userMessage}\n\nThe user attached the following file(s), saved to disk. Read them as needed to answer:\n${lines}`
   }
 
   // Run the turn via the event stream (not a blocking total-duration timeout).
@@ -778,8 +783,8 @@ export async function generateMorningBriefing(): Promise<string> {
 function saveMessage(msg: ChatMessage): void {
   const db = getDb()
   db.prepare(`
-    INSERT INTO chat_messages (id, role, content, timestamp, task_id, pending_action, process)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO chat_messages (id, role, content, timestamp, task_id, pending_action, process, attachments)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     msg.id,
     msg.role,
@@ -787,7 +792,8 @@ function saveMessage(msg: ChatMessage): void {
     msg.timestamp,
     msg.taskId,
     msg.pendingAction ? JSON.stringify(msg.pendingAction) : null,
-    msg.process && msg.process.length ? JSON.stringify(msg.process) : null
+    msg.process && msg.process.length ? JSON.stringify(msg.process) : null,
+    msg.attachments && msg.attachments.length ? JSON.stringify(msg.attachments) : null
   )
 }
 
@@ -822,7 +828,8 @@ export function getChatHistory(taskId: string | null): ChatMessage[] {
     timestamp: row.timestamp as string,
     taskId: row.task_id as string | null,
     pendingAction: row.pending_action ? JSON.parse(row.pending_action as string) : undefined,
-    process: row.process ? JSON.parse(row.process as string) : undefined
+    process: row.process ? JSON.parse(row.process as string) : undefined,
+    attachments: row.attachments ? JSON.parse(row.attachments as string) : undefined
   }))
 }
 
