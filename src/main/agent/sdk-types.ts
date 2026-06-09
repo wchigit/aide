@@ -55,6 +55,7 @@ export interface SessionHooks {
   onSessionEnd?: (input: SessionEndInput, invocation: { sessionId: string }) => Promise<SessionEndOutput | void>
   onPostToolUse?: (input: PostToolUseInput) => Promise<void>
   onPreToolUse?: (input: PreToolUseInput) => Promise<{ allow: boolean } | void>
+  onErrorOccurred?: (input: { error: string; timestamp: number }, invocation: { sessionId: string }) => Promise<void>
 }
 
 export interface SessionStartInput {

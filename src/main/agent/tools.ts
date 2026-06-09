@@ -7,6 +7,9 @@ import { listJobs, createJob, updateJob, deleteJob, toggleJob } from '../jobs'
 import { showSystemNotification } from '../index'
 import { isJobSession, jobCreatedTaskIds } from './state'
 import { getActiveMcpTools } from './mcp'
+import { browser, isBrowserAvailable } from '../automation'
+import { listSkills, installSkillFromLocalPath } from '../skills'
+import { browseSkills, installFromMarketplace } from '../skills/sources'
 import { BrowserWindow } from 'electron'
 import type { Tool } from '@github/copilot-sdk'
 
@@ -33,8 +36,108 @@ export function buildTools(): Tool<any>[] {
     manageJobTool,
     managePreferencesTool,
     generateReportTool,
+    // Browser automation tools
+    browserNavigateTool,
+    browserClickTool,
+    browserTypeTool,
+    browserReadTool,
+    browserScreenshotTool,
+    // Skill marketplace tools
+    searchSkillsTool,
+    installSkillTool,
+    listInstalledSkillsTool,
     ...mcpTools
   ]
+}
+
+// ── Skill marketplace tools ──────────────────────────────────────────
+
+const searchSkillsTool: Tool<any> = {
+  name: 'search_skills',
+  description: 'Search the skill marketplace for installable skills by keyword. Returns matching skills with name, description, source, install path, a safety hint (risk), whether it needs extra setup (API keys / dependencies), and whether already installed. Use this when the user wants to find or discover a skill to install. To actually install one, pass its sourceId + path to install_skill.',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', description: 'Keyword matched against skill name/description/category. Pass an empty string to list everything (can be large).' },
+      limit: { type: 'number', description: 'Max results to return (default 20).' }
+    },
+    required: ['query']
+  },
+  skipPermission: true, // read-only browse is auto-allowed
+  handler: async (args: { query: string; limit?: number }) => {
+    const all = await browseSkills()
+    const q = (args.query || '').toLowerCase().trim()
+    const matched = q
+      ? all.filter(s =>
+          s.name.toLowerCase().includes(q) ||
+          s.description.toLowerCase().includes(q) ||
+          (s.category || '').toLowerCase().includes(q)
+        )
+      : all
+    const limit = args.limit && args.limit > 0 ? args.limit : 20
+    return {
+      total: matched.length,
+      returned: Math.min(matched.length, limit),
+      skills: matched.slice(0, limit).map(s => ({
+        name: s.name,
+        description: s.description,
+        category: s.category,
+        risk: s.risk,
+        setup: s.setup && s.setup.type !== 'none'
+          ? { required: true, steps: s.setup.summary }
+          : { required: false },
+        sourceId: s.sourceId,
+        sourceName: s.sourceName,
+        path: s.path,
+        installed: s.installed
+      }))
+    }
+  }
+}
+
+const installSkillTool: Tool<any> = {
+  name: 'install_skill',
+  description: 'Install a skill so the agent can use it. Two modes: (1) source="marketplace" — provide sourceId and path obtained from search_skills; (2) source="local" — provide localPath to a folder containing a SKILL.md on the user\'s machine. The skill is enabled immediately after install.',
+  parameters: {
+    type: 'object',
+    properties: {
+      source: { type: 'string', enum: ['marketplace', 'local'], description: 'Where to install from.' },
+      sourceId: { type: 'string', description: 'Marketplace source id (required when source=marketplace). Get it from search_skills.' },
+      path: { type: 'string', description: 'Repository path to the skill (required when source=marketplace). Get it from search_skills.' },
+      localPath: { type: 'string', description: 'Absolute path to a local skill folder or SKILL.md file (required when source=local).' }
+    },
+    required: ['source']
+  },
+  handler: async (args: { source: 'marketplace' | 'local'; sourceId?: string; path?: string; localPath?: string }) => {
+    try {
+      if (args.source === 'local') {
+        if (!args.localPath) return { success: false, error: 'localPath is required for a local install' }
+        const skill = installSkillFromLocalPath(args.localPath)
+        return { success: true, installed: skill.name, message: `Installed local skill "${skill.name}"` }
+      }
+      if (!args.sourceId || !args.path) {
+        return { success: false, error: 'sourceId and path are required for a marketplace install — get them from search_skills' }
+      }
+      const skill = await installFromMarketplace(args.sourceId, args.path)
+      return { success: true, installed: skill.name, message: `Installed "${skill.name}" from the marketplace` }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+}
+
+const listInstalledSkillsTool: Tool<any> = {
+  name: 'list_installed_skills',
+  description: 'List skills currently installed in Aide, with their enabled/disabled state and source. Use this to check what is already available before installing something new.',
+  parameters: { type: 'object', properties: {} },
+  skipPermission: true, // read-only
+  handler: async () => {
+    const skills = listSkills()
+    return {
+      total: skills.length,
+      skills: skills.map(s => ({ name: s.name, description: s.description, enabled: s.enabled, source: s.source }))
+    }
+  }
 }
 
 const memoryWriteTool: Tool<any> = {
@@ -628,5 +731,123 @@ const generateReportTool: Tool<any> = {
 function emitToRenderer(event: { type: string; [key: string]: unknown }): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('aide:event', event)
+  }
+}
+
+// ============================================================
+// Browser Automation Tools — Playwright-based web automation
+// ============================================================
+
+const browserNavigateTool: Tool<any> = {
+  name: 'browser_navigate',
+  description: 'Navigate to a URL in the browser. Opens a new browser window if needed. Use this to visit websites, web apps, or any URL.',
+  parameters: {
+    type: 'object',
+    properties: {
+      url: { type: 'string', description: 'The URL to navigate to (e.g., "https://github.com")' }
+    },
+    required: ['url']
+  },
+  skipPermission: false,
+  handler: async (args: { url: string }) => {
+    if (!isBrowserAvailable()) {
+      return { success: false, error: 'Browser automation is not available. Chromium may not be installed.' }
+    }
+    try {
+      const page = await browser.navigateTo(args.url)
+      const title = await page.title()
+      return { success: true, url: args.url, title, message: `Navigated to ${args.url}` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserClickTool: Tool<any> = {
+  name: 'browser_click',
+  description: 'Click an element on the current web page. Use CSS selectors to identify the element.',
+  parameters: {
+    type: 'object',
+    properties: {
+      selector: { type: 'string', description: 'CSS selector for the element to click (e.g., "button.submit", "#login-btn", "a[href=\'/dashboard\']")' }
+    },
+    required: ['selector']
+  },
+  skipPermission: false,
+  handler: async (args: { selector: string }) => {
+    try {
+      await browser.clickElement(args.selector)
+      return { success: true, message: `Clicked element: ${args.selector}` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserTypeTool: Tool<any> = {
+  name: 'browser_type',
+  description: 'Type text into an input field on the current web page.',
+  parameters: {
+    type: 'object',
+    properties: {
+      selector: { type: 'string', description: 'CSS selector for the input element' },
+      text: { type: 'string', description: 'Text to type into the element' }
+    },
+    required: ['selector', 'text']
+  },
+  skipPermission: false,
+  handler: async (args: { selector: string; text: string }) => {
+    try {
+      await browser.typeIntoElement(args.selector, args.text)
+      return { success: true, message: `Typed text into: ${args.selector}` }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserReadTool: Tool<any> = {
+  name: 'browser_read',
+  description: 'Read text content from an element on the current web page. Also returns current URL and page title.',
+  parameters: {
+    type: 'object',
+    properties: {
+      selector: { type: 'string', description: 'CSS selector for the element to read (optional, omit to get page info only)' }
+    }
+  },
+  skipPermission: true,
+  handler: async (args: { selector?: string }) => {
+    try {
+      const url = browser.getCurrentUrl()
+      const title = await browser.getPageTitle()
+      let text: string | undefined
+
+      if (args.selector) {
+        text = await browser.getElementText(args.selector)
+      }
+
+      return { success: true, url, title, text }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+const browserScreenshotTool: Tool<any> = {
+  name: 'browser_screenshot',
+  description: 'Take a screenshot of the current web page. Returns a base64-encoded PNG image.',
+  parameters: {
+    type: 'object',
+    properties: {}
+  },
+  skipPermission: true,
+  handler: async () => {
+    try {
+      const buffer = await browser.takeScreenshot()
+      const base64 = buffer.toString('base64')
+      return { success: true, imageBase64: base64, mimeType: 'image/png' }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
   }
 }
