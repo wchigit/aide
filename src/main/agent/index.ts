@@ -179,7 +179,7 @@ const hooks: SessionConfig['hooks'] = {
       if (task?.workingState && task.workingState.length > 1500) {
         // Truncate to keep the most recent content (last 800 chars with a marker)
         const truncated = '...(earlier context compressed)\n' + task.workingState.slice(-800)
-        updateTask(taskId, { workingState: truncated } as any)
+        updateTask(taskId, { workingState: truncated })
       }
     }
     return {}
