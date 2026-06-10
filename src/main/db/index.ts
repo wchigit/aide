@@ -174,6 +174,7 @@ function initSchema(db: DatabaseInstance): void {
       task_id TEXT,
       pending_action TEXT,
       process TEXT,
+      attachments TEXT,
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
     );
 
@@ -283,6 +284,16 @@ const MIGRATIONS: Migration[] = [
       const cols = (db.prepare('PRAGMA table_info(chat_messages)').all() as { name: string }[]).map(c => c.name)
       if (!cols.includes('process')) {
         db.exec('ALTER TABLE chat_messages ADD COLUMN process TEXT')
+      }
+    },
+  },
+  {
+    version: 4,
+    name: 'chat message attachments',
+    up: (db) => {
+      const cols = (db.prepare('PRAGMA table_info(chat_messages)').all() as { name: string }[]).map(c => c.name)
+      if (!cols.includes('attachments')) {
+        db.exec('ALTER TABLE chat_messages ADD COLUMN attachments TEXT')
       }
     },
   },

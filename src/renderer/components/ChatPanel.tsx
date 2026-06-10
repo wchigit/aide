@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowUp, ChevronLeft, Check, X, Pencil, ChevronDown, ChevronRight, Paperclip, Copy, CheckCheck, Square, Loader2, Activity, FileText, FolderOpen } from 'lucide-react'
+import { ArrowUp, ChevronLeft, Check, X, Pencil, ChevronDown, ChevronRight, Paperclip, Copy, CheckCheck, Square, Loader2, Activity, FileText, FolderOpen, FileCode, FileArchive, FileVideo, FileAudio, File as FileIcon, AlertTriangle, Download } from 'lucide-react'
 import { useTaskStore } from '../stores/taskStore'
 import { useChatStore, GENERAL_KEY } from '../stores/chatStore'
 import type { LiveStep } from '../stores/chatStore'
-import type { ChatMessage, PendingAction, ModelInfo, TaskActivity, TurnStep, Task } from '@shared/types'
+import type { ChatMessage, ChatAttachment, PendingAction, ModelInfo, TaskActivity, TurnStep, Task } from '@shared/types'
 
 // Stable empty reference so the per-session live selector doesn't return a new
 // array each render (which would thrash zustand's equality check).
@@ -117,6 +117,7 @@ export function ChatPanel() {
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [showOtherModels, setShowOtherModels] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -201,7 +202,9 @@ export function ChatPanel() {
 
   const handleFileSelect = useCallback((files: FileList | null) => {
     if (!files) return
+    const rejected: string[] = []
     Array.from(files).forEach(file => {
+      if (file.size > MAX_ATTACHMENT_BYTES) { rejected.push(file.name); return }
       const reader = new FileReader()
       reader.onload = () => {
         setAttachments(prev => [...prev, {
@@ -214,7 +217,19 @@ export function ChatPanel() {
       }
       reader.readAsDataURL(file)
     })
+    if (rejected.length > 0) {
+      setAttachmentError(
+        `${rejected.join(', ')} ${rejected.length > 1 ? 'exceed' : 'exceeds'} the ${formatBytes(MAX_ATTACHMENT_BYTES)} limit`
+      )
+    }
   }, [])
+
+  // Auto-dismiss the attachment warning so it never lingers.
+  useEffect(() => {
+    if (!attachmentError) return
+    const t = setTimeout(() => setAttachmentError(null), 4000)
+    return () => clearTimeout(t)
+  }, [attachmentError])
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items
@@ -293,6 +308,16 @@ export function ChatPanel() {
       {/* Input Area */}
       <div className="shrink-0">
         <div className="chat-content-width mx-auto px-6 py-3 pb-4">
+          {/* Oversized-file warning (auto-dismisses) */}
+          {attachmentError && (
+            <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[12px] text-amber-500 anim-fade-up">
+              <AlertTriangle size={13} className="shrink-0" />
+              <span className="flex-1 min-w-0 truncate">{attachmentError}</span>
+              <button onClick={() => setAttachmentError(null)} className="text-amber-500/70 hover:text-amber-500 shrink-0">
+                <X size={12} />
+              </button>
+            </div>
+          )}
           {/* Attachment preview */}
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
@@ -301,9 +326,10 @@ export function ChatPanel() {
                   {a.type.startsWith('image/') ? (
                     <img src={a.dataUrl} className="w-5 h-5 rounded object-cover" alt="" />
                   ) : (
-                    <Paperclip size={12} className="text-text-tertiary" />
+                    <AttachmentIcon kind={attachmentKind(a.type, a.name)} size={13} />
                   )}
                   <span className="max-w-[120px] truncate">{a.name}</span>
+                  {a.size > 0 && <span className="text-[10.5px] text-text-tertiary">{formatBytes(a.size)}</span>}
                   <button onClick={() => removeAttachment(a.id)} className="text-text-tertiary hover:text-text-primary ml-0.5">
                     <X size={12} />
                   </button>
@@ -641,6 +667,177 @@ function formatActivityTime(iso: string): string {
 
 /* === Message Bubble === */
 
+// Per-file attachment ceiling. Each attachment is base64-inlined into the
+// message and persisted, so an unbounded file would bloat the DB; 10 MB
+// comfortably covers images and documents while keeping storage lean.
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+
+// Human-readable byte size for an attachment label.
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes < 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  const kb = bytes / 1024
+  if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`
+  const mb = kb / 1024
+  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`
+}
+
+// Approximate the decoded byte size of a base64 data URL (display only).
+function dataUrlBytes(dataUrl: string): number {
+  const i = dataUrl.indexOf('base64,')
+  if (i === -1) return 0
+  const b64 = dataUrl.slice(i + 7)
+  const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0
+  return Math.max(0, Math.floor((b64.length * 3) / 4) - padding)
+}
+
+// Classify an attachment from its MIME type, falling back to the filename
+// extension when the type is missing or too generic to be useful.
+type FileKind = 'image' | 'video' | 'audio' | 'pdf' | 'archive' | 'code' | 'doc' | 'file'
+function attachmentKind(type: string, name: string): FileKind {
+  const t = (type || '').toLowerCase()
+  const ext = name.toLowerCase().split('.').pop() || ''
+  if (t.startsWith('image/')) return 'image'
+  if (t.startsWith('video/')) return 'video'
+  if (t.startsWith('audio/')) return 'audio'
+  if (t === 'application/pdf' || ext === 'pdf') return 'pdf'
+  if (/(zip|tar|gzip|x-7z|x-rar|compressed)/.test(t) || ['zip', 'tar', 'gz', 'tgz', 'rar', '7z'].includes(ext)) return 'archive'
+  if (t.startsWith('text/') || ['js', 'ts', 'tsx', 'jsx', 'json', 'py', 'rb', 'go', 'rs', 'java', 'c', 'h', 'cpp', 'cs', 'php', 'sh', 'css', 'html', 'xml', 'yml', 'yaml', 'sql', 'md'].includes(ext)) return 'code'
+  if (['doc', 'docx', 'rtf', 'odt', 'xls', 'xlsx', 'csv', 'ppt', 'pptx'].includes(ext) || /(word|excel|spreadsheet|presentation|officedocument)/.test(t)) return 'doc'
+  return 'file'
+}
+
+function AttachmentIcon({ kind, size = 13 }: { kind: FileKind; size?: number }) {
+  const cls = 'shrink-0 text-text-tertiary'
+  switch (kind) {
+    case 'video': return <FileVideo size={size} className={cls} />
+    case 'audio': return <FileAudio size={size} className={cls} />
+    case 'pdf': return <FileText size={size} className={cls} />
+    case 'archive': return <FileArchive size={size} className={cls} />
+    case 'code': return <FileCode size={size} className={cls} />
+    case 'doc': return <FileText size={size} className={cls} />
+    default: return <FileIcon size={size} className={cls} />
+  }
+}
+
+// Full-screen image preview. Electron's renderer ignores target="_blank", so a
+// thumbnail click opens this in-app lightbox instead. Dismiss via the close
+// button, a backdrop click, or Esc.
+function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+  }, [onClose])
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm anim-fade-in"
+      onClick={onClose}
+    >
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <a
+          href={src}
+          download={alt}
+          onClick={e => e.stopPropagation()}
+          className="w-9 h-9 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white/90 transition-colors"
+          title="Download"
+        >
+          <Download size={17} />
+        </a>
+        <button
+          onClick={onClose}
+          className="w-9 h-9 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white/90 transition-colors"
+          title="Close (Esc)"
+        >
+          <X size={18} />
+        </button>
+      </div>
+      <img
+        src={src}
+        alt={alt}
+        onClick={e => e.stopPropagation()}
+        className="max-w-[92vw] max-h-[92vh] object-contain rounded-lg shadow-2xl anim-zoom-in"
+      />
+    </div>
+  )
+}
+
+// Renders the files a user attached to a message. Images become inline
+// thumbnails (click to open a full-screen preview), audio/video get a compact
+// inline player, and everything else a labeled chip (click to open/download) —
+// so each kind reads at a glance.
+function MessageAttachments({ attachments, isUser }: { attachments: ChatAttachment[]; isUser: boolean }) {
+  const [preview, setPreview] = useState<ChatAttachment | null>(null)
+  return (
+    <div className={`mt-1.5 flex flex-wrap gap-2 ${isUser ? 'justify-end' : ''}`}>
+      {attachments.map((a, i) => {
+        const kind = attachmentKind(a.type, a.name)
+        if (kind === 'image') {
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setPreview(a)}
+              title={a.name}
+              className="block rounded-xl overflow-hidden border border-edge hover:border-accent/50 transition-colors cursor-zoom-in"
+            >
+              <img
+                src={a.dataUrl}
+                alt={a.name}
+                className="max-w-[220px] max-h-[220px] object-cover"
+              />
+            </button>
+          )
+        }
+        if (kind === 'video') {
+          return (
+            <video
+              key={i}
+              src={a.dataUrl}
+              controls
+              className="max-w-[260px] max-h-[200px] rounded-xl border border-edge bg-black/40"
+            />
+          )
+        }
+        if (kind === 'audio') {
+          return (
+            <div key={i} className="flex flex-col gap-1.5 px-3 py-2 rounded-xl bg-surface-2 border border-edge-subtle max-w-[260px]">
+              <div className="flex items-center gap-1.5 text-[12px] text-text-secondary">
+                <FileAudio size={13} className="shrink-0 text-text-tertiary" />
+                <span className="truncate" title={a.name}>{a.name}</span>
+              </div>
+              <audio src={a.dataUrl} controls className="w-full h-8" />
+            </div>
+          )
+        }
+        const sizeLabel = formatBytes(dataUrlBytes(a.dataUrl))
+        return (
+          <a
+            key={i}
+            href={a.dataUrl}
+            target="_blank"
+            rel="noreferrer"
+            download={a.name}
+            title={a.name}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-2 border border-edge-subtle hover:border-edge transition-colors max-w-[240px]"
+          >
+            <AttachmentIcon kind={kind} size={16} />
+            <span className="flex flex-col min-w-0">
+              <span className="truncate text-[12px] text-text-secondary leading-tight">{a.name}</span>
+              {sizeLabel && <span className="text-[10.5px] text-text-tertiary leading-tight">{sizeLabel}</span>}
+            </span>
+          </a>
+        )
+      })}
+      {preview && (
+        <ImageLightbox src={preview.dataUrl} alt={preview.name} onClose={() => setPreview(null)} />
+      )}
+    </div>
+  )
+}
+
 function MessageBubbleInner({ message }: { message: ChatMessage }) {
   const confirmAction = useChatStore(s => s.confirmAction)
   const [copied, setCopied] = useState(false)
@@ -674,6 +871,10 @@ function MessageBubbleInner({ message }: { message: ChatMessage }) {
               </div>
             )}
           </div>
+        )}
+
+        {message.attachments && message.attachments.length > 0 && (
+          <MessageAttachments attachments={message.attachments} isUser={isUser} />
         )}
 
         {/* Copy + timestamp row */}
