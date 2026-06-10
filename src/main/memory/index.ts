@@ -333,11 +333,3 @@ export function markMemoryInactive(id: string): boolean {
     .run(new Date().toISOString(), id)
   return info.changes > 0
 }
-
-// === Archive (L2) — Session End Extraction ===
-
-export function archiveFromSession(sessionId: string, extractedFacts: string[]): void {
-  for (const fact of extractedFacts) {
-    writeMemory({ content: fact, layer: 'L2', source: 'system' })
-  }
-}

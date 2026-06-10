@@ -287,7 +287,7 @@ const MIGRATIONS: Migration[] = [
     },
   },
   {
-    version: 4,
+    version: 5,
     name: 'memory redesign: working_state, projectIds, embedding',
     up: (db) => {
       const taskCols = (db.prepare('PRAGMA table_info(tasks)').all() as { name: string }[]).map(c => c.name)
