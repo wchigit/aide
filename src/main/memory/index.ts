@@ -1,3 +1,4 @@
+import { join } from 'path'
 import { v4 as uuid } from 'uuid'
 import { getDb } from '../db'
 import type { MemoryEntry, MemoryFilter, MemoryLayer, MemorySource } from '@shared/types'
@@ -205,7 +206,20 @@ export function initEmbeddingModel(): void {
   embeddingModelReady = (async () => {
     // Use require() to load from node_modules at runtime (bypasses Vite bundling)
     const modulePath = '@xenova/transformers'
-    const { pipeline } = require(modulePath)
+    const { pipeline, env } = require(modulePath)
+
+    // By default transformers.js resolves models relative to its own folder
+    // inside the read-only app.asar, so a packaged build can neither read a
+    // bundled model nor cache a downloaded one. Point it at the model we bundle
+    // offline via extraResources (scripts/fetch-model.mjs), with a writable
+    // userData cache as a fallback for the rare case the bundle is missing.
+    const { app } = require('electron')
+    env.localModelPath = app.isPackaged
+      ? join(process.resourcesPath, 'models')
+      : join(app.getAppPath(), 'models')
+    env.cacheDir = join(app.getPath('userData'), 'models-cache')
+    env.allowLocalModels = true
+
     const model = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2')
     embeddingModel = model
     console.log('[Memory] Embedding model loaded')
